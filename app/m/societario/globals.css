@@ -46,3 +46,61 @@
 
 /* Logo PNG colorida -> totalmente branca (para usar no fundo escuro da sidebar) */
 .logo-white { filter: brightness(0) invert(1); }
+
+/* Reset minimo (equivalente ao "preflight" do Tailwind) escopado so ao
+   Societario. Preflight global esta desligado (corePlugins.preflight=false)
+   para nao afetar os outros modulos do hub, mas isso faz os proprios
+   botoes/inputs do Societario aparecerem com a aparencia padrao do
+   navegador (borda cinza, fundo, etc.) em vez de "limpos" como no app
+   original. TODO seletor fica dentro de um unico :where(...) para a regra
+   inteira ter especificidade zero - assim nunca empata (e perde) para
+   nenhuma classe utilitaria do Tailwind (ex: bg-brand-700, border), mesmo
+   quando o elemento tem atributo type="submit" etc. */
+:where(.societario-scope button),
+:where(.societario-scope input),
+:where(.societario-scope select),
+:where(.societario-scope textarea),
+:where(.societario-scope optgroup) {
+  font-family: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+:where(.societario-scope button),
+:where(.societario-scope select) {
+  text-transform: none;
+}
+:where(.societario-scope button),
+:where(.societario-scope [type="button"]),
+:where(.societario-scope [type="reset"]),
+:where(.societario-scope [type="submit"]) {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+}
+:where(.societario-scope button:not(:disabled)),
+:where(.societario-scope [type="button"]:not(:disabled)),
+:where(.societario-scope [type="reset"]:not(:disabled)),
+:where(.societario-scope [type="submit"]:not(:disabled)) {
+  cursor: pointer;
+}
+:where(.societario-scope table) {
+  text-indent: 0;
+  border-color: inherit;
+  border-collapse: collapse;
+}
+
+/* Reset universal de bordas (o preflight do Tailwind zera border-width em
+   todo elemento via seletor "*"; sem isso, botoes/inputs mantem a borda
+   padrao do navegador mesmo com -webkit-appearance:button). */
+:where(.societario-scope),
+:where(.societario-scope *),
+:where(.societario-scope *::before),
+:where(.societario-scope *::after) {
+  border-width: 0;
+  border-style: solid;
+  border-color: currentColor;
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import "./globals.css";
-import { isAdmin, isDev } from "@/lib/societario/options";
+import { APP_VERSION, isAdmin, isDev } from "@/lib/societario/options";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { AutoSync } from "@/components/societario/AutoSync";
 
@@ -30,6 +30,7 @@ export default async function SocietarioLayout({
         <div className="px-4 py-5 border-b border-white/10 text-center">
           <div className="text-lg font-bold tracking-tight">Societário</div>
           <div className="text-[10px] text-white/60">PhD Contábil</div>
+          <div className="text-[9px] text-white/40 mt-1">v{APP_VERSION}</div>
         </div>
 
         <nav className="flex-1 px-2 py-3 space-y-0.5 text-sm overflow-y-auto">
