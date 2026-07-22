@@ -15,7 +15,7 @@ export default function LoginPage({
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="flex items-center justify-center mb-5">
           <Image
-            src="/phd-logo-login.png"
+            src="/societario/phd-logo-login.png"
             alt="PhD Contábil"
             width={320}
             height={130}
