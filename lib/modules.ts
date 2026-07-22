@@ -79,14 +79,14 @@ export const MODULES: ModuleDef[] = [
   },
   {
     id: "societario", name: "Societário", initials: "SO", color: "oklch(0.62 0.13 20)",
-    desc: "Abertura, alteração e baixa de empresas e atos societários.",
+    desc: "Processos societários, empresas e atos societários — migrado do Societário PHD.",
     apps: [
-      { name: "Abertura de Empresas", desc: "Constituição, DBE e registro." },
-      { name: "Alterações Contratuais", desc: "Mudanças cadastrais e de quadro societário." },
-      { name: "Baixa de Empresas", desc: "Encerramento e distrato de atividades." },
-      { name: "Contratos Sociais", desc: "Elaboração, versões e guarda." },
-      { name: "Registro na Junta", desc: "Protocolo e acompanhamento de atos." },
-      { name: "Certificados Digitais", desc: "Emissão e renovação e-CNPJ/e-CPF." },
+      { name: "Dashboard", desc: "Visão geral, indicadores e atividade recente dos processos.", href: "/m/societario" },
+      { name: "Processos", desc: "Listagem com filtros, detalhe e atividades de cada processo.", href: "/m/societario/processos" },
+      { name: "Novo processo", desc: "Abertura de novo processo societário com atividades.", href: "/m/societario/processos/novo" },
+      { name: "Empresas", desc: "Empresas com processos abertos e concluídos.", href: "/m/societario/empresas" },
+      { name: "Tipos de processo", desc: "Cadastro dos tipos de processo (admin).", href: "/m/societario/tipos-processo" },
+      { name: "Usuários", desc: "Gestão de usuários autorizados no módulo (admin).", href: "/m/societario/admin/usuarios" },
     ],
   },
 ];

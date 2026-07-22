@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/societario/cron/sync-tareffa", "schedule": "0 9 * * *" },
+    { "path": "/api/societario/cron/keepalive", "schedule": "0 4 * * *" }
+  ]
+}

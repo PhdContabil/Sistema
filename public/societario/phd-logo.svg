@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 95" fill="none">
+  <!-- P -->
+  <text x="0" y="68" font-family="Arial Black, Impact, sans-serif" font-size="78" font-weight="900" fill="currentColor" letter-spacing="-2">P</text>
+  <!-- h (menor, mais baixo) -->
+  <text x="50" y="68" font-family="Arial Black, Impact, sans-serif" font-size="58" font-weight="900" fill="currentColor" letter-spacing="-2">h</text>
+  <!-- D -->
+  <text x="92" y="68" font-family="Arial Black, Impact, sans-serif" font-size="78" font-weight="900" fill="currentColor" letter-spacing="-2">D</text>
+  <!-- CONTABIL azul -->
+  <text x="48" y="86" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#1e3a8a" letter-spacing="1">CONTABIL</text>
+  <!-- ® registered -->
+  <text x="155" y="22" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="currentColor">®</text>
+</svg>
