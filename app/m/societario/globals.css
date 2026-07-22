@@ -104,3 +104,9 @@
   border-style: solid;
   border-color: currentColor;
 }
+/* Preflight tambem reseta "a" para herdar cor e nao usar sublinhado/azul
+   padrao do navegador (sem isso, links dentro do Societario ficam azuis). */
+:where(.societario-scope) a {
+  color: inherit;
+  text-decoration: inherit;
+}
