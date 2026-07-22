@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Preflight do Tailwind, gerado de verdade pelo CLI (tailwindcss v3.4.4) e
+   escopado ao Societario com :where(.societario-scope) - em vez de eu
+   reescrever regra por regra a mao (o que ja causou bugs de especificidade
+   duas vezes). Preflight global fica desligado no tailwind.config.ts para
+   nao afetar o resto do hub; este bloco replica o preflight real, mas so
+   dentro do modulo Societario. */
+/*! tailwindcss v3.4.4 | MIT License | https://tailwindcss.com*/:where(.societario-scope) *,:where(.societario-scope) :after,:where(.societario-scope) :before{box-sizing:border-box;border:0 solid #e5e7eb}:where(.societario-scope) :after,:where(.societario-scope) :before{--tw-content:""}.societario-scope,.societario-scope{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}.societario-scope{margin:0;line-height:inherit}:where(.societario-scope) hr{height:0;color:inherit;border-top-width:1px}:where(.societario-scope) abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}:where(.societario-scope) h1,:where(.societario-scope) h2,:where(.societario-scope) h3,:where(.societario-scope) h4,:where(.societario-scope) h5,:where(.societario-scope) h6{font-size:inherit;font-weight:inherit}:where(.societario-scope) a{color:inherit;text-decoration:inherit}:where(.societario-scope) b,:where(.societario-scope) strong{font-weight:bolder}:where(.societario-scope) code,:where(.societario-scope) kbd,:where(.societario-scope) pre,:where(.societario-scope) samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}:where(.societario-scope) small{font-size:80%}:where(.societario-scope) sub,:where(.societario-scope) sup{font-size:75%;line-height:0;position:relative;vertical-align:initial}:where(.societario-scope) sub{bottom:-.25em}:where(.societario-scope) sup{top:-.5em}:where(.societario-scope) table{text-indent:0;border-color:inherit;border-collapse:collapse}:where(.societario-scope) button,:where(.societario-scope) input,:where(.societario-scope) optgroup,:where(.societario-scope) select,:where(.societario-scope) textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}:where(.societario-scope) button,:where(.societario-scope) select{text-transform:none}:where(.societario-scope) button,:where(.societario-scope) input:where([type=button]),:where(.societario-scope) input:where([type=reset]),:where(.societario-scope) input:where([type=submit]){-webkit-appearance:button;background-color:initial;background-image:none}:where(.societario-scope) :-moz-focusring{outline:auto}:where(.societario-scope) :-moz-ui-invalid{box-shadow:none}:where(.societario-scope) progress{vertical-align:initial}:where(.societario-scope) ::-webkit-inner-spin-button,:where(.societario-scope) ::-webkit-outer-spin-button{height:auto}:where(.societario-scope) [type=search]{-webkit-appearance:textfield;outline-offset:-2px}:where(.societario-scope) ::-webkit-search-decoration{-webkit-appearance:none}:where(.societario-scope) ::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}:where(.societario-scope) summary{display:list-item}:where(.societario-scope) blockquote,:where(.societario-scope) dd,:where(.societario-scope) dl,:where(.societario-scope) figure,:where(.societario-scope) h1,:where(.societario-scope) h2,:where(.societario-scope) h3,:where(.societario-scope) h4,:where(.societario-scope) h5,:where(.societario-scope) h6,:where(.societario-scope) hr,:where(.societario-scope) p,:where(.societario-scope) pre{margin:0}:where(.societario-scope) fieldset{margin:0}:where(.societario-scope) fieldset,:where(.societario-scope) legend{padding:0}:where(.societario-scope) menu,:where(.societario-scope) ol,:where(.societario-scope) ul{list-style:none;margin:0;padding:0}:where(.societario-scope) dialog{padding:0}:where(.societario-scope) textarea{resize:vertical}:where(.societario-scope) input::-moz-placeholder,:where(.societario-scope) textarea::-moz-placeholder{opacity:1;color:#9ca3af}:where(.societario-scope) input::placeholder,:where(.societario-scope) textarea::placeholder{opacity:1;color:#9ca3af}:where(.societario-scope) [role=button],:where(.societario-scope) button{cursor:pointer}:where(.societario-scope) :disabled{cursor:default}:where(.societario-scope) audio,:where(.societario-scope) canvas,:where(.societario-scope) embed,:where(.societario-scope) iframe,:where(.societario-scope) img,:where(.societario-scope) object,:where(.societario-scope) svg,:where(.societario-scope) video{display:block;vertical-align:middle}:where(.societario-scope) img,:where(.societario-scope) video{max-width:100%;height:auto}:where(.societario-scope) [hidden]{display:none}
+
 /* Variaveis e background/cor escopados apenas ao modulo Societario.
    Antes estavam em :root/body (documento inteiro), o que fazia essas
    regras vazarem para o resto do hub (Launcher, outros modulos) sempre
@@ -46,67 +54,3 @@
 
 /* Logo PNG colorida -> totalmente branca (para usar no fundo escuro da sidebar) */
 .logo-white { filter: brightness(0) invert(1); }
-
-/* Reset minimo (equivalente ao "preflight" do Tailwind) escopado so ao
-   Societario. Preflight global esta desligado (corePlugins.preflight=false)
-   para nao afetar os outros modulos do hub, mas isso faz os proprios
-   botoes/inputs do Societario aparecerem com a aparencia padrao do
-   navegador (borda cinza, fundo, etc.) em vez de "limpos" como no app
-   original. TODO seletor fica dentro de um unico :where(...) para a regra
-   inteira ter especificidade zero - assim nunca empata (e perde) para
-   nenhuma classe utilitaria do Tailwind (ex: bg-brand-700, border), mesmo
-   quando o elemento tem atributo type="submit" etc. */
-:where(.societario-scope button),
-:where(.societario-scope input),
-:where(.societario-scope select),
-:where(.societario-scope textarea),
-:where(.societario-scope optgroup) {
-  font-family: inherit;
-  font-size: 100%;
-  font-weight: inherit;
-  line-height: inherit;
-  color: inherit;
-  margin: 0;
-  padding: 0;
-}
-:where(.societario-scope button),
-:where(.societario-scope select) {
-  text-transform: none;
-}
-:where(.societario-scope button),
-:where(.societario-scope [type="button"]),
-:where(.societario-scope [type="reset"]),
-:where(.societario-scope [type="submit"]) {
-  -webkit-appearance: button;
-  background-color: transparent;
-  background-image: none;
-}
-:where(.societario-scope button:not(:disabled)),
-:where(.societario-scope [type="button"]:not(:disabled)),
-:where(.societario-scope [type="reset"]:not(:disabled)),
-:where(.societario-scope [type="submit"]:not(:disabled)) {
-  cursor: pointer;
-}
-:where(.societario-scope table) {
-  text-indent: 0;
-  border-color: inherit;
-  border-collapse: collapse;
-}
-
-/* Reset universal de bordas (o preflight do Tailwind zera border-width em
-   todo elemento via seletor "*"; sem isso, botoes/inputs mantem a borda
-   padrao do navegador mesmo com -webkit-appearance:button). */
-:where(.societario-scope),
-:where(.societario-scope *),
-:where(.societario-scope *::before),
-:where(.societario-scope *::after) {
-  border-width: 0;
-  border-style: solid;
-  border-color: currentColor;
-}
-/* Preflight tambem reseta "a" para herdar cor e nao usar sublinhado/azul
-   padrao do navegador (sem isso, links dentro do Societario ficam azuis). */
-:where(.societario-scope) a {
-  color: inherit;
-  text-decoration: inherit;
-}
