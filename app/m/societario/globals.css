@@ -54,3 +54,14 @@
 
 /* Logo PNG colorida -> totalmente branca (para usar no fundo escuro da sidebar) */
 .logo-white { filter: brightness(0) invert(1); }
+
+/* Anula o zebra-striping global do hub (app/globals.css: tbody tr:nth-child(even) td),
+   que nao e escopado e vaza para as tabelas do Societario usando --row-alt do tema
+   (fica quase preto no tema escuro do hub). As tabelas do Societario controlam seu
+   proprio hover/zebra via classes Tailwind (hover:bg-gray-50 etc.). */
+.societario-scope tbody tr:nth-child(even) td,
+.societario-scope tbody tr:nth-child(even) td.col-empresa,
+.societario-scope tbody tr:hover td,
+.societario-scope tbody tr:hover td.col-empresa {
+  background: transparent;
+}
