@@ -25,7 +25,7 @@ export default async function SocietarioLayout({
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen societario-scope">
       <aside className="fixed top-0 left-0 h-screen w-52 bg-brand-900 text-white flex flex-col z-10">
         <div className="px-4 py-5 border-b border-white/10 text-center">
           <div className="text-lg font-bold tracking-tight">Societário</div>
