@@ -71,7 +71,7 @@ export default function Dctfweb() {
             <tbody>
               {linhas.map((d: DctfwebObrigada) => (
                 <tr key={`${d.codigoempresa}-${d.ano}-${d.mes}`}>
-                  <td className="col-empresa">{d.nome ?? `Empresa ${d.codigoempresa}`}{d.cnpj && <span className="cnpj">{formatCNPJ(d.cnpj)}</span>}</td>
+                  <td className="col-empresa">{d.nome ?? `Empresa ${d.codigoempresa}`}<span className="cnpj"><span className="codigo">#{d.codigoempresa}</span>{d.cnpj ? ` · ${formatCNPJ(d.cnpj)}` : ""}</span></td>
                   <td style={{ textAlign: "center" }}>{String(d.mes).padStart(2, "0")}/{d.ano}</td>
                   <td style={{ textAlign: "center" }}><span className="badge badge-soft">{d.origem ?? "–"}</span></td>
                   <td>{d.total_folha != null ? <span className="num">{formatBRL(d.total_folha)}</span> : <span className="dash">–</span>}</td>

@@ -43,7 +43,7 @@ function Row({ e, sit, sublimite, limite, aberta, onToggle }: { e: EmpresaLimite
   return (
     <>
       <tr onClick={onToggle} style={{ cursor: "pointer" }}>
-        <td className="col-empresa">{e.nome ?? `Empresa ${e.codigoempresa}`}{e.cnpj && <span className="cnpj">{formatCNPJ(e.cnpj)}</span>}</td>
+        <td className="col-empresa">{e.nome ?? `Empresa ${e.codigoempresa}`}<span className="cnpj"><span className="codigo">#{e.codigoempresa}</span>{e.cnpj ? ` · ${formatCNPJ(e.cnpj)}` : ""}</span></td>
         <td className="num">{formatBRL(e.faturamento_ano)}</td>
         <td className="num">{e.meses_com_faturamento}</td>
         <td className="num">{formatBRL(e.media_mensal)}</td>

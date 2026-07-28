@@ -97,7 +97,7 @@ export default function ConciliacaoHonorarios() {
             <tbody>
               {filtradas.map((l) => (
                 <tr key={l.codigoempresa}>
-                  <td className="col-empresa">{l.nome ?? `Empresa ${l.codigoempresa}`}{l.cnpj && <span className="cnpj">{formatCNPJ(l.cnpj)}</span>}</td>
+                  <td className="col-empresa">{l.nome ?? `Empresa ${l.codigoempresa}`}<span className="cnpj"><span className="codigo">#{l.codigoempresa}</span>{l.cnpj ? ` · ${formatCNPJ(l.cnpj)}` : ""}</span></td>
                   <td>{money(l.financeiro.dp)}</td>
                   <td>{money(l.financeiro.fiscal)}</td>
                   <td>{money(l.financeiro.contabil)}</td>

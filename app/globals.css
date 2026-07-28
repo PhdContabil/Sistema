@@ -193,6 +193,7 @@ table.grid thead th { position: sticky; top: 0; z-index: 1; background: var(--su
 .col-empresa { text-align: left; position: sticky; left: 0; z-index: 2; background: var(--surface); font-weight: 500; min-width: 200px; }
 thead .col-empresa { background: var(--surface2); z-index: 3; }
 td.col-empresa .cnpj { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 2px; }
+td.col-empresa .codigo { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace; color: var(--accent); font-weight: 500; }
 tbody tr:nth-child(even) td { background: var(--row-alt); }
 tbody tr:nth-child(even) td.col-empresa { background: var(--row-alt); }
 tbody tr:hover td { background: var(--accent-soft); }
