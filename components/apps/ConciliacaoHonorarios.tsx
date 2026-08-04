@@ -76,6 +76,11 @@ export default function ConciliacaoHonorarios() {
         <button className="btn primary" onClick={carregar} disabled={carregando}>{carregando ? "Atualizando…" : "↻ Atualizar"}</button>
       </div>
 
+      <div className="legend">
+        <span className="lg"><span className="sw sw-hon" />Honorários contratados (R$): DP · Fiscal · Contábil · Manut. · Total</span>
+        <span className="lg"><span className="sw sw-mov" />Movimento dos setores: empregados · pró-labore · faturam./mês · lançtos 6m</span>
+      </div>
+
       <div className="table-wrap">
         {carregando ? (
           <div className="loading">Carregando conciliação…</div>
@@ -83,25 +88,18 @@ export default function ConciliacaoHonorarios() {
           <table className="grid">
             <thead>
               <tr>
-                <th className="col-empresa" rowSpan={3}>Empresa</th>
-                <th className="grp-fin" colSpan={5}>Financeiro (honorários)</th>
-                <th className="grp-set" colSpan={4}>Setores (movimento)</th>
-                <th className="grp-res" rowSpan={3}>Resultado</th>
-                <th className="grp-res" rowSpan={3}>Considerações</th>
-              </tr>
-              <tr>
-                <th className="sub-fin" rowSpan={2}>DP</th>
-                <th className="sub-fin" rowSpan={2}>Fiscal</th>
-                <th className="sub-fin" rowSpan={2}>Contábil</th>
-                <th className="sub-fin" rowSpan={2}>Manut.</th>
-                <th className="sub-fin" rowSpan={2}>Total</th>
-                <th className="sub-set" colSpan={2}>DP</th>
-                <th className="sub-set" rowSpan={2}>Fiscal<br />fatur/mês</th>
-                <th className="sub-set" rowSpan={2}>Contábil<br />lançtos 6m</th>
-              </tr>
-              <tr>
-                <th className="sub-set">Empreg</th>
-                <th className="sub-set">Pró-lab</th>
+                <th className="col-empresa">Empresa</th>
+                <th className="hon">DP</th>
+                <th className="hon">Fiscal</th>
+                <th className="hon">Contábil</th>
+                <th className="hon">Manut.</th>
+                <th className="hon">Total</th>
+                <th className="mov">Empreg.</th>
+                <th className="mov">Pró-lab.</th>
+                <th className="mov">Faturam./mês</th>
+                <th className="mov">Lançtos 6m</th>
+                <th>Resultado</th>
+                <th>Considerações</th>
               </tr>
             </thead>
             <tbody>
