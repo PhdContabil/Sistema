@@ -30,7 +30,20 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "trabalhista", name: "Trabalhista", initials: "TR", color: "oklch(0.62 0.13 150)",
+    id: "pessoas", name: "Pessoas", initials: "PE", color: "oklch(0.62 0.13 150)",
+    desc: "Nossa gente: cultura, comunicação, saúde, normas e desenvolvimento.",
+    apps: [
+      { name: "Sobre nós", desc: "História, hierarquia e cultura da PHD.", href: "/m/pessoas/sobre-nos" },
+      { name: "Pessoas", desc: "Quem é quem, por setor.", href: "/m/pessoas/pessoas" },
+      { name: "Comunicação", desc: "Férias, ausências, reuniões e confraternizações.", href: "/m/pessoas/comunicacao" },
+      { name: "Remuneração", desc: "Cargos e salários, PLR e benefícios.", href: "/m/pessoas/remuneracao" },
+      { name: "Saúde e Bem-Estar", desc: "Escuta, exames, convênios e saúde mental.", href: "/m/pessoas/saude" },
+      { name: "Normas e Procedimentos", desc: "Políticas internas da PHD.", href: "/m/pessoas/normas" },
+      { name: "Avaliação de Desempenho", desc: "Experiência e avaliação semestral.", href: "/m/pessoas/avaliacao" },
+    ],
+  },
+  {
+    id: "trabalhista", name: "Trabalhista", initials: "TR", color: "oklch(0.62 0.13 170)",
     desc: "Folha de pagamento, eSocial e rotinas de departamento pessoal.",
     apps: [
       { name: "Folha de Pagamento", desc: "Cálculo de salários, encargos e benefícios." },
