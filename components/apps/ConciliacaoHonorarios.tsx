@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { avaliar, formatBRL, formatNum, formatCNPJ, type ConciliacaoItem, type LinhaConciliacao } from "@/lib/conciliacao";
 
-type Filtro = "todos" | "ok" | "divergente";
+type Filtro = "todos" | "ok" | "divergente" | "sem";
 interface ApiResp { dados?: ConciliacaoItem[]; fonte?: "api" | "exemplo"; error?: string; }
 
 function money(v: number) {
   return v > 0 ? <span className="num">{formatBRL(v)}</span> : <span className="dash">–</span>;
+}
+
+function resClass(r: string) {
+  if (r === "OK") return "res-ok";
+  if (r === "Divergente") return "res-div";
+  return "res-neutro";
 }
 
 export default function ConciliacaoHonorarios() {
@@ -37,6 +43,7 @@ export default function ConciliacaoHonorarios() {
     return linhas.filter((l) => {
       if (filtro === "ok" && l.resultado !== "OK") return false;
       if (filtro === "divergente" && l.resultado !== "Divergente") return false;
+      if (filtro === "sem" && l.resultado !== "Sem contrato") return false;
       if (!q) return true;
       return (l.nome ?? "").toLowerCase().includes(q) || (l.cnpj ?? "").includes(q) || String(l.codigoempresa).includes(q);
     });
@@ -44,6 +51,7 @@ export default function ConciliacaoHonorarios() {
 
   const totalOk = linhas.filter((l) => l.resultado === "OK").length;
   const totalDiv = linhas.filter((l) => l.resultado === "Divergente").length;
+  const totalSem = linhas.filter((l) => l.resultado === "Sem contrato").length;
 
   return (
     <>
@@ -56,6 +64,7 @@ export default function ConciliacaoHonorarios() {
         <div className="card"><div className="k">Empresas</div><div className="v num">{linhas.length}</div></div>
         <div className="card ok"><div className="k">OK</div><div className="v num">{totalOk}</div></div>
         <div className="card div"><div className="k">Divergentes</div><div className="v num">{totalDiv}</div></div>
+        <div className="card"><div className="k">Sem contrato</div><div className="v num" style={{ color: "var(--muted)" }}>{totalSem}</div></div>
       </div>
 
       <div className="toolbar">
@@ -63,6 +72,7 @@ export default function ConciliacaoHonorarios() {
         <span className={`chip ${filtro === "todos" ? "on" : ""}`} onClick={() => setFiltro("todos")}>Todos</span>
         <span className={`chip ${filtro === "ok" ? "on" : ""}`} onClick={() => setFiltro("ok")}>OK</span>
         <span className={`chip ${filtro === "divergente" ? "on" : ""}`} onClick={() => setFiltro("divergente")}>Divergentes</span>
+        <span className={`chip ${filtro === "sem" ? "on" : ""}`} onClick={() => setFiltro("sem")}>Sem contrato</span>
         <button className="btn primary" onClick={carregar} disabled={carregando}>{carregando ? "Atualizando…" : "↻ Atualizar"}</button>
       </div>
 
@@ -107,7 +117,7 @@ export default function ConciliacaoHonorarios() {
                   <td className="num">{formatNum(l.setores.prolabore)}</td>
                   <td>{money(l.setores.faturamento_mensal)}</td>
                   <td className="num">{formatNum(l.setores.lancamentos_media6m)}</td>
-                  <td className={l.resultado === "OK" ? "res-ok" : "res-div"}>{l.resultado}</td>
+                  <td className={resClass(l.resultado)}>{l.resultado}</td>
                   <td className="consid">{l.consideracoes || <span className="dash">–</span>}</td>
                 </tr>
               ))}

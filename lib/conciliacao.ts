@@ -30,7 +30,7 @@ export interface ConciliacaoResponse {
   dados: ConciliacaoItem[];
 }
 
-export type Resultado = "OK" | "Divergente";
+export type Resultado = "OK" | "Divergente" | "Sem contrato";
 
 export interface LinhaConciliacao extends ConciliacaoItem {
   resultado: Resultado;
@@ -70,10 +70,15 @@ export function avaliar(item: ConciliacaoItem): LinhaConciliacao {
   // Manutenção (serviço 22): taxa de empresa parada — não deveria ter movimento.
   if (pagaManutencao && temMovimento) motivos.push("manutenção, c/ movimento");
 
+  // Sem contrato: não paga nenhum honorário e não tem movimento em nenhum setor
+  // (ex.: empresa que só passou pelo escritório para um cancelamento).
+  const semContrato = f.total <= 0 && !temMovimento;
+  const resultado: Resultado = semContrato ? "Sem contrato" : motivos.length > 0 ? "Divergente" : "OK";
+
   return {
     ...item,
-    resultado: motivos.length > 0 ? "Divergente" : "OK",
-    consideracoes: motivos.join("; "),
+    resultado,
+    consideracoes: semContrato ? "sem honorário e sem movimento" : motivos.join("; "),
     motivos,
   };
 }
