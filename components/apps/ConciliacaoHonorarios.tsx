@@ -98,8 +98,8 @@ export default function ConciliacaoHonorarios() {
                 <th className="mov">Pró-lab.</th>
                 <th className="mov">Faturam./mês</th>
                 <th className="mov">Lançtos 6m</th>
-                <th>Resultado</th>
-                <th>Considerações</th>
+                <th className="c-res">Resultado</th>
+                <th className="consid">Considerações</th>
               </tr>
             </thead>
             <tbody>

@@ -190,8 +190,13 @@ table.grid thead th { position: sticky; top: 0; z-index: 1; background: var(--su
 .grp-res { background: var(--surface2) !important; text-align: center; }
 .sub-fin { background: var(--fin-sub) !important; text-align: center; font-size: 12px; }
 .sub-set { background: var(--set-sub) !important; text-align: center; font-size: 12px; }
-.col-empresa { text-align: left; position: sticky; left: 0; z-index: 2; background: var(--surface); font-weight: 500; min-width: 200px; }
-thead .col-empresa { background: var(--surface2); z-index: 3; }
+/* Coluna Empresa — precisa vencer o `table.grid td` (alinhamento à direita/nowrap) */
+table.grid th.col-empresa, table.grid td.col-empresa {
+  text-align: left; white-space: normal; word-break: break-word;
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  font-weight: 500; min-width: 220px; max-width: 300px; line-height: 1.35;
+}
+table.grid thead th.col-empresa { background: var(--surface2); z-index: 3; }
 td.col-empresa .cnpj { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 2px; }
 td.col-empresa .codigo { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace; color: var(--accent); font-weight: 500; }
 tbody tr:nth-child(even) td { background: var(--row-alt); }
@@ -204,6 +209,11 @@ tbody tr:hover td.col-empresa { background: var(--accent-soft); }
 .res-neutro { color: var(--muted); font-weight: 500; text-align: center; }
 table.grid thead th.hon { background: var(--fin-band); }
 table.grid thead th.mov { background: var(--set-band); }
+/* colunas numéricas compactas, para caber sem rolagem excessiva */
+table.grid th.hon, table.grid td.hon,
+table.grid th.mov, table.grid td.mov { padding-left: 8px; padding-right: 8px; }
+table.grid th.c-res, table.grid td.c-res { text-align: center; }
+table.grid thead th.c-res, table.grid thead th.consid { text-align: center; }
 .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 2px 0 10px; font-size: 12px; color: var(--muted); }
 .legend .lg { display: flex; align-items: center; gap: 7px; }
 .legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid var(--border); }
@@ -278,7 +288,13 @@ table.grid thead th.mov { background: var(--set-band); }
 .org-qtd { font-size: 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 .org-lista { list-style: none; margin: 0; padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
 .org-lista li { display: flex; align-items: center; gap: 9px; }
-.consid { text-align: left; color: var(--text); white-space: normal; min-width: 220px; font-size: 12.5px; }
+/* Considerações — texto corrido; precisa vencer o nowrap padrão da tabela */
+table.grid td.consid, table.grid th.consid {
+  text-align: left; white-space: normal; word-break: break-word;
+  color: var(--text); min-width: 190px; max-width: 260px; font-size: 12.5px; line-height: 1.4;
+}
+/* Resultado centralizado (também precisa vencer o alinhamento padrão) */
+table.grid td.res-ok, table.grid td.res-div, table.grid td.res-neutro { text-align: center; }
 .dash { color: var(--muted); }
 .loading { padding: 40px; text-align: center; color: var(--muted); }
 .footnote { color: var(--muted); font-size: 12px; margin-top: 14px; font-style: italic; max-width: 680px; }
