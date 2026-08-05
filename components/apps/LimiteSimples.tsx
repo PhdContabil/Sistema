@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatBRL, formatCNPJ } from "@/lib/conciliacao";
 import { situacaoLimite, situacaoClass, ordemSituacao, formatPct, MESES_ABREV, type AnaliseLimiteResponse, type EmpresaLimite, type Situacao } from "@/lib/fiscal";
 
@@ -69,27 +70,27 @@ function Row({ e, sit, sublimite, limite, aberta, onToggle }: { e: EmpresaLimite
   );
 }
 
-export default function LimiteSimples() {
-  const [resp, setResp] = useState<AnaliseLimiteResponse | null>(null);
-  const [fonte, setFonte] = useState<string | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
-  const [carregando, setCarregando] = useState(true);
+export default function LimiteSimples({
+  resp,
+  fonte,
+  erroServidor,
+}: {
+  resp: AnaliseLimiteResponse;
+  fonte: "api" | "exemplo";
+  erroServidor: string | null;
+}) {
+  const router = useRouter();
+  const erro = erroServidor;
+  const [carregando, setCarregando] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Situacao | "todos">("todos");
   const [aberta, setAberta] = useState<number | null>(null);
 
-  async function carregar() {
-    setCarregando(true); setErro(null);
-    try {
-      const res = await fetch("/api/fiscal/limite", { cache: "no-store" });
-      const json = await res.json();
-      if (!res.ok || json.error) throw new Error(json.error || "Falha ao carregar.");
-      setResp(json); setFonte(json.fonte ?? "api");
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro desconhecido.");
-    } finally { setCarregando(false); }
+  function carregar() {
+    setCarregando(true);
+    router.refresh();
+    setTimeout(() => setCarregando(false), 1200);
   }
-  useEffect(() => { carregar(); }, []);
 
   const linhas = useMemo(() => {
     const dados = resp?.dados ?? [];

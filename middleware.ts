@@ -81,9 +81,11 @@ async function isEmailAllowedDB(email: string): Promise<boolean> {
 async function identificarUsuario(
   supabase: ReturnType<typeof createServerClient>
 ): Promise<{ user: { email?: string | null } | null }> {
-  const { user } = await getUserWithTimeout(supabase);
-  if (user?.email) return { user };
-
+  // 1) Sessão do cookie — leitura LOCAL, sem chamada de rede.
+  //    O Next dispara várias requisições em paralelo (prefetch dos links do
+  //    menu, APIs da tela). Validar cada uma no servidor do Supabase gerava
+  //    lentidão e falhas esporádicas que derrubavam a sessão.
+  //    O acesso aos dados continua protegido pelo RLS, que valida o token.
   try {
     const { data } = await Promise.race([
       supabase.auth.getSession(),
@@ -94,8 +96,13 @@ async function identificarUsuario(
     const doCookie = data?.session?.user;
     if (doCookie?.email) return { user: doCookie };
   } catch {
-    /* sem sessão utilizável */
+    /* segue para a checagem no servidor */
   }
+
+  // 2) Sem cookie utilizável: confirma no servidor do Supabase.
+  const { user } = await getUserWithTimeout(supabase);
+  if (user?.email) return { user };
+
   return { user: null };
 }
 
