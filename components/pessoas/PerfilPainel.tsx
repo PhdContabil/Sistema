@@ -26,10 +26,19 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
   useEffect(() => {
     let vivo = true;
     setP(null); setErro(null);
-    fetch(`/api/pessoas/${slug}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => { if (!vivo) return; if (j.error) setErro(j.error); else { setP(j.perfil); setPodeEditar(Boolean(j.podeEditar)); } })
-      .catch(() => vivo && setErro("Não foi possível carregar o perfil."));
+    fetch(`/api/pessoas/${slug}`, { cache: "no-store", credentials: "same-origin" })
+      .then(async (r) => {
+        const tipo = r.headers.get("content-type") ?? "";
+        if (!tipo.includes("application/json")) {
+          // Provavelmente redirecionado para o login (sessão expirada).
+          throw new Error("Sua sessão expirou. Recarregue a página e entre novamente.");
+        }
+        const j = await r.json();
+        if (!r.ok || j.error) throw new Error(j.error || `Erro ${r.status} ao carregar o perfil.`);
+        return j;
+      })
+      .then((j) => { if (!vivo) return; setP(j.perfil); setPodeEditar(Boolean(j.podeEditar)); })
+      .catch((e) => vivo && setErro(e instanceof Error ? e.message : "Não foi possível carregar o perfil."));
     return () => { vivo = false; };
   }, [slug]);
 

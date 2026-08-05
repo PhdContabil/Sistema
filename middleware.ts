@@ -10,7 +10,7 @@
 // - Bloqueia /m/societario/processos/novo e
 //   /m/societario/processos/[id]/editar para colaboradores.
 
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isEmailAllowed, isAdmin } from "@/lib/societario/options";
 
@@ -102,23 +102,34 @@ function isAdminOnlyPath(path: string): boolean {
 }
 
 export async function middleware(req: NextRequest) {
-  let res = NextResponse.next({ request: { headers: req.headers } });
+  // Padrão oficial do @supabase/ssr: os cookies renovados precisam ser
+  // repassados TANTO para a request quanto para a response. Sem isso, a
+  // sessão se perde a cada renovação de token e o usuário cai no login.
+  let res = NextResponse.next({ request: req });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get: (name: string) => req.cookies.get(name)?.value,
-        set: (name: string, value: string, options: CookieOptions) => {
-          res.cookies.set({ name, value, ...options });
-        },
-        remove: (name: string, options: CookieOptions) => {
-          res.cookies.set({ name, value: "", ...options });
+        getAll: () => req.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+          res = NextResponse.next({ request: req });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            res.cookies.set(name, value, options)
+          );
         },
       },
     }
   );
+
+  /** Redireciona preservando os cookies de sessão renovados. */
+  const redirecionar = (url: URL) => {
+    const r = NextResponse.redirect(url);
+    res.cookies.getAll().forEach((c) => r.cookies.set(c));
+    return r;
+  };
 
   const { user } = await getUserWithTimeout(supabase);
 
@@ -133,7 +144,7 @@ export async function middleware(req: NextRequest) {
     url.pathname = "/login";
     url.search = "";
     url.searchParams.set("next", path);
-    return NextResponse.redirect(url);
+    return redirecionar(url);
   }
 
   const email = user.email || "";
@@ -151,7 +162,7 @@ export async function middleware(req: NextRequest) {
     url.search = "";
     url.searchParams.set("erro", "dominio");
     url.searchParams.set("email", email);
-    return NextResponse.redirect(url);
+    return redirecionar(url);
   }
 
   // ===== 3. Fora do Societário, qualquer pessoa da PHD entra =====
@@ -160,7 +171,7 @@ export async function middleware(req: NextRequest) {
       const url = req.nextUrl.clone();
       url.pathname = "/";
       url.search = "";
-      return NextResponse.redirect(url);
+      return redirecionar(url);
     }
     return res;
   }
@@ -187,7 +198,7 @@ export async function middleware(req: NextRequest) {
     url.pathname = "/m/societario/auth/error";
     url.searchParams.set("reason", "not_allowed");
     url.searchParams.set("email", email);
-    return NextResponse.redirect(url);
+    return redirecionar(url);
   }
 
   // Restringe áreas admin / cadastros / mutações para quem não é admin.
@@ -196,14 +207,14 @@ export async function middleware(req: NextRequest) {
       const url = req.nextUrl.clone();
       url.pathname = "/m/societario/auth/error";
       url.searchParams.set("reason", "not_admin");
-      return NextResponse.redirect(url);
+      return redirecionar(url);
     }
   }
 
   if (path === "/m/societario/login") {
     const url = req.nextUrl.clone();
     url.pathname = "/m/societario";
-    return NextResponse.redirect(url);
+    return redirecionar(url);
   }
 
   return res;
