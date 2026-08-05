@@ -1,88 +1,83 @@
 import { NextResponse } from "next/server";
+import { obterCredenciaisMS, tokenGraph } from "@/lib/pessoas/msconfig";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Presença do Teams via Microsoft Graph.
- *
- * Requer (Environment Variables na Vercel):
- *   MS_TENANT_ID       — ID do diretório (tenant) do Azure AD da PHD
- *   MS_CLIENT_ID       — Application (client) ID do app registrado
- *   MS_CLIENT_SECRET   — segredo do app
- * Permissão de aplicação necessária: Presence.Read.All (com consentimento do admin).
- *
- * Sem as credenciais, devolve {} e a interface simplesmente não mostra o indicador.
- */
-export async function POST(req: Request) {
-  const tenant = process.env.MS_TENANT_ID;
-  const clientId = process.env.MS_CLIENT_ID;
-  const secret = process.env.MS_CLIENT_SECRET;
+// cache curto dos ids (email -> id do Entra), evita re-resolver a cada 60s
+let cacheIds: { mapa: Record<string, string>; em: number } | null = null;
+const TTL_IDS = 30 * 60 * 1000;
 
-  if (!tenant || !clientId || !secret) {
+export async function POST(req: Request) {
+  const c = await obterCredenciaisMS();
+  if (c.origem === "ausente") {
     return NextResponse.json({ presenca: {}, configurado: false });
   }
 
   let emails: string[] = [];
   try {
     const body = await req.json();
-    emails = Array.isArray(body?.emails) ? body.emails.filter(Boolean).slice(0, 650) : [];
+    emails = Array.isArray(body?.emails)
+      ? body.emails.filter(Boolean).map((e: string) => e.toLowerCase()).slice(0, 650)
+      : [];
   } catch {
     emails = [];
   }
   if (emails.length === 0) return NextResponse.json({ presenca: {}, configurado: true });
 
+  const token = await tokenGraph(c);
+  if (!token) return NextResponse.json({ presenca: {}, configurado: true, erro: "token" });
+
   try {
-    // 1) token de aplicação (client credentials)
-    const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: secret,
-        scope: "https://graph.microsoft.com/.default",
-        grant_type: "client_credentials",
-      }),
-      cache: "no-store",
-    });
-    if (!tokenRes.ok) throw new Error(`token ${tokenRes.status}`);
-    const { access_token } = await tokenRes.json();
+    // ids (com cache)
+    let idPorEmail: Record<string, string> = {};
+    if (cacheIds && Date.now() - cacheIds.em < TTL_IDS) {
+      idPorEmail = cacheIds.mapa;
+    }
+    const faltando = emails.filter((e) => !idPorEmail[e]);
+    if (faltando.length > 0) {
+      const novos: Record<string, string> = { ...idPorEmail };
+      await Promise.all(
+        faltando.map(async (mail) => {
+          const r = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mail)}?$select=id`,
+            { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+          );
+          if (r.ok) {
+            const u = await r.json();
+            if (u?.id) novos[mail] = u.id;
+          }
+        })
+      );
+      idPorEmail = novos;
+      cacheIds = { mapa: novos, em: Date.now() };
+    }
 
-    // 2) resolve e-mails -> ids de usuário
-    const ids: Record<string, string> = {};
-    await Promise.all(
-      emails.map(async (mail) => {
-        const r = await fetch(
-          `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mail)}?$select=id,mail`,
-          { headers: { Authorization: `Bearer ${access_token}` }, cache: "no-store" }
-        );
-        if (r.ok) {
-          const u = await r.json();
-          if (u?.id) ids[u.id] = mail.toLowerCase();
-        }
-      })
-    );
+    const emailPorId: Record<string, string> = {};
+    for (const mail of emails) {
+      const id = idPorEmail[mail];
+      if (id) emailPorId[id] = mail;
+    }
+    const ids = Object.keys(emailPorId);
+    if (ids.length === 0) return NextResponse.json({ presenca: {}, configurado: true });
 
-    const listaIds = Object.keys(ids);
-    if (listaIds.length === 0) return NextResponse.json({ presenca: {}, configurado: true });
-
-    // 3) presença em lote (máx. 650 por chamada)
     const pr = await fetch("https://graph.microsoft.com/v1.0/communications/getPresencesByUserId", {
       method: "POST",
-      headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: listaIds }),
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
       cache: "no-store",
     });
-    if (!pr.ok) throw new Error(`presence ${pr.status}`);
+    if (!pr.ok) {
+      return NextResponse.json({ presenca: {}, configurado: true, erro: `graph ${pr.status}` });
+    }
     const dados = await pr.json();
 
     const presenca: Record<string, string> = {};
     for (const item of dados?.value ?? []) {
-      const mail = ids[item.id];
+      const mail = emailPorId[item.id];
       if (mail) presenca[mail] = String(item.availability ?? "unknown").toLowerCase();
     }
-    return NextResponse.json({ presenca, configurado: true });
+    return NextResponse.json({ presenca, configurado: true, origem: c.origem });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "erro";
-    return NextResponse.json({ presenca: {}, configurado: true, erro: msg });
+    return NextResponse.json({ presenca: {}, configurado: true, erro: e instanceof Error ? e.message : "erro" });
   }
 }

@@ -41,10 +41,6 @@ export default function ListaPessoas({ pessoas }: { pessoas: Perfil[] }) {
     );
   }, [pessoas, busca]);
 
-  // divide em duas colunas mantendo a ordem alfabética (A→ na esquerda)
-  const meio = Math.ceil(filtradas.length / 2);
-  const colunas = [filtradas.slice(0, meio), filtradas.slice(meio)];
-
   const selecionada = filtradas.find((p) => p.slug === sel) ?? null;
 
   function statusDe(p: Perfil): string | null {
@@ -59,41 +55,50 @@ export default function ListaPessoas({ pessoas }: { pessoas: Perfil[] }) {
         <span className="chip on">{filtradas.length} pessoas</span>
       </div>
 
-      <div className="lista-cols">
-        {colunas.map((col, ci) => (
-          <div key={ci} className="lista-col">
-            {col.map((p) => {
-              const st = statusDe(p);
-              return (
-                <button
-                  key={p.slug}
-                  className={`linha-pessoa${sel === p.slug ? " ativa" : ""}`}
-                  onClick={() => setSel(sel === p.slug ? null : p.slug)}
-                >
-                  <span className="lp-foto">
-                    {p.foto_url
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={p.foto_url} alt={p.nome} />
-                      : <span className="lp-ini mono">{iniciais(p.nome)}</span>}
-                    {st && <span className={`presenca ${st}`} title={rotuloPresenca(st)} />}
+      <div className="pessoas-layout">
+        {/* Coluna esquerda: lista rolável */}
+        <aside className="pessoas-lista">
+          {filtradas.map((p) => {
+            const st = statusDe(p);
+            return (
+              <button
+                key={p.slug}
+                className={`linha-pessoa${sel === p.slug ? " ativa" : ""}`}
+                onClick={() => setSel(p.slug)}
+              >
+                <span className="lp-foto">
+                  {p.foto_url
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={p.foto_url} alt={p.nome} />
+                    : <span className="lp-ini mono">{iniciais(p.nome)}</span>}
+                  {st && <span className={`presenca ${st}`} title={rotuloPresenca(st)} />}
+                </span>
+                <span className="lp-txt">
+                  <span className="lp-nome">
+                    {p.nome}
+                    {p.modelo && <span className="lp-modelo mono">modelo</span>}
                   </span>
-                  <span className="lp-txt">
-                    <span className="lp-nome">
-                      {p.nome}
-                      {p.modelo && <span className="lp-modelo mono">modelo</span>}
-                    </span>
-                    <span className="lp-cargo">{p.setor} — {p.funcao ?? p.cargo ?? ""}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+                  <span className="lp-cargo">{p.setor} — {p.funcao ?? p.cargo ?? ""}</span>
+                </span>
+              </button>
+            );
+          })}
+          {filtradas.length === 0 && <div className="loading">Nenhuma pessoa encontrada.</div>}
+        </aside>
+
+        {/* Coluna direita: perfil fixo */}
+        <div className="pessoas-detalhe">
+          {selecionada ? (
+            <PerfilPainel slug={selecionada.slug} onFechar={() => setSel(null)} />
+          ) : (
+            <div className="detalhe-vazio">
+              <div className="dv-ic">👥</div>
+              <p><strong>Selecione uma pessoa</strong></p>
+              <p className="dv-sub">Clique em um nome na lista para ver o perfil completo aqui.</p>
+            </div>
+          )}
+        </div>
       </div>
-
-      {filtradas.length === 0 && <div className="loading">Nenhuma pessoa encontrada.</div>}
-
-      {selecionada && <PerfilPainel slug={selecionada.slug} onFechar={() => setSel(null)} />}
     </>
   );
 }

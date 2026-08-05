@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { MODULES } from "@/lib/modules";
 import ThemeToggle from "./ThemeToggle";
 
@@ -14,6 +15,12 @@ export default function Workspace({
   children: React.ReactNode;
 }) {
   const cur = MODULES.find((m) => m.id === moduleId);
+
+  // Tela anterior = um nível acima na URL (ex.: /m/pessoas/sobre-nos/historia -> /m/pessoas/sobre-nos)
+  const pathname = usePathname() ?? "";
+  const partes = pathname.split("/").filter(Boolean);
+  const voltarPara = partes.length > 2 ? "/" + partes.slice(0, -1).join("/") : "/";
+
   return (
     <div className="workspace">
       <aside className="sidebar">
@@ -53,9 +60,14 @@ export default function Workspace({
 
       <div className="main">
         <div className="main-top">
-          <div className="crumb mono">
-            <Link href="/">Módulos</Link> / <span className={appName ? "" : "cur"}>{cur?.name ?? moduleId}</span>
-            {appName && <> / <span className="cur">{appName}</span></>}
+          <div className="top-esq">
+            <Link className="btn-voltar" href={voltarPara} aria-label="Voltar para a tela anterior">
+              ← Voltar
+            </Link>
+            <div className="crumb mono">
+              <Link href="/">Módulos</Link> / <span className={appName ? "" : "cur"}>{cur?.name ?? moduleId}</span>
+              {appName && <> / <span className="cur">{appName}</span></>}
+            </div>
           </div>
         </div>
         <div className="main-body">{children}</div>

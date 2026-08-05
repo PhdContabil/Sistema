@@ -21,6 +21,32 @@ export default function EditarPerfil({ slug }: { slug: string }) {
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+
+  async function enviarFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    if (arquivo.size > 5 * 1024 * 1024) { setErro("A imagem deve ter até 5 MB."); return; }
+
+    setEnviandoFoto(true); setErro(null); setMsg(null);
+    const sb = createSupabaseBrowserClient();
+    const ext = (arquivo.name.split(".").pop() || "jpg").toLowerCase();
+    const caminho = `${slug}-${Date.now()}.${ext}`;
+
+    const { error: upErr } = await sb.storage.from("fotos-pessoas").upload(caminho, arquivo, {
+      upsert: true, contentType: arquivo.type,
+    });
+    if (upErr) { setEnviandoFoto(false); setErro(`Falha no upload: ${upErr.message}`); return; }
+
+    const { data } = sb.storage.from("fotos-pessoas").getPublicUrl(caminho);
+    const url = data.publicUrl;
+
+    const { error: updErr } = await sb.from("pessoas_perfil")
+      .update({ foto_url: url, atualizado_em: new Date().toISOString() }).eq("slug", slug);
+    setEnviandoFoto(false);
+    if (updErr) setErro(`Foto enviada, mas não salvou no perfil: ${updErr.message}`);
+    else { setForm((f) => ({ ...f, foto_url: url })); setMsg("Foto atualizada."); }
+  }
 
   useEffect(() => {
     const sb = createSupabaseBrowserClient();
@@ -107,10 +133,27 @@ export default function EditarPerfil({ slug }: { slug: string }) {
         <input className="search" value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} placeholder="Ex.: Sócio - Gestor de Pessoas e Finanças" />
       </label>
 
-      <label className="campo">
-        <span>Foto (URL da imagem)</span>
-        <input className="search" value={form.foto_url} onChange={(e) => setForm({ ...form, foto_url: e.target.value })} placeholder="https://…" />
-      </label>
+      <div className="campo">
+        <span>Foto do perfil</span>
+        <div className="fp-foto">
+          <span className="fp-preview">
+            {form.foto_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={form.foto_url} alt="Sua foto" />
+              : <span className="fp-sem">sem foto</span>}
+          </span>
+          <div className="fp-foto-acoes">
+            <label className="btn" style={{ cursor: "pointer" }}>
+              {enviandoFoto ? "Enviando…" : "Escolher imagem…"}
+              <input type="file" accept="image/*" onChange={enviarFoto} disabled={enviandoFoto} style={{ display: "none" }} />
+            </label>
+            {form.foto_url && (
+              <button type="button" className="btn" onClick={() => setForm({ ...form, foto_url: "" })}>Remover</button>
+            )}
+            <span className="fp-dica">JPG, PNG ou WEBP — até 5 MB.</span>
+          </div>
+        </div>
+      </div>
 
       <label className="campo">
         <span>Seu histórico na PHD</span>

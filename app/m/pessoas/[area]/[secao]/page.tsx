@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import Workspace from "@/components/Workspace";
 import Conteudo from "@/components/pessoas/Conteudo";
@@ -48,9 +47,6 @@ export default function SecaoPage({ params }: { params: { area: string; secao: s
         !s.especial && <Conteudo secao={s} />
       )}
 
-      <div className="voltar">
-        <Link href={`/m/pessoas/${a.id}`}>← Voltar para {a.titulo}</Link>
-      </div>
     </Workspace>
   );
 }
