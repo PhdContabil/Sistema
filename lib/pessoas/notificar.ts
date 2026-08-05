@@ -107,6 +107,63 @@ export async function avisarTeams(paraEmail: string, texto: string, link: string
   }
 }
 
+/** Lê uma configuração do banco (app_config), com cache simples. */
+const cacheCfg = new Map<string, { valor: string | null; em: number }>();
+async function config(chave: string): Promise<string | null> {
+  const doEnv = process.env[chave];
+  if (doEnv) return doEnv;
+
+  const c = cacheCfg.get(chave);
+  if (c && Date.now() - c.em < 5 * 60 * 1000) return c.valor;
+
+  const sb = admin();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.from("app_config").select("valor").eq("chave", chave).maybeSingle();
+    const valor = data?.valor ?? null;
+    cacheCfg.set(chave, { valor, em: Date.now() });
+    return valor;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mensagem PRIVADA no Teams via Power Automate.
+ *
+ * O Graph não deixa um app enviar chat 1:1 (403). O Power Automate consegue
+ * porque envia como "Flow bot". Então o sistema chama um fluxo com gatilho
+ * "Quando uma solicitação HTTP é recebida" e o fluxo posta no Teams.
+ *
+ * Configure a URL do gatilho em POWER_AUTOMATE_URL (env) ou na tabela app_config.
+ * Payload enviado:
+ *   { "para": "email@phdcontabil.com.br", "titulo": "...", "mensagem": "...", "link": "..." }
+ */
+export async function avisarTeamsFluxo(
+  paraEmail: string,
+  titulo: string,
+  mensagem: string,
+  link: string
+): Promise<boolean> {
+  const url = await config("POWER_AUTOMATE_URL");
+  if (!url) return false;
+
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ para: paraEmail, titulo, mensagem, link }),
+      cache: "no-store",
+    });
+    const ok = r.ok;
+    await registrar(paraEmail, "teams", titulo, ok, ok ? "via Power Automate" : `HTTP ${r.status}`);
+    return ok;
+  } catch (e) {
+    await registrar(paraEmail, "teams", titulo, false, e instanceof Error ? e.message : "erro");
+    return false;
+  }
+}
+
 /**
  * Aviso em canal do Teams via Incoming Webhook.
  * Caminho que funciona sem app do Teams: basta criar o webhook no canal

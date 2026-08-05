@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { admin, formatarPeriodos, type PeriodoFerias } from "@/lib/pessoas/ferias";
-import { enviarEmail, avisarTeams, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
+import { enviarEmail, avisarTeams, avisarTeamsFluxo, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
 
 export const dynamic = "force-dynamic";
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
@@ -98,6 +98,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       { texto: "Ver minhas férias", url: link }
     );
     await enviarEmail(sol.solicitante, titulo, html);
+    await avisarTeamsFluxo(
+      sol.solicitante,
+      titulo,
+      aprovado
+        ? `Suas férias (${resumo}) foram APROVADAS por ${avaliador?.nome ?? email}.`
+        : `Suas férias (${resumo}) foram RECUSADAS por ${avaliador?.nome ?? email}.${body.motivo ? ` Motivo: ${body.motivo}` : ""}`,
+      link
+    );
     await avisarTeams(sol.solicitante, `${titulo}: ${resumo}`, link);
     await avisarCanal(`${aprovado ? "✅" : "❌"} Férias de **${nome}** ${aprovado ? "aprovadas" : "recusadas"} — ${resumo}`);
   }
