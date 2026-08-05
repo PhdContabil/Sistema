@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/societario/supabase-browser";
 import type { Perfil } from "@/lib/pessoas/dados";
 
 function iniciais(nome: string) {
@@ -18,6 +19,11 @@ function compBR(iso: string | null) {
   return `${m}/${a}`;
 }
 
+/**
+ * Lê o perfil direto do Supabase pelo navegador (a leitura é liberada por RLS).
+ * Assim a tela não depende de rota de API — evita qualquer problema de sessão
+ * no meio do caminho.
+ */
 export default function PerfilPainel({ slug, onFechar }: { slug: string; onFechar: () => void }) {
   const [p, setP] = useState<Perfil | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -25,20 +31,45 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
 
   useEffect(() => {
     let vivo = true;
-    setP(null); setErro(null);
-    fetch(`/api/pessoas/${slug}`, { cache: "no-store", credentials: "same-origin" })
-      .then(async (r) => {
-        const tipo = r.headers.get("content-type") ?? "";
-        if (!tipo.includes("application/json")) {
-          // Provavelmente redirecionado para o login (sessão expirada).
-          throw new Error("Sua sessão expirou. Recarregue a página e entre novamente.");
-        }
-        const j = await r.json();
-        if (!r.ok || j.error) throw new Error(j.error || `Erro ${r.status} ao carregar o perfil.`);
-        return j;
-      })
-      .then((j) => { if (!vivo) return; setP(j.perfil); setPodeEditar(Boolean(j.podeEditar)); })
-      .catch((e) => vivo && setErro(e instanceof Error ? e.message : "Não foi possível carregar o perfil."));
+    setP(null);
+    setErro(null);
+    setPodeEditar(false);
+
+    (async () => {
+      try {
+        const sb = createSupabaseBrowserClient();
+
+        const { data: perfil, error: e1 } = await sb
+          .from("pessoas_perfil")
+          .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo")
+          .eq("slug", slug)
+          .maybeSingle();
+
+        if (e1) throw new Error(e1.message);
+        if (!perfil) throw new Error("Perfil não encontrado.");
+        if (!vivo) return;
+
+        const [{ data: fs }, { data: cs }, { data: auth }] = await Promise.all([
+          sb.from("pessoas_formacao")
+            .select("id,curso,grau,instituicao,inicio,fim")
+            .eq("pessoa_id", perfil.id)
+            .order("fim", { ascending: false }),
+          sb.from("pessoas_cursos")
+            .select("id,tipo,titulo,instituicao,participacao,competencia")
+            .eq("pessoa_id", perfil.id)
+            .order("competencia", { ascending: false }),
+          sb.auth.getUser(),
+        ]);
+
+        if (!vivo) return;
+        const meuEmail = auth?.user?.email?.toLowerCase() ?? null;
+        setPodeEditar(Boolean(meuEmail && perfil.email && String(perfil.email).toLowerCase() === meuEmail));
+        setP({ ...(perfil as Perfil), formacoes: fs ?? [], cursos: cs ?? [] });
+      } catch (e) {
+        if (vivo) setErro(e instanceof Error ? e.message : "Não foi possível carregar o perfil.");
+      }
+    })();
+
     return () => { vivo = false; };
   }, [slug]);
 
@@ -67,7 +98,7 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
             <div className="perfil-acoes">
               {podeEditar
                 ? <a className="btn primary" href={`/m/pessoas/perfil/${p.slug}/editar`}>Editar meu perfil</a>
-                : <span className="perfil-dica">Entre com seu e-mail PHD para editar o seu perfil.</span>}
+                : <span className="perfil-dica">Só a própria pessoa edita este espaço.</span>}
             </div>
           </header>
 
@@ -87,7 +118,7 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
                       <tr key={f.id}>
                         <td>{f.curso}</td>
                         <td className="mut">{f.grau ?? "–"}</td>
-                        <td className="mut mono">{periodo(f) || "–"}</td>
+                        <td className="mut">{periodo(f) || "–"}</td>
                         <td className="mut">{f.instituicao ?? "–"}</td>
                       </tr>
                     ))}
@@ -104,7 +135,7 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
                   <tbody>
                     {p.cursos.map((c) => (
                       <tr key={c.id}>
-                        <td className="mut mono">{compBR(c.competencia) || "–"}</td>
+                        <td className="mut">{compBR(c.competencia) || "–"}</td>
                         <td>{c.titulo}</td>
                         <td className="mut">{c.instituicao ?? "–"}</td>
                         <td className="mut">{c.participacao ?? "–"}</td>

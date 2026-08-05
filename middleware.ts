@@ -69,6 +69,36 @@ async function isEmailAllowedDB(email: string): Promise<boolean> {
   }
 }
 
+/**
+ * Identifica o usuário da requisição.
+ *
+ * 1) `getUser()` valida o token no servidor do Supabase (chamada de rede).
+ * 2) Se ela falhar ou demorar (instância lenta, latência, pico de requisições),
+ *    NÃO deslogamos a pessoa: caímos para a sessão já presente no cookie.
+ *    Sem esse fallback, qualquer soluço de rede jogava o usuário no login
+ *    ao navegar entre módulos.
+ */
+async function identificarUsuario(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<{ user: { email?: string | null } | null }> {
+  const { user } = await getUserWithTimeout(supabase);
+  if (user?.email) return { user };
+
+  try {
+    const { data } = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("getSession timeout")), 3000)
+      ),
+    ]);
+    const doCookie = data?.session?.user;
+    if (doCookie?.email) return { user: doCookie };
+  } catch {
+    /* sem sessão utilizável */
+  }
+  return { user: null };
+}
+
 /** Chama supabase.auth.getUser() com timeout, pra não travar o middleware
  * caso o Supabase Auth esteja pausado/lento (plano Free pausa após inatividade). */
 async function getUserWithTimeout(
@@ -131,12 +161,14 @@ export async function middleware(req: NextRequest) {
     return r;
   };
 
-  const { user } = await getUserWithTimeout(supabase);
-
   const path = req.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  const isPublicCedo = PUBLIC_PATHS.some((p) => path.startsWith(p));
 
-  if (isPublic) return res;
+  // Em rota pública não precisa checar sessão (evita chamadas desnecessárias
+  // ao Supabase e o risco de invalidar tokens em paralelo).
+  if (isPublicCedo) return res;
+
+  const { user } = await identificarUsuario(supabase);
 
   // ===== 1. Sem sessão: manda para o login do hub =====
   if (!user) {
