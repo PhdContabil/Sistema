@@ -10,7 +10,7 @@
 // - Bloqueia /m/societario/processos/novo e
 //   /m/societario/processos/[id]/editar para colaboradores.
 
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isEmailAllowed, isAdmin } from "@/lib/societario/options";
 
@@ -113,7 +113,7 @@ export async function middleware(req: NextRequest) {
     {
       cookies: {
         getAll: () => req.cookies.getAll(),
-        setAll: (cookiesToSet) => {
+        setAll: (cookiesToSet: { name: string; value: string; options: CookieOptions }[]) => {
           cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
           res = NextResponse.next({ request: req });
           cookiesToSet.forEach(({ name, value, options }) =>
