@@ -64,14 +64,7 @@ export const AREAS: AreaPessoas[] = [
     id: "comunicacao", titulo: "Comunicação", resumo: "Férias, ausências, reuniões e confraternizações.",
     cor: "oklch(0.62 0.13 200)",
     secoes: [
-      {
-        id: "ferias", titulo: "Férias", resumo: "Solicitação, períodos a vencer e agendados.",
-        itens: [
-          { id: "solicite", titulo: "Solicite", resumo: "Informe o mês e os dias desejados.", texto: "Informe o mês e os dias em que gostaria de tirar férias. É possível escolher dois períodos no ano, se desejar.", pendente: true, nota: "Formulário será ativado numa próxima etapa." },
-          { id: "a-vencer", titulo: "A vencer", resumo: "Períodos aquisitivos próximos do vencimento.", pendente: true, nota: "Preenchido manualmente pelo Júnior (no futuro, direto do Questor)." },
-          { id: "agendadas", titulo: "Agendadas", resumo: "Férias já programadas da equipe.", pendente: true, nota: "Preenchido manualmente pelo Júnior." },
-        ],
-      },
+      { id: "ferias", titulo: "Férias", resumo: "Solicite seus períodos e acompanhe a aprovação.", rota: "/m/pessoas/ferias" },
       {
         id: "ausencias", titulo: "Ausências", resumo: "Solicitação de banco de horas e demais ausências.",
         itens: [

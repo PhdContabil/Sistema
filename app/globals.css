@@ -465,6 +465,66 @@ table.mini td.mut { color: var(--muted); }
 }
 .btn-remover:hover { color: var(--div); background: var(--surface2); }
 
+/* ===== Férias ===== */
+.sub-info { font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; }
+.campo-inline { display: flex; flex-direction: column; gap: 4px; }
+.campo-inline > span { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.campo-inline .search { min-width: 150px; }
+.dias-badge {
+  background: var(--accent-soft); color: var(--accent); border-radius: 999px;
+  padding: 4px 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+.lista-aprov { display: flex; flex-direction: column; gap: 12px; }
+.card-aprov { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface2); }
+.ca-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ca-nome { font-size: 15px; font-weight: 600; }
+.ca-setor { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ca-periodos { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }
+.periodo-chip {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 5px 10px; font-size: 13px;
+}
+.periodo-chip em { color: var(--muted); font-style: normal; font-size: 11.5px; }
+.ca-obs { margin: 10px 0 0; font-size: 13px; color: var(--text); font-style: italic; }
+.ca-acoes, .ca-recusa { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.ca-recusa .search { flex: 1; min-width: 220px; }
+.btn-recusar { border-color: var(--div); color: var(--div); }
+.btn-recusar:hover { background: color-mix(in srgb, var(--div) 10%, var(--surface)); border-color: var(--div); }
+
+/* ===== Gantt do mês ===== */
+.gantt { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
+.gantt-topo { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.gantt-filtros { display: flex; gap: 6px; flex-wrap: wrap; }
+.gantt-wrap { overflow-x: auto; }
+table.gantt-tab { border-collapse: collapse; width: 100%; min-width: 720px; }
+table.gantt-tab th, table.gantt-tab td { border: 1px solid var(--border); }
+table.gantt-tab th.g-dia {
+  width: 26px; font-size: 10.5px; font-weight: 600; color: var(--muted);
+  text-align: center; padding: 5px 0; background: var(--surface2);
+}
+table.gantt-tab th.g-dia.fds, table.gantt-tab td.g-cel.fds { background: color-mix(in srgb, var(--muted) 10%, var(--surface)); }
+table.gantt-tab th.g-dia.hoje, table.gantt-tab td.g-cel.hoje { background: var(--accent-soft); }
+.g-nome {
+  text-align: left; padding: 7px 12px 7px 10px; min-width: 210px; max-width: 260px;
+  background: var(--surface); font-size: 13px; position: sticky; left: 0; z-index: 2;
+}
+thead .g-nome { background: var(--surface2); z-index: 3; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.g-ponto { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }
+.g-titulo { font-weight: 500; }
+.g-detalhe { display: block; font-size: 11px; color: var(--muted); margin-left: 16px; }
+td.g-cel { height: 30px; }
+td.g-barra-cel { padding: 3px 2px; }
+.g-barra {
+  display: block; height: 20px; border-radius: 5px; color: #fff;
+  font-size: 10.5px; font-weight: 600; line-height: 20px; text-align: center;
+}
+.mes-evt {
+  display: block; width: 100%; font-size: 10px; line-height: 1.25; color: var(--text);
+  background: var(--accent-soft); border-radius: 4px; padding: 2px 4px; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mes-mais { font-size: 10px; color: var(--muted); }
+
 /* ===== Agenda mensal ===== */
 .mes { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); }
 .mes-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }

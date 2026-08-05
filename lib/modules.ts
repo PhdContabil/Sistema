@@ -34,6 +34,9 @@ export const MODULES: ModuleDef[] = [
     desc: "Nossa gente: cultura, comunicação, saúde, normas e desenvolvimento.",
     apps: [
       { name: "Meu perfil", desc: "Preencha seus dados: foto, histórico, formação e cursos.", href: "/m/pessoas/meu-perfil" },
+      { name: "Férias", desc: "Solicite seus períodos e acompanhe a aprovação.", href: "/m/pessoas/ferias" },
+      { name: "Aprovar férias", desc: "Encarregados avaliam as solicitações do setor.", href: "/m/pessoas/ferias/aprovacoes" },
+      { name: "Agenda", desc: "Linha do tempo do mês: férias, ausências e feriados.", href: "/m/pessoas/agenda" },
       { name: "Ponto Digital", desc: "Registre seu ponto sem sair do sistema.", href: "/m/pessoas/ponto" },
       { name: "Sobre nós", desc: "História, hierarquia e cultura da PHD.", href: "/m/pessoas/sobre-nos" },
       { name: "Pessoas", desc: "Quem é quem, por setor.", href: "/m/pessoas/pessoas" },
