@@ -59,8 +59,21 @@ export async function enviarEmail(para: string, assunto: string, html: string): 
   }
 }
 
-/** Aviso na central de atividades do Teams (app-only). */
+/**
+ * Aviso na central de atividades do Teams.
+ *
+ * TESTADO EM 05/08/2026: o Graph devolve 403 —
+ *   "Application ... is not authorized to generate custom text notifications".
+ * Ou seja: mesmo com a permissão TeamsActivity.Send concedida, a Microsoft exige
+ * que o aviso seja atribuído a um APP DO TEAMS instalado no tenant. Enquanto esse
+ * app não existir, esta função falha silenciosamente (fica registrada no log) e a
+ * notificação segue por e-mail + canal do Teams (webhook).
+ *
+ * Para ativar de verdade: publicar um app do Teams (manifest) e instalá-lo para os
+ * usuários, ou usar um fluxo do Power Automate que envie a mensagem no chat.
+ */
 export async function avisarTeams(paraEmail: string, texto: string, link: string): Promise<boolean> {
+  if (process.env.TEAMS_ATIVIDADE_ATIVA !== "1") return false; // desligado até existir o app do Teams
   const c = await obterCredenciaisMS();
   if (c.origem === "ausente") return false;
   const token = await tokenGraph(c);
@@ -94,10 +107,25 @@ export async function avisarTeams(paraEmail: string, texto: string, link: string
   }
 }
 
-/** Aviso em canal do Teams via Incoming Webhook (opcional). */
+/**
+ * Aviso em canal do Teams via Incoming Webhook.
+ * Caminho que funciona sem app do Teams: basta criar o webhook no canal
+ * e guardar a URL em TEAMS_WEBHOOK_URL (env) ou em app_config.
+ */
 export async function avisarCanal(texto: string): Promise<boolean> {
-  const url = process.env.TEAMS_WEBHOOK_URL;
+  let url = process.env.TEAMS_WEBHOOK_URL;
+
+  if (!url) {
+    const sb = admin();
+    if (sb) {
+      try {
+        const { data } = await sb.from("app_config").select("valor").eq("chave", "TEAMS_WEBHOOK_URL").maybeSingle();
+        url = data?.valor ?? undefined;
+      } catch { /* segue sem webhook */ }
+    }
+  }
   if (!url) return false;
+
   try {
     const r = await fetch(url, {
       method: "POST",
@@ -105,8 +133,10 @@ export async function avisarCanal(texto: string): Promise<boolean> {
       body: JSON.stringify({ text: texto }),
       cache: "no-store",
     });
+    await registrar("canal-teams", "teams", texto.slice(0, 120), r.ok, r.ok ? undefined : `HTTP ${r.status}`);
     return r.ok;
-  } catch {
+  } catch (e) {
+    await registrar("canal-teams", "teams", texto.slice(0, 120), false, e instanceof Error ? e.message : "erro");
     return false;
   }
 }
