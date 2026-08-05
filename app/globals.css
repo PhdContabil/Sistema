@@ -242,22 +242,31 @@ table.grid thead th.c-res, table.grid thead th.consid { text-align: center; }
 .destaque-desc { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .destaque-go { font-size: 11px; color: var(--accent); font-weight: 600; flex: none; }
 
-/* Ponto Digital embutido */
-.ponto-wrap { display: flex; flex-direction: column; gap: 10px; }
-.ponto-wrap.cheio {
-  position: fixed; inset: 0; z-index: 60; background: var(--bg);
-  padding: 12px 14px; gap: 8px;
+/* ===== Ponto Digital embutido =====
+   Altura útil = viewport - topbar (64px) - padding vertical do corpo (56px). */
+.ponto-page {
+  display: flex; flex-direction: column; gap: 10px;
+  height: calc(100vh - 120px); min-height: 460px;
 }
-.ponto-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.ponto-origem { font-size: 11.5px; color: var(--muted); }
+.ponto-page.cheio {
+  position: fixed; inset: 0; z-index: 60; background: var(--bg);
+  padding: 10px 12px; gap: 8px; height: 100vh; min-height: 0;
+}
+.ponto-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; flex: none; }
+.ponto-id { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.ponto-ic {
+  width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--accent);
+  color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 600;
+}
+.ponto-id strong { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.2; }
+.ponto-origem { display: block; font-size: 11.5px; color: var(--muted); }
 .ponto-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 .ponto-acoes .btn { padding: 6px 12px; font-size: 13px; text-decoration: none; }
 .ponto-box {
-  position: relative; flex: 1; background: var(--surface); border: 1px solid var(--border);
+  position: relative; flex: 1; min-height: 0;
+  background: #fff; border: 1px solid var(--border);
   border-radius: 12px; overflow: hidden; box-shadow: var(--shadow);
-  height: calc(100vh - 300px); min-height: 520px;
 }
-.ponto-wrap.cheio .ponto-box { height: auto; min-height: 0; }
 .ponto-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
 .ponto-status {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
