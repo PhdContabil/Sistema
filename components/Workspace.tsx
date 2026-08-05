@@ -39,7 +39,7 @@ export default function Workspace({
           {MODULES.map((m) => {
             const active = m.id === moduleId;
             return (
-              <Link key={m.id} href={`/m/${m.id}`} className={`rail ${active ? "active" : ""}`}>
+              <Link key={m.id} href={`/m/${m.id}`} prefetch={false} className={`rail ${active ? "active" : ""}`}>
                 {active && <span className="bar" />}
                 <span className="ic mono" style={{ background: m.color }}>{m.initials}</span>
                 <span className="nm">{m.name}</span>

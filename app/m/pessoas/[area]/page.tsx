@@ -21,7 +21,7 @@ export default function AreaPage({ params }: { params: { area: string } }) {
       <div className="section-label mono">Tópicos · {a.secoes.length}</div>
       <div className="app-grid">
         {a.secoes.map((s) => (
-          <Link key={s.id} href={`/m/pessoas/${a.id}/${s.id}`} className="app-card on">
+          <Link key={s.id} href={s.rota ?? `/m/pessoas/${a.id}/${s.id}`} className="app-card on">
             <div className="app-ic-sm mono" style={{ color: a.cor }}>{appInitials(s.titulo)}</div>
             <div className="nm">{s.titulo}</div>
             <div className="desc">{s.resumo}</div>

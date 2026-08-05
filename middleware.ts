@@ -189,13 +189,9 @@ export async function middleware(req: NextRequest) {
   const email = user.email || "";
 
   // ===== 2. Só e-mails da PHD =====
+  // Importante: NÃO chamar signOut() aqui. Isso destruiria a sessão do sistema
+  // inteiro (inclusive disparado por prefetch de link), obrigando a logar de novo.
   if (!email.toLowerCase().endsWith(DOMINIO_PHD)) {
-    try {
-      await Promise.race([
-        supabase.auth.signOut(),
-        new Promise((r) => setTimeout(r, EXTERNAL_CALL_TIMEOUT_MS)),
-      ]);
-    } catch { /* o redirect abaixo já bloqueia */ }
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
@@ -223,16 +219,7 @@ export async function middleware(req: NextRequest) {
 
   if (!allowed) {
     if (path === "/m/societario/auth/error") return res;
-    try {
-      await Promise.race([
-        supabase.auth.signOut(),
-        new Promise((resolve) =>
-          setTimeout(resolve, EXTERNAL_CALL_TIMEOUT_MS)
-        ),
-      ]);
-    } catch {
-      // ignora falha/timeout no signOut — o redirect abaixo já bloqueia o acesso.
-    }
+    // Sem signOut: a pessoa continua logada no hub, apenas não entra no Societário.
     const url = req.nextUrl.clone();
     url.pathname = "/m/societario/auth/error";
     url.searchParams.set("reason", "not_allowed");

@@ -16,6 +16,16 @@ export default function PessoasHome() {
         </div>
       </div>
 
+      {/* Meu perfil — atalho para a pessoa preencher os próprios dados */}
+      <Link className="destaque" href="/m/pessoas/meu-perfil">
+        <span className="destaque-ic mono" style={{ background: "oklch(0.62 0.13 150)" }}>MP</span>
+        <span className="destaque-txt">
+          <span className="destaque-nome">Meu perfil</span>
+          <span className="destaque-desc">Preencha sua foto, histórico, formação acadêmica, cursos e espaço cultural.</span>
+        </span>
+        <span className="destaque-go mono">PREENCHER ›</span>
+      </Link>
+
       {/* Ponto Digital — abre embutido no sistema */}
       <Link className="destaque" href="/m/pessoas/ponto">
         <span className="destaque-ic mono">PD</span>

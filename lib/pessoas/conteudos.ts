@@ -22,6 +22,8 @@ export interface Secao {
   externo?: string;
   /** Tela especial (renderização própria). */
   especial?: "hierarquia" | "pessoas" | "agenda";
+  /** Link interno direto (o card abre esta rota em vez da tela de conteúdo). */
+  rota?: string;
   /** Aviso de onde virá o dado (ex.: preenchido manualmente pelo JR). */
   nota?: string;
 }
@@ -51,11 +53,11 @@ export const AREAS: AreaPessoas[] = [
     cor: "oklch(0.62 0.13 150)",
     secoes: [
       { id: "equipe", titulo: "Setor e Nome", resumo: "Relação das pessoas organizada por setor.", especial: "pessoas" },
-      { id: "sobre-mim", titulo: "Sobre mim", resumo: "Espaço para a pessoa se apresentar: gostos, hobbies, etc.", pendente: true, nota: "Cada pessoa preencherá seu próprio espaço." },
-      { id: "formacao", titulo: "Formação acadêmica", resumo: "Formações com data de início e término (ou previsão).", pendente: true, nota: "Base do Júnior + a pessoa adiciona conforme se forma." },
-      { id: "cursos", titulo: "Cursos complementares", resumo: "Cursos realizados — título, autor e o que achou.", pendente: true, nota: "Cada pessoa adiciona seus cursos." },
-      { id: "eventos", titulo: "Eventos", resumo: "Congressos, feiras, seminários, TCC e apresentações.", pendente: true, nota: "Cada pessoa adiciona: data, título e o que achou." },
-      { id: "espaco-cultural", titulo: "Espaço cultural", resumo: "Livros lidos ou em leitura, feiras e apresentações.", pendente: true, nota: "Cada pessoa adiciona: data, título e o que achou." },
+      { id: "meu-perfil", titulo: "Meu perfil", resumo: "Preencha seus dados: foto, histórico, formação, cursos e gostos.", rota: "/m/pessoas/meu-perfil" },
+      { id: "sobre-mim", titulo: "Sobre mim", resumo: "Apresente-se: gostos, hobbies e curiosidades.", rota: "/m/pessoas/meu-perfil" },
+      { id: "formacao", titulo: "Formação acadêmica", resumo: "Cadastre suas formações, com grau, instituição e período.", rota: "/m/pessoas/meu-perfil" },
+      { id: "cursos", titulo: "Cursos e eventos", resumo: "Cursos, congressos, seminários e apresentações.", rota: "/m/pessoas/meu-perfil" },
+      { id: "espaco-cultural", titulo: "Espaço cultural", resumo: "Livros, feiras e apresentações que fazem parte da sua história.", rota: "/m/pessoas/meu-perfil" },
     ],
   },
   {
