@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MODULES } from "@/lib/modules";
 import ThemeToggle from "./ThemeToggle";
+import UsuarioAtual from "./UsuarioAtual";
 
 export default function Workspace({
   moduleId,
@@ -48,13 +49,7 @@ export default function Workspace({
         </nav>
         <div className="sidebar-foot">
           <ThemeToggle full />
-          <div className="user-row">
-            <span className="avatar mono">RS</span>
-            <span>
-              <span className="nm" style={{ display: "block" }}>Rafael Souza</span>
-              <span className="role">Contador responsável</span>
-            </span>
-          </div>
+          <UsuarioAtual />
         </div>
       </aside>
 

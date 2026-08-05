@@ -15,11 +15,26 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isEmailAllowed, isAdmin } from "@/lib/societario/options";
 
 const PUBLIC_PATHS = [
+  // Login do hub
+  "/login",
+  "/auth/callback",
+  "/auth/sair",
+  // Login/rotas de auth do módulo Societário
   "/m/societario/login",
   "/m/societario/auth/callback",
   "/m/societario/auth/error",
   "/m/societario/auth/debug",
+  // Tarefas agendadas (executadas pela Vercel, sem sessão de usuário)
+  "/api/societario/cron",
 ];
+
+/** Domínio corporativo autorizado a entrar no hub. */
+const DOMINIO_PHD = "@phdcontabil.com.br";
+
+/** Rotas do módulo Societário (mantêm a lista de autorizados própria). */
+function isSocietarioPath(path: string): boolean {
+  return path.startsWith("/m/societario") || path.startsWith("/api/societario");
+}
 
 // Timeout curto para qualquer chamada externa dentro do middleware.
 // O Edge Middleware da Vercel tem um limite de execução de ~25s; sem isso,
@@ -110,15 +125,47 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
 
+  if (isPublic) return res;
+
+  // ===== 1. Sem sessão: manda para o login do hub =====
   if (!user) {
-    if (isPublic) return res;
     const url = req.nextUrl.clone();
-    url.pathname = "/m/societario/login";
+    url.pathname = "/login";
+    url.search = "";
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
 
   const email = user.email || "";
+
+  // ===== 2. Só e-mails da PHD =====
+  if (!email.toLowerCase().endsWith(DOMINIO_PHD)) {
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((r) => setTimeout(r, EXTERNAL_CALL_TIMEOUT_MS)),
+      ]);
+    } catch { /* o redirect abaixo já bloqueia */ }
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("erro", "dominio");
+    url.searchParams.set("email", email);
+    return NextResponse.redirect(url);
+  }
+
+  // ===== 3. Fora do Societário, qualquer pessoa da PHD entra =====
+  if (!isSocietarioPath(path)) {
+    if (path === "/login") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return res;
+  }
+
+  // ===== 4. Societário: mantém a lista de autorizados =====
   let allowed = isEmailAllowed(email) || isAdmin(email);
   if (!allowed) {
     allowed = await isEmailAllowedDB(email);
@@ -163,5 +210,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/m/societario/:path*", "/api/societario/:path*"],
+  // Protege o sistema inteiro, exceto assets estáticos e arquivos públicos.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|societario/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|txt|xml)$).*)",
+  ],
 };

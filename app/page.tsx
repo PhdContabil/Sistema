@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { MODULES } from "@/lib/modules";
 import ThemeToggle from "@/components/ThemeToggle";
+import { AvatarUsuario, useUsuario } from "@/components/UsuarioAtual";
 
 export default function Launcher() {
+  const usuario = useUsuario();
   const [busca, setBusca] = useState("");
   const q = busca.trim().toLowerCase();
   const mods = MODULES.filter(
@@ -28,13 +30,13 @@ export default function Launcher() {
             <input placeholder="Buscar aplicação…" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </label>
           <ThemeToggle />
-          <span className="avatar mono">RS</span>
+          <AvatarUsuario />
         </div>
       </div>
 
       <div className="launcher-body">
         <div className="launcher-inner">
-          <div className="eyebrow mono">Bem-vindo, Rafael</div>
+          <div className="eyebrow mono">Bem-vindo{usuario ? `, ${usuario.nome.split(" ")[0]}` : ""}</div>
           <h1>Escolha um módulo</h1>
           <p className="lead">Selecione uma área para acessar suas aplicações.</p>
 

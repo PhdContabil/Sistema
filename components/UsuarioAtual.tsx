@@ -1,0 +1,56 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/societario/supabase-browser";
+
+interface Dados { nome: string; email: string; iniciais: string; }
+
+function iniciaisDe(nome: string, email: string) {
+  const base = (nome || email.split("@")[0] || "").replace(/\|.*$/, "").trim();
+  const w = base.split(/[\s.]+/).filter(Boolean);
+  return ((w[0]?.[0] || "") + (w[1]?.[0] || "")).toUpperCase() || "??";
+}
+
+export function useUsuario(): Dados | null {
+  const [u, setU] = useState<Dados | null>(null);
+  useEffect(() => {
+    const sb = createSupabaseBrowserClient();
+    sb.auth.getUser().then(({ data }) => {
+      const user = data.user;
+      if (!user?.email) return;
+      const nome =
+        (user.user_metadata?.full_name as string) ||
+        (user.user_metadata?.name as string) ||
+        user.email.split("@")[0];
+      const limpo = String(nome).replace(/\s*\|.*$/, "").trim();
+      setU({ nome: limpo, email: user.email, iniciais: iniciaisDe(limpo, user.email) });
+    });
+  }, []);
+  return u;
+}
+
+/** Bloco de usuário da sidebar (com sair). */
+export default function UsuarioAtual() {
+  const u = useUsuario();
+  return (
+    <div className="user-row">
+      <span className="avatar mono">{u?.iniciais ?? "··"}</span>
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span className="nm" style={{ display: "block" }}>{u?.nome ?? "Carregando…"}</span>
+        <span className="role" title={u?.email}>{u?.email ?? ""}</span>
+      </span>
+      <a className="sair" href="/auth/sair" title="Sair do sistema" aria-label="Sair">⏻</a>
+    </div>
+  );
+}
+
+/** Avatar compacto do topo (launcher). */
+export function AvatarUsuario() {
+  const u = useUsuario();
+  return (
+    <span className="avatar-wrap">
+      <span className="avatar mono" title={u?.email}>{u?.iniciais ?? "··"}</span>
+      <a className="sair" href="/auth/sair" title="Sair do sistema" aria-label="Sair">⏻</a>
+    </span>
+  );
+}
