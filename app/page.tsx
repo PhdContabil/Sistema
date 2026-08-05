@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { MODULES } from "@/lib/modules";
-import { PONTO_DIGITAL_URL } from "@/lib/pessoas/conteudos";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Launcher() {
@@ -39,14 +38,14 @@ export default function Launcher() {
           <h1>Escolha um módulo</h1>
           <p className="lead">Selecione uma área para acessar suas aplicações.</p>
 
-          <a className="destaque" href={PONTO_DIGITAL_URL} target="_blank" rel="noopener noreferrer">
+          <Link className="destaque" href="/m/pessoas/ponto">
             <span className="destaque-ic mono">PD</span>
             <span className="destaque-txt">
               <span className="destaque-nome">Ponto Digital</span>
-              <span className="destaque-desc">Registre seu ponto pelo computador — abre o Coalize em nova aba.</span>
+              <span className="destaque-desc">Registre seu ponto pelo computador, sem sair do sistema.</span>
             </span>
-            <span className="destaque-go mono">ABRIR ↗</span>
-          </a>
+            <span className="destaque-go mono">ABRIR ›</span>
+          </Link>
 
           <div className="module-grid">
             {mods.map((m) => {

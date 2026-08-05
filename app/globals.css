@@ -234,6 +234,31 @@ table.grid thead th.c-res, table.grid thead th.consid { text-align: center; }
 .destaque-desc { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .destaque-go { font-size: 11px; color: var(--accent); font-weight: 600; flex: none; }
 
+/* Ponto Digital embutido */
+.ponto-wrap { display: flex; flex-direction: column; gap: 10px; }
+.ponto-wrap.cheio {
+  position: fixed; inset: 0; z-index: 60; background: var(--bg);
+  padding: 12px 14px; gap: 8px;
+}
+.ponto-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ponto-origem { font-size: 11.5px; color: var(--muted); }
+.ponto-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.ponto-acoes .btn { padding: 6px 12px; font-size: 13px; text-decoration: none; }
+.ponto-box {
+  position: relative; flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; box-shadow: var(--shadow);
+  height: calc(100vh - 300px); min-height: 520px;
+}
+.ponto-wrap.cheio .ponto-box { height: auto; min-height: 0; }
+.ponto-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+.ponto-status {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; text-align: center; padding: 24px;
+  background: var(--surface); color: var(--muted); font-size: 13.5px; z-index: 1;
+}
+.ponto-status strong { color: var(--text); font-size: 15px; }
+.ponto-status p { margin: 0; max-width: 460px; line-height: 1.55; }
+
 .bloco-titulo { font-size: 15px; font-weight: 600; margin: 0; }
 .agenda { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
 .agenda-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }

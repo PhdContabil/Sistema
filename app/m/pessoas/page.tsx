@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Workspace from "@/components/Workspace";
 import AgendaSemanal from "@/components/pessoas/AgendaSemanal";
-import { AREAS, PONTO_DIGITAL_URL } from "@/lib/pessoas/conteudos";
+import { AREAS } from "@/lib/pessoas/conteudos";
 import { TOTAL_PESSOAS } from "@/lib/pessoas/equipe";
 import { appInitials } from "@/lib/modules";
 
@@ -16,15 +16,15 @@ export default function PessoasHome() {
         </div>
       </div>
 
-      {/* Atalho externo: Ponto Digital */}
-      <a className="destaque" href={PONTO_DIGITAL_URL} target="_blank" rel="noopener noreferrer">
+      {/* Ponto Digital — abre embutido no sistema */}
+      <Link className="destaque" href="/m/pessoas/ponto">
         <span className="destaque-ic mono">PD</span>
         <span className="destaque-txt">
           <span className="destaque-nome">Ponto Digital</span>
-          <span className="destaque-desc">Registre seu ponto pelo computador — abre o Coalize em nova aba.</span>
+          <span className="destaque-desc">Registre seu ponto pelo computador, sem sair do sistema.</span>
         </span>
-        <span className="destaque-go mono">ABRIR ↗</span>
-      </a>
+        <span className="destaque-go mono">ABRIR ›</span>
+      </Link>
 
       <AgendaSemanal />
 

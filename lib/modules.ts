@@ -33,6 +33,7 @@ export const MODULES: ModuleDef[] = [
     id: "pessoas", name: "Pessoas", initials: "PE", color: "oklch(0.62 0.13 150)",
     desc: "Nossa gente: cultura, comunicação, saúde, normas e desenvolvimento.",
     apps: [
+      { name: "Ponto Digital", desc: "Registre seu ponto sem sair do sistema.", href: "/m/pessoas/ponto" },
       { name: "Sobre nós", desc: "História, hierarquia e cultura da PHD.", href: "/m/pessoas/sobre-nos" },
       { name: "Pessoas", desc: "Quem é quem, por setor.", href: "/m/pessoas/pessoas" },
       { name: "Comunicação", desc: "Férias, ausências, reuniões e confraternizações.", href: "/m/pessoas/comunicacao" },
