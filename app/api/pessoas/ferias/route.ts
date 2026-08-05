@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { admin, encarregadoDoSetor, formatarPeriodos, type PeriodoFerias } from "@/lib/pessoas/ferias";
-import { enviarEmail, avisarTeams, avisarTeamsFluxo, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
+import { enviarEmail, notificarTeams, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
 
 export const dynamic = "force-dynamic";
 
@@ -58,14 +58,13 @@ export async function POST(req: Request) {
       { texto: "Avaliar solicitação", url: link }
     );
     await enviarEmail(chefe.email, `Férias — ${perfil.nome} aguarda sua aprovação`, html);
-    // Mensagem privada no Teams (via Power Automate); se não configurado, é ignorado.
-    await avisarTeamsFluxo(
+    // Mensagem no Teams pelo melhor canal disponível
+    await notificarTeams(
       chefe.email,
       "Nova solicitação de férias",
       `${perfil.nome} (${perfil.setor}) solicitou férias: ${resumo}. Sua aprovação é necessária.`,
       link
     );
-    await avisarTeams(chefe.email, `${perfil.nome} solicitou férias: ${resumo}`, link);
   }
   await avisarCanal(`🏖️ **${perfil.nome}** (${perfil.setor}) solicitou férias — ${resumo}. Avaliação: ${link}`);
 

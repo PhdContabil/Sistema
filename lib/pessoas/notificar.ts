@@ -165,6 +165,43 @@ export async function avisarTeamsFluxo(
 }
 
 /**
+ * Mensagem no Teams SEM licença premium — via e-mail de controle.
+ *
+ * Como o gatilho HTTP do Power Automate é premium, usamos conectores padrão:
+ *   1. O sistema envia um e-mail de controle para a caixa da Tecnologia
+ *      (assunto padronizado com o destinatário).
+ *   2. Um fluxo "Quando um novo e-mail chegar" lê esse e-mail e dispara
+ *      "Postar mensagem em um chat" para a pessoa, como Flow bot.
+ *
+ * Assunto: [NC-TEAMS] para=fulano@phdcontabil.com.br | Título
+ * Corpo:   mensagem + link (texto simples, fácil de repassar no fluxo)
+ */
+export async function avisarTeamsPorEmail(
+  paraEmail: string,
+  titulo: string,
+  mensagem: string,
+  link: string
+): Promise<boolean> {
+  const caixa = (await config("TEAMS_RELAY_EMAIL")) || "tecnologia@phdcontabil.com.br";
+
+  const assunto = `[NC-TEAMS] para=${paraEmail} | ${titulo}`;
+  const corpo = `
+    <p><strong>DESTINATARIO:</strong> ${paraEmail}</p>
+    <p><strong>TITULO:</strong> ${titulo}</p>
+    <p><strong>MENSAGEM:</strong> ${mensagem}</p>
+    <p><strong>LINK:</strong> ${link}</p>
+    <hr>
+    <p style="font-size:12px;color:#68717e">
+      E-mail de controle do Núcleo Contábil. Um fluxo do Power Automate lê esta
+      mensagem e a entrega no Teams do destinatário. Não é necessário responder.
+    </p>`;
+
+  const ok = await enviarEmail(caixa, assunto, corpo);
+  await registrar(paraEmail, "teams", `relay: ${titulo}`, ok, ok ? `via caixa ${caixa}` : "falha no relay");
+  return ok;
+}
+
+/**
  * Aviso em canal do Teams via Incoming Webhook.
  * Caminho que funciona sem app do Teams: basta criar o webhook no canal
  * e guardar a URL em TEAMS_WEBHOOK_URL (env) ou em app_config.
@@ -196,6 +233,26 @@ export async function avisarCanal(texto: string): Promise<boolean> {
     await registrar("canal-teams", "teams", texto.slice(0, 120), false, e instanceof Error ? e.message : "erro");
     return false;
   }
+}
+
+/**
+ * Envia a notificação do Teams pelo melhor caminho disponível, nesta ordem:
+ *   1. Power Automate com gatilho HTTP  (POWER_AUTOMATE_URL) — exige licença premium
+ *   2. E-mail de controle + fluxo padrão (TEAMS_RELAY = "1")  — funciona no plano gratuito
+ *   3. Central de atividades do Graph    (TEAMS_ATIVIDADE_ATIVA = "1") — exige app do Teams
+ */
+export async function notificarTeams(
+  paraEmail: string,
+  titulo: string,
+  mensagem: string,
+  link: string
+): Promise<boolean> {
+  if (await avisarTeamsFluxo(paraEmail, titulo, mensagem, link)) return true;
+
+  const relay = (await config("TEAMS_RELAY")) ?? "1"; // ligado por padrão
+  if (relay === "1" && (await avisarTeamsPorEmail(paraEmail, titulo, mensagem, link))) return true;
+
+  return avisarTeams(paraEmail, `${titulo}: ${mensagem}`, link);
 }
 
 /** Modelo de e-mail simples com a identidade do sistema. */
