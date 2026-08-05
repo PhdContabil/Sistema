@@ -160,6 +160,7 @@ export const AGENDA_LEGENDA: { sigla: string; rotulo: string; cor: string }[] = 
   { sigla: "E", rotulo: "Emenda de feriado", cor: "#0ea5e9" },
   { sigla: "F", rotulo: "Férias", cor: "#16a34a" },
   { sigla: "L", rotulo: "Licença B.H.", cor: "#f59e0b" },
+  { sigla: "R", rotulo: "Reunião interna", cor: "#0f766e" },
 ];
 
 export interface AgendaDia {
@@ -174,7 +175,7 @@ export const AGENDA_SEMANA: AgendaDia[] = [
   { data: "2026-08-03", marcas: [{ sigla: "F", detalhe: "Férias: Pedro" }, { sigla: "E", detalhe: "Emenda de feriado" }] },
   { data: "2026-08-04", marcas: [{ sigla: "F", detalhe: "Férias: Pedro" }] },
   { data: "2026-08-05", marcas: [{ sigla: "F", detalhe: "Férias: Débora" }, { sigla: "L", detalhe: "Licença B.H.: Jaison" }] },
-  { data: "2026-08-06", marcas: [{ sigla: "F", detalhe: "Férias: Mônica" }, { sigla: "C", detalhe: "Confraternização aniversário PHD" }] },
+  { data: "2026-08-06", marcas: [{ sigla: "F", detalhe: "Férias: Mônica" }, { sigla: "C", detalhe: "Confraternização aniversário PHD" }, { sigla: "R", detalhe: "Reunião interna: encarregados" }] },
   { data: "2026-08-07", marcas: [{ sigla: "F", detalhe: "Férias: Mônica" }, { sigla: "A", detalhe: "Aniversário: Kelly, Ed Carlos" }] },
 ];
 

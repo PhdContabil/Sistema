@@ -41,6 +41,7 @@ export default function AgendaSemanal() {
             {l.rotulo}
           </span>
         ))}
+        <a className="agenda-mensal" href="/m/pessoas/agenda">Agenda mensal →</a>
       </div>
     </section>
   );
