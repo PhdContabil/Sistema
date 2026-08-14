@@ -30,6 +30,104 @@ export interface ConciliacaoResponse {
   dados: ConciliacaoItem[];
 }
 
+// ===========================================================================
+// Serviços contratados linha a linha (depende de a API expor `servicos[]`).
+// Enquanto o endpoint devolver só os totais agregados, estas funções ficam
+// inativas — mas já estão prontas e testadas.
+// ===========================================================================
+
+export interface ServicoContratado {
+  /** Empresa em que o serviço está lançado no Questor. */
+  codigoempresa: number;
+  /** Código do serviço (ex.: 4 = Folha, 5 = Fiscal, 3 = Contábil, 22 = Manutenção). */
+  servico: number;
+  descricao?: string | null;
+  valor: number;
+  /** Campo "Observação" do contrato — onde vem o padrão [COD: 548]. */
+  observacao?: string | null;
+  complemento?: string | null;
+}
+
+/** Códigos de serviço considerados MEI (ajuste conforme o cadastro do Questor). */
+export const SERVICOS_MEI = [70, 71, 72];
+
+/**
+ * Extrai o código da empresa correta do campo de observação.
+ *
+ * Aceita variações de digitação:
+ *   "[COD: 548]"  "[COD:548]"  "[cod : 548]"  "[Cod:548]"
+ * e ignora qualquer outro texto antes ou depois.
+ *
+ * Retorna null quando não há o padrão.
+ */
+export function extrairCodigoEmpresa(texto: string | null | undefined): number | null {
+  if (!texto) return null;
+  const m = /\[\s*cod\s*:?\s*(\d+)\s*\]/i.exec(texto);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Empresa à qual o serviço realmente pertence: se a observação tiver
+ * [COD: nnn], vale nnn; senão, a empresa em que ele está lançado.
+ */
+export function empresaDoServico(s: ServicoContratado): number {
+  return (
+    extrairCodigoEmpresa(s.observacao) ??
+    extrairCodigoEmpresa(s.complemento) ??
+    s.codigoempresa
+  );
+}
+
+export interface ResumoMei { qtd: number; valor: number }
+
+/** Soma quantidade e valor dos serviços de MEI de uma lista. */
+export function resumirMei(servicos: ServicoContratado[]): ResumoMei {
+  const meis = servicos.filter((s) => SERVICOS_MEI.includes(s.servico));
+  return {
+    qtd: meis.length,
+    valor: meis.reduce((t, s) => t + (s.valor || 0), 0),
+  };
+}
+
+/**
+ * Reatribui os serviços à empresa correta (padrão [COD: nnn]) e devolve,
+ * por empresa, os totais por bloco + o resumo de MEI.
+ */
+export function agruparServicosPorEmpresa(
+  servicos: ServicoContratado[]
+): Map<number, { financeiro: Financeiro; mei: ResumoMei }> {
+  const mapa = new Map<number, { financeiro: Financeiro; mei: ResumoMei; lista: ServicoContratado[] }>();
+
+  for (const s of servicos) {
+    const empresa = empresaDoServico(s);
+    if (!mapa.has(empresa)) {
+      mapa.set(empresa, {
+        financeiro: { dp: 0, fiscal: 0, contabil: 0, manutencao: 0, outros: 0, total: 0 },
+        mei: { qtd: 0, valor: 0 },
+        lista: [],
+      });
+    }
+    const alvo = mapa.get(empresa)!;
+    alvo.lista.push(s);
+
+    const v = s.valor || 0;
+    if (s.servico === 4) alvo.financeiro.dp += v;
+    else if (s.servico === 5) alvo.financeiro.fiscal += v;
+    else if (s.servico === 3) alvo.financeiro.contabil += v;
+    else if (s.servico === 22) alvo.financeiro.manutencao += v;
+    else alvo.financeiro.outros += v;
+    alvo.financeiro.total += v;
+  }
+
+  const saida = new Map<number, { financeiro: Financeiro; mei: ResumoMei }>();
+  for (const [empresa, dados] of mapa) {
+    saida.set(empresa, { financeiro: dados.financeiro, mei: resumirMei(dados.lista) });
+  }
+  return saida;
+}
+
 export type Resultado = "OK" | "Divergente" | "Sem contrato";
 
 export interface LinhaConciliacao extends ConciliacaoItem {
