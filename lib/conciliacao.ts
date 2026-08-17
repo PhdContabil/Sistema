@@ -28,6 +28,8 @@ export interface ConciliacaoItem {
   /** Calculado no app a partir de `servicos`. */
   mei?: ResumoMei;
   ajuste?: { saiu: number; entrou: number; destinos: number[]; origens: number[] };
+  /** Empresa que só aparece porque recebeu serviço via [COD:nnn]. */
+  soViaCod?: boolean;
 }
 
 export interface ConciliacaoResponse {

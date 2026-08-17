@@ -47,6 +47,19 @@ export function getConciliacaoHonorarios(cnpj?: string, detalhado = false): Prom
   return get<ConciliacaoResponse>(`/fiscal/conciliacao-honorarios${qs}`);
 }
 
+export interface EmpresaCadastro {
+  codigoempresa: number;
+  nome: string | null;
+  cnpj: string | null;
+  ativa: boolean;
+}
+
+/** Cadastro de empresas. `apenasAtivas=false` traz também as encerradas. */
+export function getEmpresas(apenasAtivas = true): Promise<{ total: number; dados: EmpresaCadastro[] }> {
+  const qs = apenasAtivas ? "" : "?apenas_ativas=false";
+  return get<{ total: number; dados: EmpresaCadastro[] }>(`/empresas${qs}`);
+}
+
 export function getAnaliseLimite(params: { ano?: number; cnpj?: string } = {}): Promise<AnaliseLimiteResponse> {
   const q = new URLSearchParams();
   if (params.ano) q.set("ano", String(params.ano));

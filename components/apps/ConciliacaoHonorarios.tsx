@@ -157,6 +157,9 @@ export default function ConciliacaoHonorarios({
                       ↗ {formatBRL(l.ajuste.saiu)} pertence a {l.ajuste.destinos.map((d) => `#${d}`).join(", ")}
                     </span>
                   ) : null}
+                  {l.soViaCod && (
+                    <span className="obs obs-mov">honorário recebido via marcação [COD:{l.codigoempresa}]</span>
+                  )}
                   {l.ajuste?.entrou ? (
                     <span className="obs obs-mov">
                       ↘ recebe {formatBRL(l.ajuste.entrou)} de {l.ajuste.origens.map((o) => `#${o}`).join(", ")}

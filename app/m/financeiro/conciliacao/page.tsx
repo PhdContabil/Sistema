@@ -1,7 +1,7 @@
 import Workspace from "@/components/Workspace";
 import ConciliacaoHonorarios from "@/components/apps/ConciliacaoHonorarios";
 import { getModule } from "@/lib/modules";
-import { getConciliacaoHonorarios, hasApiKey } from "@/lib/questor";
+import { getConciliacaoHonorarios, getEmpresas, hasApiKey } from "@/lib/questor";
 import { SAMPLE_DADOS } from "@/lib/sample";
 import {
   agruparServicosPorEmpresa, recalcularPorEmpresa, servicosSemConta,
@@ -64,16 +64,35 @@ export default async function Page() {
         });
 
         // Acrescenta empresas que passaram a ter honorário só via [COD:]
+        // (não vêm na lista de ativas, então buscamos nome/CNPJ no cadastro).
         if (recalc) {
+          const novas: number[] = [];
           for (const [cod, r] of recalc) {
-            if (!existentes.has(cod) && r.financeiro.total > 0) {
+            if (!existentes.has(cod) && r.financeiro.total > 0) novas.push(cod);
+          }
+
+          if (novas.length > 0) {
+            let nomes = new Map<number, { nome: string | null; cnpj: string | null }>();
+            try {
+              const cad = await getEmpresas(false);
+              nomes = new Map(
+                (cad.dados ?? []).map((e) => [e.codigoempresa, { nome: e.nome, cnpj: e.cnpj }])
+              );
+            } catch {
+              /* sem cadastro: a linha aparece com o código */
+            }
+
+            for (const cod of novas) {
+              const r = recalc.get(cod)!;
+              const info = nomes.get(cod);
               dados.push({
                 codigoempresa: cod,
-                nome: null,
-                cnpj: null,
+                nome: info?.nome ?? null,
+                cnpj: info?.cnpj ?? null,
                 financeiro: r.financeiro,
                 setores: { empregados: 0, prolabore: 0, faturamento_mensal: 0, lancamentos_media6m: 0 },
                 mei: r.mei,
+                soViaCod: true,
               });
             }
           }
