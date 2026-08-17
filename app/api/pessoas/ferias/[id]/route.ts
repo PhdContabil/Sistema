@@ -68,7 +68,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // Aprovada -> entra na agenda; senão remove eventos daquela solicitação
   if (acao === "aprovar" && periodos?.length) {
     await sb.from("eventos_agenda").insert(
-      periodos.map((p) => ({
+      (periodos as { inicio: string; fim: string }[]).map((p) => ({
         tipo: "ferias",
         titulo: `Férias: ${nome}`,
         pessoa_id: sol.pessoa_id,
