@@ -39,8 +39,11 @@ async function get<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function getConciliacaoHonorarios(cnpj?: string): Promise<ConciliacaoResponse> {
-  const qs = cnpj ? `?cnpj=${encodeURIComponent(cnpj)}` : "";
+export function getConciliacaoHonorarios(cnpj?: string, detalhado = false): Promise<ConciliacaoResponse> {
+  const q = new URLSearchParams();
+  if (cnpj) q.set("cnpj", cnpj);
+  if (detalhado) q.set("detalhado", "true");
+  const qs = q.toString() ? `?${q.toString()}` : "";
   return get<ConciliacaoResponse>(`/fiscal/conciliacao-honorarios${qs}`);
 }
 

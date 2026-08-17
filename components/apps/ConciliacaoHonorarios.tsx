@@ -19,10 +19,12 @@ export default function ConciliacaoHonorarios({
   dados,
   fonte,
   erroServidor,
+  detalhado = false,
 }: {
   dados: ConciliacaoItem[];
   fonte: "api" | "exemplo";
   erroServidor: string | null;
+  detalhado?: boolean;
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -49,6 +51,8 @@ export default function ConciliacaoHonorarios({
   const totalOk = linhas.filter((l) => l.resultado === "OK").length;
   const totalDiv = linhas.filter((l) => l.resultado === "Divergente").length;
   const totalSem = linhas.filter((l) => l.resultado === "Sem contrato").length;
+  const totalMeiQtd = linhas.reduce((s, l) => s + (l.mei?.qtd ?? 0), 0);
+  const totalMeiValor = linhas.reduce((s, l) => s + (l.mei?.valor ?? 0), 0);
 
   function atualizar() {
     setAtualizando(true);
@@ -70,6 +74,14 @@ export default function ConciliacaoHonorarios({
         <div className="card ok"><div className="k">OK</div><div className="v num">{totalOk}</div></div>
         <div className="card div"><div className="k">Divergentes</div><div className="v num">{totalDiv}</div></div>
         <div className="card"><div className="k">Sem contrato</div><div className="v num" style={{ color: "var(--muted)" }}>{totalSem}</div></div>
+        {detalhado && (
+          <div className="card">
+            <div className="k">MEI</div>
+            <div className="v num" style={{ fontSize: 20, color: "#b45309" }}>
+              {totalMeiQtd} · R$ {formatBRL(totalMeiValor)}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="toolbar">
@@ -86,7 +98,13 @@ export default function ConciliacaoHonorarios({
 
       <div className="legend">
         <span className="lg"><span className="sw sw-hon" />Honorários contratados (R$)</span>
+        {detalhado && <span className="lg"><span className="sw sw-mei" />MEI</span>}
         <span className="lg"><span className="sw sw-mov" />Movimento dos setores</span>
+        {detalhado && (
+          <span className="lg" style={{ color: "var(--muted)" }}>
+            ↗ ↘ serviços reatribuídos pela marcação [COD:nnn] da observação
+          </span>
+        )}
       </div>
 
       <div className="table-wrap">
@@ -99,6 +117,8 @@ export default function ConciliacaoHonorarios({
               <th className="hon">Contábil</th>
               <th className="hon">Manut.</th>
               <th className="hon">Total</th>
+              {detalhado && <th className="mei">Qtd MEI</th>}
+              {detalhado && <th className="mei">Valor MEI</th>}
               <th className="mov">Empreg.</th>
               <th className="mov">Pró-lab.</th>
               <th className="mov">Faturam./mês</th>
@@ -118,12 +138,24 @@ export default function ConciliacaoHonorarios({
                   {l.consideracoes && (
                     <span className={`obs ${l.resultado === "Divergente" ? "obs-div" : ""}`}>{l.consideracoes}</span>
                   )}
+                  {l.ajuste?.saiu ? (
+                    <span className="obs obs-mov">
+                      ↗ {formatBRL(l.ajuste.saiu)} pertence a {l.ajuste.destinos.map((d) => `#${d}`).join(", ")}
+                    </span>
+                  ) : null}
+                  {l.ajuste?.entrou ? (
+                    <span className="obs obs-mov">
+                      ↘ recebe {formatBRL(l.ajuste.entrou)} de {l.ajuste.origens.map((o) => `#${o}`).join(", ")}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="hon">{money(l.financeiro.dp)}</td>
                 <td className="hon">{money(l.financeiro.fiscal)}</td>
                 <td className="hon">{money(l.financeiro.contabil)}</td>
                 <td className="hon">{money(l.financeiro.manutencao)}</td>
                 <td className="hon"><strong>{money(l.financeiro.total)}</strong></td>
+                {detalhado && <td className="mei num">{l.mei?.qtd ? formatNum(l.mei.qtd) : <span className="dash">–</span>}</td>}
+                {detalhado && <td className="mei">{l.mei?.valor ? money(l.mei.valor) : <span className="dash">–</span>}</td>}
                 <td className="mov num">{formatNum(l.setores.empregados)}</td>
                 <td className="mov num">{formatNum(l.setores.prolabore)}</td>
                 <td className="mov">{money(l.setores.faturamento_mensal)}</td>
@@ -132,7 +164,7 @@ export default function ConciliacaoHonorarios({
               </tr>
             ))}
             {filtradas.length === 0 && (
-              <tr><td className="loading" colSpan={11}>Nenhuma empresa encontrada.</td></tr>
+              <tr><td className="loading" colSpan={detalhado ? 13 : 11}>Nenhuma empresa encontrada.</td></tr>
             )}
           </tbody>
         </table>

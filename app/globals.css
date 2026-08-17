@@ -274,6 +274,15 @@ table.grid.conc td.col-empresa, table.grid.conc th.col-empresa { min-width: 270p
 .legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid var(--border); }
 .legend .sw-hon { background: var(--fin-band); }
 .legend .sw-mov { background: var(--set-band); }
+.legend .sw-mei { background: var(--mei-band); }
+
+/* Colunas de MEI */
+:root { --mei-band: #fdf0c9; }
+html[data-theme="dark"] { --mei-band: #3a3218; }
+table.grid thead th.mei { background: var(--mei-band) !important; }
+table.grid th.mei, table.grid td.mei { padding-left: 8px; padding-right: 8px; }
+table.grid td.col-empresa .obs.obs-mov { color: #b45309; }
+html[data-theme="dark"] table.grid td.col-empresa .obs.obs-mov { color: #fdba74; }
 
 /* ===== Módulo Pessoas ===== */
 .destaque {

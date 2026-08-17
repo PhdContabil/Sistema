@@ -23,6 +23,11 @@ export interface ConciliacaoItem {
   cnpj: string | null;
   financeiro: Financeiro;
   setores: Setores;
+  /** Serviços linha a linha (só vem com ?detalhado=true). */
+  servicos?: ServicoContratado[] | null;
+  /** Calculado no app a partir de `servicos`. */
+  mei?: ResumoMei;
+  ajuste?: { saiu: number; entrou: number; destinos: number[]; origens: number[] };
 }
 
 export interface ConciliacaoResponse {
@@ -31,9 +36,9 @@ export interface ConciliacaoResponse {
 }
 
 // ===========================================================================
-// Serviços contratados linha a linha (depende de a API expor `servicos[]`).
-// Enquanto o endpoint devolver só os totais agregados, estas funções ficam
-// inativas — mas já estão prontas e testadas.
+// Serviços contratados linha a linha.
+// Disponíveis em GET /fiscal/conciliacao-honorarios?detalhado=true
+// (sem o parâmetro, a API devolve `servicos: null` e estas funções não atuam).
 // ===========================================================================
 
 export interface ServicoContratado {
@@ -48,8 +53,31 @@ export interface ServicoContratado {
   complemento?: string | null;
 }
 
-/** Códigos de serviço considerados MEI (ajuste conforme o cadastro do Questor). */
-export const SERVICOS_MEI = [70, 71, 72];
+/**
+ * Códigos de serviço de MEI (levantados no cadastro `servicoescrit`).
+ *
+ * ATENÇÃO: não classificar MEI pela conta contábil (2710) — os serviços
+ * 12 ("Taxas de Profissionais") e 109 ("Taxa Profissionais") caem nessa
+ * conta e NÃO são MEI. A classificação é pelo código do serviço.
+ */
+export const SERVICOS_MEI_PRINCIPAIS = [72, 102, 79, 119];
+
+export const SERVICOS_MEI_EVENTUAIS = [
+  2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010, 2013, 2015,
+  2048, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067,
+];
+
+export const SERVICOS_MEI = [...SERVICOS_MEI_PRINCIPAIS, ...SERVICOS_MEI_EVENTUAIS];
+
+/** Serviços que caem na conta do MEI mas NÃO são MEI. */
+const NAO_MEI = [12, 109];
+
+/** true se o serviço é de MEI (por código; a descrição serve de reforço). */
+export function ehServicoMei(s: { servico: number; descricao?: string | null }): boolean {
+  if (NAO_MEI.includes(s.servico)) return false;
+  if (SERVICOS_MEI.includes(s.servico)) return true;
+  return /^\s*mei\b/i.test(s.descricao ?? "");
+}
 
 /**
  * Extrai o código da empresa correta do campo de observação.
@@ -84,46 +112,67 @@ export interface ResumoMei { qtd: number; valor: number }
 
 /** Soma quantidade e valor dos serviços de MEI de uma lista. */
 export function resumirMei(servicos: ServicoContratado[]): ResumoMei {
-  const meis = servicos.filter((s) => SERVICOS_MEI.includes(s.servico));
+  const meis = servicos.filter(ehServicoMei);
   return {
     qtd: meis.length,
     valor: meis.reduce((t, s) => t + (s.valor || 0), 0),
   };
 }
 
+export interface AjusteEmpresa {
+  /** Resumo de MEI já com a reatribuição aplicada. */
+  mei: ResumoMei;
+  /** Valor que saiu desta empresa para outras (marcado com [COD:]). */
+  saiu: number;
+  /** Valor que entrou nesta empresa vindo de outras. */
+  entrou: number;
+  /** Empresas de destino do que saiu. */
+  destinos: number[];
+  /** Empresas de origem do que entrou. */
+  origens: number[];
+}
+
 /**
  * Reatribui os serviços à empresa correta (padrão [COD: nnn]) e devolve,
- * por empresa, os totais por bloco + o resumo de MEI.
+ * por empresa, o resumo de MEI e o que entrou/saiu na reatribuição.
  */
 export function agruparServicosPorEmpresa(
   servicos: ServicoContratado[]
-): Map<number, { financeiro: Financeiro; mei: ResumoMei }> {
-  const mapa = new Map<number, { financeiro: Financeiro; mei: ResumoMei; lista: ServicoContratado[] }>();
+): Map<number, AjusteEmpresa> {
+  const mapa = new Map<number, AjusteEmpresa & { lista: ServicoContratado[] }>();
+
+  const garantir = (empresa: number) => {
+    if (!mapa.has(empresa)) {
+      mapa.set(empresa, { mei: { qtd: 0, valor: 0 }, saiu: 0, entrou: 0, destinos: [], origens: [], lista: [] });
+    }
+    return mapa.get(empresa)!;
+  };
 
   for (const s of servicos) {
-    const empresa = empresaDoServico(s);
-    if (!mapa.has(empresa)) {
-      mapa.set(empresa, {
-        financeiro: { dp: 0, fiscal: 0, contabil: 0, manutencao: 0, outros: 0, total: 0 },
-        mei: { qtd: 0, valor: 0 },
-        lista: [],
-      });
-    }
-    const alvo = mapa.get(empresa)!;
+    const dono = empresaDoServico(s);
+    const alvo = garantir(dono);
     alvo.lista.push(s);
 
-    const v = s.valor || 0;
-    if (s.servico === 4) alvo.financeiro.dp += v;
-    else if (s.servico === 5) alvo.financeiro.fiscal += v;
-    else if (s.servico === 3) alvo.financeiro.contabil += v;
-    else if (s.servico === 22) alvo.financeiro.manutencao += v;
-    else alvo.financeiro.outros += v;
-    alvo.financeiro.total += v;
+    // serviço marcado: registra a movimentação nas duas pontas
+    if (dono !== s.codigoempresa) {
+      const v = s.valor || 0;
+      const origem = garantir(s.codigoempresa);
+      origem.saiu += v;
+      if (!origem.destinos.includes(dono)) origem.destinos.push(dono);
+      alvo.entrou += v;
+      if (!alvo.origens.includes(s.codigoempresa)) alvo.origens.push(s.codigoempresa);
+    }
   }
 
-  const saida = new Map<number, { financeiro: Financeiro; mei: ResumoMei }>();
-  for (const [empresa, dados] of mapa) {
-    saida.set(empresa, { financeiro: dados.financeiro, mei: resumirMei(dados.lista) });
+  const saida = new Map<number, AjusteEmpresa>();
+  for (const [empresa, d] of mapa) {
+    saida.set(empresa, {
+      mei: resumirMei(d.lista),
+      saiu: d.saiu,
+      entrou: d.entrou,
+      destinos: d.destinos,
+      origens: d.origens,
+    });
   }
   return saida;
 }
