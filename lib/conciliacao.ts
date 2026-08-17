@@ -51,7 +51,24 @@ export interface ServicoContratado {
   /** Campo "Observação" do contrato — onde vem o padrão [COD: 548]. */
   observacao?: string | null;
   complemento?: string | null;
+  /**
+   * Conta contábil do serviço. É ela que define o bloco na conciliação
+   * (2708 DP · 2707 Fiscal · 2706 Contábil · 2703 Manutenção · 2710 MEI).
+   * Sem este campo não é possível redistribuir os blocos com exatidão.
+   */
+  conta?: number | null;
 }
+
+export type BlocoHonorario = "dp" | "fiscal" | "contabil" | "manutencao" | "mei" | "demais";
+
+/** Conta contábil -> bloco da conciliação (mesmo critério que a API usa no agregado). */
+export const CONTA_BLOCO: Record<number, BlocoHonorario> = {
+  2708: "dp",
+  2707: "fiscal",
+  2706: "contabil",
+  2703: "manutencao",
+  2710: "mei",
+};
 
 /**
  * Códigos de serviço de MEI (levantados no cadastro `servicoescrit`).
@@ -117,6 +134,57 @@ export function resumirMei(servicos: ServicoContratado[]): ResumoMei {
     qtd: meis.length,
     valor: meis.reduce((t, s) => t + (s.valor || 0), 0),
   };
+}
+
+/**
+ * Bloco em que o serviço entra.
+ * Prioridade: MEI (por código/descrição) -> conta contábil -> demais.
+ */
+export function blocoDoServico(s: ServicoContratado): BlocoHonorario {
+  if (ehServicoMei(s)) return "mei";
+  if (s.conta && CONTA_BLOCO[s.conta]) return CONTA_BLOCO[s.conta];
+  return "demais";
+}
+
+/** true se TODOS os serviços trazem a conta contábil (permite recálculo exato). */
+export function temContas(servicos: ServicoContratado[]): boolean {
+  return servicos.length > 0 && servicos.every((s) => typeof s.conta === "number" && s.conta > 0);
+}
+
+/**
+ * Recalcula os blocos por empresa a partir dos serviços, já com a
+ * reatribuição do [COD:nnn] aplicada. Só use quando `temContas()` for true.
+ */
+export function recalcularPorEmpresa(
+  servicos: ServicoContratado[]
+): Map<number, { financeiro: Financeiro; mei: ResumoMei }> {
+  const mapa = new Map<number, { financeiro: Financeiro; mei: ResumoMei }>();
+
+  for (const s of servicos) {
+    const empresa = empresaDoServico(s);
+    if (!mapa.has(empresa)) {
+      mapa.set(empresa, {
+        financeiro: { dp: 0, fiscal: 0, contabil: 0, manutencao: 0, outros: 0, total: 0 },
+        mei: { qtd: 0, valor: 0 },
+      });
+    }
+    const alvo = mapa.get(empresa)!;
+    const v = s.valor || 0;
+    const bloco = blocoDoServico(s);
+
+    if (bloco === "mei") {
+      alvo.mei.qtd += 1;
+      alvo.mei.valor += v;
+      alvo.financeiro.outros += v; // MEI também compõe "demais" no total
+    } else if (bloco === "demais") {
+      alvo.financeiro.outros += v;
+    } else {
+      alvo.financeiro[bloco] += v;
+    }
+    alvo.financeiro.total += v;
+  }
+
+  return mapa;
 }
 
 export interface AjusteEmpresa {

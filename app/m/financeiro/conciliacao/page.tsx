@@ -3,7 +3,10 @@ import ConciliacaoHonorarios from "@/components/apps/ConciliacaoHonorarios";
 import { getModule } from "@/lib/modules";
 import { getConciliacaoHonorarios, hasApiKey } from "@/lib/questor";
 import { SAMPLE_DADOS } from "@/lib/sample";
-import { agruparServicosPorEmpresa, type ConciliacaoItem, type ServicoContratado } from "@/lib/conciliacao";
+import {
+  agruparServicosPorEmpresa, recalcularPorEmpresa, temContas,
+  type ConciliacaoItem, type ServicoContratado,
+} from "@/lib/conciliacao";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +20,7 @@ export default async function Page() {
   let erro: string | null = null;
 
   let detalhado = false;
+  let redistribuido = false;
 
   if (!hasApiKey()) {
     dados = SAMPLE_DADOS;
@@ -33,12 +37,44 @@ export default async function Page() {
 
       if (detalhado) {
         const ajustes = agruparServicosPorEmpresa(todos);
+
+        // Com a conta contábil de cada serviço, os blocos são recalculados e
+        // os valores passam a aparecer NA LINHA DA EMPRESA CORRETA.
+        redistribuido = temContas(todos);
+        const recalc = redistribuido ? recalcularPorEmpresa(todos) : null;
+
+        // Empresas que só existem por reatribuição (não vinham na lista original)
+        const existentes = new Set(dados.map((d) => d.codigoempresa));
+
         dados = dados.map((d) => {
           const a = ajustes.get(d.codigoempresa);
-          return a
-            ? { ...d, mei: a.mei, ajuste: { saiu: a.saiu, entrou: a.entrou, destinos: a.destinos, origens: a.origens } }
-            : d;
+          const r = recalc?.get(d.codigoempresa);
+          return {
+            ...d,
+            financeiro: r ? r.financeiro : d.financeiro,
+            mei: r ? r.mei : a?.mei,
+            // com redistribuição real o aviso não é mais necessário
+            ajuste: redistribuido
+              ? undefined
+              : a && { saiu: a.saiu, entrou: a.entrou, destinos: a.destinos, origens: a.origens },
+          };
         });
+
+        // Acrescenta empresas que passaram a ter honorário só via [COD:]
+        if (recalc) {
+          for (const [cod, r] of recalc) {
+            if (!existentes.has(cod) && r.financeiro.total > 0) {
+              dados.push({
+                codigoempresa: cod,
+                nome: null,
+                cnpj: null,
+                financeiro: r.financeiro,
+                setores: { empregados: 0, prolabore: 0, faturamento_mensal: 0, lancamentos_media6m: 0 },
+                mei: r.mei,
+              });
+            }
+          }
+        }
       }
     } catch (e) {
       erro = e instanceof Error ? e.message : "Falha ao consultar a API Questor.";
@@ -55,7 +91,13 @@ export default async function Page() {
           <div className="desc">Honorários contratados x movimento real de cada setor.</div>
         </div>
       </div>
-      <ConciliacaoHonorarios dados={dados} fonte={fonte} erroServidor={erro} detalhado={detalhado} />
+      <ConciliacaoHonorarios
+        dados={dados}
+        fonte={fonte}
+        erroServidor={erro}
+        detalhado={detalhado}
+        redistribuido={redistribuido}
+      />
     </Workspace>
   );
 }

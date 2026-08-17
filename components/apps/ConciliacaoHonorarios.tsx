@@ -20,11 +20,13 @@ export default function ConciliacaoHonorarios({
   fonte,
   erroServidor,
   detalhado = false,
+  redistribuido = false,
 }: {
   dados: ConciliacaoItem[];
   fonte: "api" | "exemplo";
   erroServidor: string | null;
   detalhado?: boolean;
+  redistribuido?: boolean;
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -100,9 +102,14 @@ export default function ConciliacaoHonorarios({
         <span className="lg"><span className="sw sw-hon" />Honorários contratados (R$)</span>
         {detalhado && <span className="lg"><span className="sw sw-mei" />MEI</span>}
         <span className="lg"><span className="sw sw-mov" />Movimento dos setores</span>
-        {detalhado && (
+        {detalhado && redistribuido && (
           <span className="lg" style={{ color: "var(--muted)" }}>
-            ↗ ↘ serviços reatribuídos pela marcação [COD:nnn] da observação
+            valores já distribuídos na empresa correta pela marcação [COD:nnn]
+          </span>
+        )}
+        {detalhado && !redistribuido && (
+          <span className="lg" style={{ color: "#b45309" }}>
+            ↗ ↘ serviços de outra empresa (falta a conta contábil para redistribuir)
           </span>
         )}
       </div>
@@ -130,7 +137,7 @@ export default function ConciliacaoHonorarios({
             {filtradas.map((l) => (
               <tr key={l.codigoempresa}>
                 <td className="col-empresa">
-                  <span className="emp-nome">{l.nome ?? `Empresa ${l.codigoempresa}`}</span>
+                  <span className="emp-nome">{l.nome ?? `Empresa #${l.codigoempresa}`}</span>
                   <span className="cnpj">
                     <span className="codigo">#{l.codigoempresa}</span>
                     {l.cnpj ? ` · ${formatCNPJ(l.cnpj)}` : ""}
