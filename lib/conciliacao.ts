@@ -61,13 +61,18 @@ export interface ServicoContratado {
 
 export type BlocoHonorario = "dp" | "fiscal" | "contabil" | "manutencao" | "mei" | "demais";
 
-/** Conta contábil -> bloco da conciliação (mesmo critério que a API usa no agregado). */
+/**
+ * Conta contábil -> bloco da conciliação (mesmo critério do agregado da API):
+ * 2708=DP · 2707=Fiscal · 2706=Contábil · 2703=Manutenção · outras=demais.
+ *
+ * A conta 2710 NÃO entra aqui de propósito: MEI é definido pelo CÓDIGO do
+ * serviço, porque os serviços 12 e 109 caem em 2710 e não são MEI.
+ */
 export const CONTA_BLOCO: Record<number, BlocoHonorario> = {
   2708: "dp",
   2707: "fiscal",
   2706: "contabil",
   2703: "manutencao",
-  2710: "mei",
 };
 
 /**
