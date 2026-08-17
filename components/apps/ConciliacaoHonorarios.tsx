@@ -21,12 +21,14 @@ export default function ConciliacaoHonorarios({
   erroServidor,
   detalhado = false,
   redistribuido = false,
+  semConta = 0,
 }: {
   dados: ConciliacaoItem[];
   fonte: "api" | "exemplo";
   erroServidor: string | null;
   detalhado?: boolean;
   redistribuido?: boolean;
+  semConta?: number;
 }) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
@@ -110,6 +112,11 @@ export default function ConciliacaoHonorarios({
         {detalhado && !redistribuido && (
           <span className="lg" style={{ color: "#b45309" }}>
             ↗ ↘ serviços de outra empresa (falta a conta contábil para redistribuir)
+          </span>
+        )}
+        {detalhado && semConta > 0 && (
+          <span className="lg" style={{ color: "#b45309" }}>
+            {semConta} serviço{semConta > 1 ? "s" : ""} sem conta contábil (contabilizado em “demais”)
           </span>
         )}
       </div>

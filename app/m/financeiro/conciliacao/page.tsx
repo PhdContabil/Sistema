@@ -4,7 +4,7 @@ import { getModule } from "@/lib/modules";
 import { getConciliacaoHonorarios, hasApiKey } from "@/lib/questor";
 import { SAMPLE_DADOS } from "@/lib/sample";
 import {
-  agruparServicosPorEmpresa, recalcularPorEmpresa, temContas,
+  agruparServicosPorEmpresa, recalcularPorEmpresa, servicosSemConta,
   type ConciliacaoItem, type ServicoContratado,
 } from "@/lib/conciliacao";
 
@@ -21,6 +21,7 @@ export default async function Page() {
 
   let detalhado = false;
   let redistribuido = false;
+  let semConta = 0;
 
   if (!hasApiKey()) {
     dados = SAMPLE_DADOS;
@@ -38,10 +39,12 @@ export default async function Page() {
       if (detalhado) {
         const ajustes = agruparServicosPorEmpresa(todos);
 
-        // Com a conta contábil de cada serviço, os blocos são recalculados e
-        // os valores passam a aparecer NA LINHA DA EMPRESA CORRETA.
-        redistribuido = temContas(todos);
-        const recalc = redistribuido ? recalcularPorEmpresa(todos) : null;
+        // Blocos recalculados a partir dos serviços: os valores passam a
+        // aparecer NA LINHA DA EMPRESA CORRETA. Serviço sem conta cai em
+        // "demais" (mesmo critério da API) e não bloqueia a redistribuição.
+        redistribuido = true;
+        semConta = servicosSemConta(todos);
+        const recalc = recalcularPorEmpresa(todos);
 
         // Empresas que só existem por reatribuição (não vinham na lista original)
         const existentes = new Set(dados.map((d) => d.codigoempresa));
@@ -97,6 +100,7 @@ export default async function Page() {
         erroServidor={erro}
         detalhado={detalhado}
         redistribuido={redistribuido}
+        semConta={semConta}
       />
     </Workspace>
   );

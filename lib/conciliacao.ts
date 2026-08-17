@@ -151,9 +151,13 @@ export function blocoDoServico(s: ServicoContratado): BlocoHonorario {
   return "demais";
 }
 
-/** true se TODOS os serviços trazem a conta contábil (permite recálculo exato). */
-export function temContas(servicos: ServicoContratado[]): boolean {
-  return servicos.length > 0 && servicos.every((s) => typeof s.conta === "number" && s.conta > 0);
+/**
+ * Quantos serviços vieram SEM conta contábil.
+ * Eles caem em "demais" — mesmo critério da API ("outras=demais") — e não
+ * impedem a redistribuição do restante.
+ */
+export function servicosSemConta(servicos: ServicoContratado[]): number {
+  return servicos.filter((s) => typeof s.conta !== "number" || s.conta <= 0).length;
 }
 
 /**
@@ -165,15 +169,23 @@ export function recalcularPorEmpresa(
 ): Map<number, { financeiro: Financeiro; mei: ResumoMei }> {
   const mapa = new Map<number, { financeiro: Financeiro; mei: ResumoMei }>();
 
-  for (const s of servicos) {
-    const empresa = empresaDoServico(s);
+  const garantir = (empresa: number) => {
     if (!mapa.has(empresa)) {
       mapa.set(empresa, {
         financeiro: { dp: 0, fiscal: 0, contabil: 0, manutencao: 0, outros: 0, total: 0 },
         mei: { qtd: 0, valor: 0 },
       });
     }
-    const alvo = mapa.get(empresa)!;
+    return mapa.get(empresa)!;
+  };
+
+  for (const s of servicos) {
+    // A empresa hospedeira precisa existir no mapa mesmo que TODOS os seus
+    // serviços tenham sido reatribuídos — senão ela ficaria com o valor antigo.
+    garantir(s.codigoempresa);
+
+    const empresa = empresaDoServico(s);
+    const alvo = garantir(empresa);
     const v = s.valor || 0;
     const bloco = blocoDoServico(s);
 
