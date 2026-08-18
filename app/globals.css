@@ -599,3 +599,101 @@ html[data-theme="dark"] .sit-critico { color: #fca5a5; }
 .detail-box { padding: 14px 18px; }
 .detail-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; }
 .detail-note { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+/* ---------- Consolidação Departamental ---------- */
+
+.summary .card .sub {
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+}
+
+.toolbar .sel {
+  height: 34px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 13px; font-family: inherit;
+  max-width: 180px;
+}
+.toolbar .sel.wide { max-width: 260px; }
+
+/* Letras de pendência */
+.fl {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 5px;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  margin: 0 1px; cursor: default;
+}
+.fl.f { background: #dbeafe; color: #1d4ed8; }
+.fl.r { background: #fee2e2; color: #b91c1c; }
+.fl.i { background: #fef3c7; color: #b45309; }
+html[data-theme="dark"] .fl.f { background: #1e3a8a; color: #bfdbfe; }
+html[data-theme="dark"] .fl.r { background: #7f1d1d; color: #fecaca; }
+html[data-theme="dark"] .fl.i { background: #78350f; color: #fde68a; }
+
+.chip.f.on { background: #1d4ed8; border-color: #1d4ed8; }
+.chip.r.on { background: #b91c1c; border-color: #b91c1c; }
+.chip.i.on { background: #b45309; border-color: #b45309; }
+
+table.grid.consol th.mes, table.grid.consol td.mes {
+  text-align: center; white-space: nowrap;
+  width: 52px; min-width: 52px; padding-left: 4px; padding-right: 4px;
+}
+table.grid.consol td.mes.vazio { background: var(--surface2); }
+table.grid.consol th.c-res, table.grid.consol td.c-res {
+  text-align: center; width: 60px;
+}
+table.grid.consol td.col-empresa { min-width: 280px; }
+
+.legend .lg .fl { margin-right: 6px; }
+
+/* ---------- Modal "Sobre" ---------- */
+
+.modal-bg {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; overflow-y: auto;
+}
+.modal {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 14px;
+  width: min(760px, 100%); max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.modal-head h2 { font-size: 17px; margin: 0; }
+.modal-body { padding: 18px 20px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+.modal-body h3 {
+  font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); margin: 22px 0 8px;
+}
+.modal-body h3:first-child { margin-top: 0; }
+.modal-body p { margin: 0 0 10px; }
+.modal-body ul { margin: 0 0 10px; padding-left: 18px; }
+.modal-body li { margin-bottom: 4px; }
+.modal-body .nota {
+  color: var(--muted); font-size: 12px;
+  border-left: 2px solid var(--border); padding-left: 10px;
+}
+.modal-foot {
+  padding: 14px 20px; border-top: 1px solid var(--border); text-align: right;
+}
+.btn.icon { padding: 4px 9px; font-size: 14px; line-height: 1; }
+
+table.mini { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; }
+table.mini th, table.mini td {
+  text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.mini th { color: var(--muted); font-weight: 600; }
+
+.contas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.contas h4 { font-size: 12px; margin: 0 0 6px; }
+.contas h4 span { color: var(--muted); font-weight: 400; }
+.contas .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.contas code {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 2px 6px; font-size: 11px;
+}

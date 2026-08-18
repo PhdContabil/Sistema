@@ -87,6 +87,7 @@ export const MODULES: ModuleDef[] = [
     id: "contabil", name: "Contábil", initials: "CT", color: "oklch(0.62 0.13 60)",
     desc: "Lançamentos, balancetes, demonstrações e SPED Contábil.",
     apps: [
+      { name: "Consolidação Departamental", desc: "O que cada empresa movimentou x o que foi contabilizado, mês a mês.", href: "/m/contabil/consolidacao" },
       { name: "Lançamentos", desc: "Registro de partidas dobradas e lotes." },
       { name: "Balancete", desc: "Verificação de saldos e conferência." },
       { name: "Balanço Patrimonial", desc: "Demonstrações contábeis do período." },

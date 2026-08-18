@@ -2,6 +2,7 @@
 // a chave X-API-Key só pode existir no servidor (LGPD / dados PII).
 import type { ConciliacaoResponse } from "./conciliacao";
 import type { AnaliseLimiteResponse, DctfwebResponse } from "./fiscal";
+import type { ConsolidacaoResponse, SocioItem } from "./contabil";
 
 const BASE = process.env.QUESTOR_API_URL ?? "https://phdfibra.dyndns.org";
 const KEY = process.env.QUESTOR_API_KEY;
@@ -58,6 +59,23 @@ export interface EmpresaCadastro {
 export function getEmpresas(apenasAtivas = true): Promise<{ total: number; dados: EmpresaCadastro[] }> {
   const qs = apenasAtivas ? "" : "?apenas_ativas=false";
   return get<{ total: number; dados: EmpresaCadastro[] }>(`/empresas${qs}`);
+}
+
+/** Consolidação Departamental: agregados por empresa e mês (valor + quantidade). */
+export function getConsolidacaoDepartamental(
+  params: { ano: number; cnpj?: string; codigoempresa?: number }
+): Promise<ConsolidacaoResponse> {
+  const q = new URLSearchParams();
+  q.set("ano", String(params.ano));
+  if (params.cnpj) q.set("cnpj", params.cnpj);
+  if (params.codigoempresa) q.set("codigoempresa", String(params.codigoempresa));
+  return get<ConsolidacaoResponse>(`/contabil/consolidacao-departamental?${q.toString()}`);
+}
+
+/** Quadro societário. Por padrão só os sócios atuais. */
+export function getSocios(incluirDesligados = false): Promise<{ total: number; dados: SocioItem[] }> {
+  const qs = incluirDesligados ? "?incluir_desligados=true" : "";
+  return get<{ total: number; dados: SocioItem[] }>(`/rh/socios${qs}`);
 }
 
 export function getAnaliseLimite(params: { ano?: number; cnpj?: string } = {}): Promise<AnaliseLimiteResponse> {
