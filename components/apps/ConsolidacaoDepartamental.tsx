@@ -2,21 +2,25 @@
 
 import { useMemo, useState } from "react";
 import {
-  montarLinhas, contarPendencias, somarTotais, formatBRLCurto, formatCNPJ,
+  montarLinhas, contarPendencias, formatBRLCurto, formatCNPJ,
   MESES_ABR, FLAG_LABEL,
   type EmpresaConsolidacao, type GruposContas, type SocioItem, type Flag,
+  type TotaisConsolidacao,
 } from "@/lib/contabil";
 
-type FiltroPend = "todas" | "com" | "sem" | Flag;
+type FiltroPend = "todas" | Flag;
 
 export default function ConsolidacaoDepartamental({
-  ano, anosDisponiveis, dados, grupos, socios, geradoEm, erroServidor,
+  ano, anosDisponiveis, dados, grupos, socios, totais, totalEmpresas,
+  geradoEm, erroServidor,
 }: {
   ano: number;
   anosDisponiveis: number[];
   dados: EmpresaConsolidacao[];
   grupos: GruposContas;
   socios: SocioItem[];
+  totais: TotaisConsolidacao;
+  totalEmpresas: number;
   geradoEm?: string | null;
   erroServidor: string | null;
 }) {
@@ -26,7 +30,6 @@ export default function ConsolidacaoDepartamental({
   const [sobre, setSobre] = useState(false);
 
   const linhas = useMemo(() => montarLinhas(dados), [dados]);
-  const totais = useMemo(() => somarTotais(dados), [dados]);
 
   // sócio -> empresas. Aplicado igualmente aos três grupos, ao contrário do
   // Power BI, onde o relacionamento de receita está inativo.
@@ -36,10 +39,14 @@ export default function ConsolidacaoDepartamental({
     return [...s].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [socios]);
 
+  // Aceita nome parcial: quem digita "silva" filtra por qualquer sócio Silva.
   const empresasDoSocio = useMemo(() => {
-    if (!socio) return null;
+    const alvo = socio.trim().toLowerCase();
+    if (!alvo) return null;
     const s = new Set<number>();
-    for (const x of socios) if (x.nomesocio === socio) s.add(x.codigoempresa);
+    for (const x of socios) {
+      if ((x.nomesocio ?? "").toLowerCase().includes(alvo)) s.add(x.codigoempresa);
+    }
     return s;
   }, [socio, socios]);
 
@@ -47,11 +54,7 @@ export default function ConsolidacaoDepartamental({
     const q = busca.trim().toLowerCase();
     return linhas.filter((l) => {
       if (empresasDoSocio && !empresasDoSocio.has(l.codigoempresa)) return false;
-      if (pend === "com" && l.totalPendencias === 0) return false;
-      if (pend === "sem" && l.totalPendencias > 0) return false;
-      if (pend === "F" || pend === "R" || pend === "I") {
-        if (!l.meses.some((m) => m.includes(pend))) return false;
-      }
+      if (pend !== "todas" && !l.meses.some((m) => m.includes(pend))) return false;
       if (!q) return true;
       return (
         (l.nome ?? "").toLowerCase().includes(q) ||
@@ -86,7 +89,10 @@ export default function ConsolidacaoDepartamental({
       `Ano;${ano}`,
       `Filtro sócio;${socio || "Todos"}`,
       `Filtro busca;${busca || "-"}`,
+      `Filtro pendência;${pend === "todas" ? "Todas" : pend}`,
       `Empresas listadas;${filtradas.length}`,
+      `Empresas do escritório;${totalEmpresas}`,
+      `Observação;Lista traz apenas empresas com alguma pendência`,
       `Pendências;F=${cont.F} R=${cont.R} I=${cont.I}`,
       `Contas folha;${grupos.folha.join(" ")}`,
       `Contas receita;${grupos.receita.join(" ")}`,
@@ -137,7 +143,9 @@ export default function ConsolidacaoDepartamental({
         <div className="card div">
           <div className="k">Pendências</div>
           <div className="v num">{cont.total}</div>
-          <div className="sub">{cont.empresas} empresas</div>
+          <div className="sub">
+            {cont.empresas} de {totalEmpresas} empresas
+          </div>
         </div>
       </div>
 
@@ -151,16 +159,23 @@ export default function ConsolidacaoDepartamental({
         <select className="sel" value={ano} onChange={(e) => irParaAno(Number(e.target.value))}>
           {anosDisponiveis.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select className="sel wide" value={socio} onChange={(e) => setSocio(e.target.value)}>
-          <option value="">Todos os sócios</option>
-          {nomesSocios.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
+        <input
+          className="search socio"
+          list="lista-socios"
+          placeholder="Sócio (digite para buscar)…"
+          value={socio}
+          onChange={(e) => setSocio(e.target.value)}
+        />
+        <datalist id="lista-socios">
+          {nomesSocios.map((n) => <option key={n} value={n} />)}
+        </datalist>
+        {socio && (
+          <button className="btn icon" onClick={() => setSocio("")} title="Limpar sócio">✕</button>
+        )}
         <span className={`chip ${pend === "todas" ? "on" : ""}`} onClick={() => setPend("todas")}>Todas</span>
-        <span className={`chip ${pend === "com" ? "on" : ""}`} onClick={() => setPend("com")}>Com pendência</span>
-        <span className={`chip ${pend === "sem" ? "on" : ""}`} onClick={() => setPend("sem")}>Sem pendência</span>
-        <span className={`chip f ${pend === "F" ? "on" : ""}`} onClick={() => setPend("F")}>F {cont.F}</span>
-        <span className={`chip r ${pend === "R" ? "on" : ""}`} onClick={() => setPend("R")}>R {cont.R}</span>
-        <span className={`chip i ${pend === "I" ? "on" : ""}`} onClick={() => setPend("I")}>I {cont.I}</span>
+        <span className={`chip f ${pend === "F" ? "on" : ""}`} onClick={() => setPend("F")}>F</span>
+        <span className={`chip r ${pend === "R" ? "on" : ""}`} onClick={() => setPend("R")}>R</span>
+        <span className={`chip i ${pend === "I" ? "on" : ""}`} onClick={() => setPend("I")}>I</span>
         <button className="btn" onClick={exportarExcel}>↓ Excel</button>
         <button className="btn" onClick={() => setSobre(true)}>? Sobre</button>
         <span className="contador">{filtradas.length} de {linhas.length}</span>
@@ -171,7 +186,8 @@ export default function ConsolidacaoDepartamental({
         <span className="lg"><span className="fl r">R</span>{FLAG_LABEL.R}</span>
         <span className="lg"><span className="fl i">I</span>{FLAG_LABEL.I}</span>
         <span className="lg" style={{ color: "var(--muted)" }}>
-          célula vazia = nada pendente · cinza = sem movimento no mês
+          cinza = sem movimento no mês · a lista traz só empresas com alguma pendência
+          ({totalEmpresas - linhas.length} sem pendência ficaram de fora)
         </span>
       </div>
 
@@ -218,8 +234,9 @@ export default function ConsolidacaoDepartamental({
 
       <p className="footnote">
         A letra aparece quando o movimento existe e o lançamento contábil não.
-        Passe o mouse na letra para ver o grupo. Use <strong>Sobre</strong> para ver as contas
-        e a regra completa.
+        Passe o mouse na letra para ver o grupo. Os cartões acima somam o escritório
+        inteiro, inclusive as empresas sem pendência que não aparecem na lista.
+        Use <strong>Sobre</strong> para ver as contas e a regra completa.
         {geradoEm && <> Dados apurados em {new Date(geradoEm).toLocaleString("pt-BR")}.</>}
       </p>
 
@@ -248,8 +265,13 @@ function Sobre({ grupos, ano, onFechar }: { grupos: GruposContas; ano: number; o
           </ul>
           <p>
             Quando existe movimento e <em>não</em> existe o lançamento contábil, a célula recebe uma letra.
-            Célula vazia significa que está tudo lançado; célula cinza significa que não houve
-            movimento nenhum naquele mês.
+            Célula vazia significa que está tudo lançado naquele mês; célula cinza significa que
+            não houve movimento nenhum.
+          </p>
+          <p className="nota">
+            A lista mostra <strong>apenas as empresas com alguma pendência no ano</strong>. Quem está
+            com tudo lançado não aparece — é o que mantém a tela leve. Os cartões do topo, porém,
+            somam o escritório inteiro, para continuarem batendo com o relatório.
           </p>
 
           <h3>As três regras</h3>

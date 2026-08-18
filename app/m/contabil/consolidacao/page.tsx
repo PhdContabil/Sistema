@@ -2,7 +2,10 @@ import Workspace from "@/components/Workspace";
 import ConsolidacaoDepartamental from "@/components/apps/ConsolidacaoDepartamental";
 import { getModule } from "@/lib/modules";
 import { getConsolidacaoDepartamental, getSocios, hasApiKey } from "@/lib/questor";
-import type { EmpresaConsolidacao, GruposContas, SocioItem } from "@/lib/contabil";
+import {
+  somarTotais, temPendencia,
+  type EmpresaConsolidacao, type GruposContas, type SocioItem, type TotaisConsolidacao,
+} from "@/lib/contabil";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,11 @@ export default async function Page({
   let socios: SocioItem[] = [];
   let geradoEm: string | null = null;
   let erro: string | null = null;
+  let totais: TotaisConsolidacao = {
+    folhaContabil: 0, receitaContabil: 0, impostoContabil: 0,
+    receitaFiscal: 0, folhaMovimento: 0,
+  };
+  let totalEmpresas = 0;
 
   if (!hasApiKey()) {
     erro = "QUESTOR_API_KEY não configurada no servidor.";
@@ -37,10 +45,19 @@ export default async function Page({
         getConsolidacaoDepartamental({ ano }),
         getSocios().catch(() => ({ total: 0, dados: [] as SocioItem[] })),
       ]);
-      dados = consol.dados ?? [];
+      const todas = consol.dados ?? [];
       grupos = consol.grupos ?? GRUPOS_VAZIOS;
       geradoEm = consol.gerado_em ?? null;
       socios = soc.dados ?? [];
+
+      // Os cartões somam TODAS as empresas — são o total do escritório e
+      // precisam bater com o relatório, independente do que a tabela lista.
+      totais = somarTotais(todas);
+      totalEmpresas = todas.length;
+
+      // A tabela leva só quem tem pendência. Filtrar aqui, no servidor, evita
+      // mandar ~1,3 mil empresas limpas para o navegador à toa.
+      dados = todas.filter(temPendencia);
     } catch (e) {
       erro = e instanceof Error ? e.message : "Falha ao consultar a API Questor.";
     }
@@ -63,6 +80,8 @@ export default async function Page({
         dados={dados}
         grupos={grupos}
         socios={socios}
+        totais={totais}
+        totalEmpresas={totalEmpresas}
         geradoEm={geradoEm}
         erroServidor={erro}
       />

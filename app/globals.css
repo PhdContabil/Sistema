@@ -697,3 +697,5 @@ table.mini th { color: var(--muted); font-weight: 600; }
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 5px; padding: 2px 6px; font-size: 11px;
 }
+
+.toolbar .search.socio { max-width: 240px; flex: 0 1 240px; }

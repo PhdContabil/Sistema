@@ -90,6 +90,11 @@ export function flagsDoMes(m: MesConsolidacao): Flag[] {
   return f;
 }
 
+/** True se a empresa tem ao menos uma pendência no ano. */
+export function temPendencia(e: EmpresaConsolidacao): boolean {
+  return e.meses.some((m) => flagsDoMes(m).length > 0);
+}
+
 export interface LinhaConsolidacao {
   codigoempresa: number;
   nome: string | null;
