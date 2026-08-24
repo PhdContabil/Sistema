@@ -33,6 +33,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (body.status !== undefined) {
     if (!ehStatus(body.status)) return NextResponse.json({ error: "Status inválido." }, { status: 400 });
     patch.status = body.status;
+    // Marca de fechamento própria: no sistema antigo só existia updated_at,
+    // que qualquer edição resetava, e por isso não dava para medir o tempo
+    // real de atendimento. A partir daqui passa a dar.
+    patch.closed_at = body.status === "finalizado" ? new Date().toISOString() : null;
   }
   if (body.priority !== undefined) {
     if (!ehPrioridade(body.priority)) return NextResponse.json({ error: "Prioridade inválida." }, { status: 400 });

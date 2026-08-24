@@ -1,21 +1,22 @@
 // Tickets — módulo Tecnologia e Inovação.
 //
-// Os dados continuam no projeto Supabase original do sistema de tickets
-// (aijtilkobbychwnqbowr). O Núcleo Contábil passa a ser a interface, sem
-// copiar nada: fonte única, e o sistema antigo segue funcionando durante a
-// transição. Só o servidor fala com esse banco — a chave nunca vai ao
-// navegador.
+// Os dados foram migrados do projeto Supabase original (aijtilkobbychwnqbowr)
+// para o banco do próprio Núcleo Contábil em 24/08/2026: 1.178 tickets, 181
+// comentários, 276 anexos, 112 atribuições, 46 usuários e 4 admins.
+// Não há mais dependência de projeto externo nem de chave extra.
+//
+// Os ARQUIVOS dos anexos continuam no storage do projeto antigo — as URLs
+// gravadas nas descrições e na tabela de anexos apontam para lá. Mover os
+// arquivos e reescrever as URLs é uma etapa à parte.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-export const TICKETS_URL =
-  process.env.TICKETS_SUPABASE_URL || "https://aijtilkobbychwnqbowr.supabase.co";
-
-/** Cliente admin do banco de tickets. Null se a chave não estiver configurada. */
+/** Cliente admin. Só o servidor fala com o banco — a chave nunca vai ao navegador. */
 export function ticketsDb(): SupabaseClient | null {
-  const key = process.env.TICKETS_SUPABASE_SERVICE_KEY;
-  if (!TICKETS_URL || !key) return null;
-  return createClient(TICKETS_URL, key, { auth: { persistSession: false } });
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
 }
 
 // ---------------------------------------------------------------- domínio

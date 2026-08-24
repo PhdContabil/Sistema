@@ -24,8 +24,7 @@ export default async function Page({
   let erro: string | null = null;
 
   if (!ticketsDb()) {
-    erro =
-      "Banco de tickets não configurado. Defina TICKETS_SUPABASE_SERVICE_KEY nas variáveis de ambiente do projeto.";
+    erro = "Banco não configurado no servidor (SUPABASE_SERVICE_ROLE_KEY ausente).";
   } else {
     try {
       [tickets, resumo] = await Promise.all([
