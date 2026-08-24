@@ -35,7 +35,7 @@ export default function UsuarioAtual() {
   return (
     <div className="user-row">
       <span className="avatar mono">{u?.iniciais ?? "··"}</span>
-      <span style={{ minWidth: 0, flex: 1 }}>
+      <span className="quem" style={{ minWidth: 0, flex: 1 }}>
         <span className="nm" style={{ display: "block" }}>{u?.nome ?? "Carregando…"}</span>
         <span className="role" title={u?.email}>{u?.email ?? ""}</span>
       </span>

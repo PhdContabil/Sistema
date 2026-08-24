@@ -875,10 +875,17 @@ html[data-theme="dark"] .prio.alta { background: #7f1d1d; color: #fecaca; }
 .workspace.menu-recolhido .sidebar .nm,
 .workspace.menu-recolhido .sidebar .brand-txt,
 .workspace.menu-recolhido .sidebar .nav-label,
-.workspace.menu-recolhido .sidebar-foot .rotulo,
-.workspace.menu-recolhido .sidebar-foot .email {
+.workspace.menu-recolhido .sidebar .rotulo,
+.workspace.menu-recolhido .sidebar .quem,
+.workspace.menu-recolhido .sidebar .role,
+.workspace.menu-recolhido .sidebar .sair {
   display: none;
 }
+/* Nada de texto vazando enquanto a barra encolhe. */
+.workspace.menu-recolhido .sidebar * { white-space: nowrap; }
+.workspace.menu-recolhido .sidebar .icon-btn { width: auto; padding: 8px; }
+.workspace.menu-recolhido .sidebar .rail .ic { margin: 0 auto; }
+.workspace.menu-recolhido .sidebar .user-row { justify-content: center; }
 .workspace.menu-recolhido .sidebar .rail,
 .workspace.menu-recolhido .sidebar .brand,
 .workspace.menu-recolhido .sidebar-foot > * {
@@ -899,29 +906,6 @@ html[data-theme="dark"] .prio.alta { background: #7f1d1d; color: #fecaca; }
   transition: background .15s ease;
 }
 
-/* ---------- Medição de esforço e ganho ---------- */
-
-.medicao {
-  display: grid; gap: 10px; margin-bottom: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-}
-.med {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--r-sm); padding: 9px 11px;
-}
-.med .k {
-  font-size: 10.5px; color: var(--muted); text-transform: uppercase;
-  letter-spacing: .04em; margin-bottom: 3px;
-}
-.med .v { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.med.destaque { background: var(--accent-soft); border-color: var(--marca); }
-.med.destaque .v { color: var(--marca); }
-.med input {
-  width: 100%; font-family: inherit; font-size: 14px; font-weight: 600;
-  color: var(--text); background: var(--surface);
-  border: 1px solid var(--border); border-radius: 7px; padding: 4px 7px;
-}
-.med .dica { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
 
 .tk-ganho {
   font-size: 10.5px; font-weight: 600; color: var(--marca);
@@ -951,7 +935,8 @@ html[data-theme="dark"] .tk-ganho { color: var(--text); }
   background: var(--surface); overflow: hidden;
 }
 .med {
-  flex: 1 1 132px; min-width: 132px;
+  display: block;              /* imune a qualquer flex herdado */
+  flex: 1 1 150px; min-width: 150px; max-width: 100%;
   background: transparent; border: 0; border-radius: 0;
   border-left: 1px solid var(--border);
   padding: 12px 14px;
@@ -973,6 +958,9 @@ html[data-theme="dark"] .tk-ganho { color: var(--text); }
 .med input:focus { outline: none; border-bottom: 1px solid var(--marca); }
 .med input::placeholder { color: var(--border); font-weight: 400; }
 .med.destaque { background: var(--accent-soft); border-left-color: var(--border); }
+.med.destaque .v { font-size: 18px; }
+/* A explicação fica embaixo, com quebra normal — nunca espremida ao lado. */
+.med .dica { white-space: normal; overflow-wrap: anywhere; }
 .med.destaque .v { color: var(--marca); }
 html[data-theme="dark"] .med.destaque .v { color: var(--text); }
 
@@ -990,3 +978,14 @@ html[data-theme="dark"] .med.destaque .v { color: var(--text); }
 .pessoa-chip.fixa em {
   display: block; font-style: normal; font-size: 11px; color: var(--muted); margin-top: 1px;
 }
+
+/* Explicação fixa do campo: o que aquele número significa. */
+.med .ajuda {
+  font-size: 10.5px; color: var(--muted); line-height: 1.35;
+  margin-top: 5px; white-space: normal;
+}
+.med .dica {
+  margin-top: 4px; font-weight: 500;
+  color: var(--marca); white-space: normal;
+}
+html[data-theme="dark"] .med .dica { color: var(--marca-clara); }

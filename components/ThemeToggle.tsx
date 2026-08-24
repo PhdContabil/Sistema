@@ -20,7 +20,7 @@ export default function ThemeToggle({ full = false }: { full?: boolean }) {
   return (
     <button className="icon-btn" onClick={toggle} style={full ? { width: "100%" } : undefined} aria-label={label}>
       <span className="theme-dot" />
-      {label}
+      <span className="rotulo">{label}</span>
     </button>
   );
 }

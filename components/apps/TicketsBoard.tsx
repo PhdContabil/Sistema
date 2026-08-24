@@ -415,31 +415,44 @@ function DetalheTicket({
             </div>
           </div>
 
-          <h3>Esforço e retorno</h3>
+          <h3>Esforço do time de TI</h3>
           <div className="medicao">
-            <CampoMedicao rotulo="Horas estimadas" valor={t.horas_estimadas} sufixo="h"
-                          editavel={souAdmin} salvando={salvando}
-                          onSalvar={(v) => salvarMedicao("horas_estimadas", v)} />
-            <CampoMedicao rotulo="Horas realizadas" valor={t.horas_realizadas} sufixo="h"
-                          editavel={souAdmin} salvando={salvando}
-                          onSalvar={(v) => salvarMedicao("horas_realizadas", v)}
-                          dica={desvio !== null
-                            ? `${desvio > 0 ? "+" : ""}${desvio.toFixed(0)}% vs. estimado`
-                            : undefined} />
-            <CampoMedicao rotulo="Ganho de tempo" valor={t.ganho_horas_mes} sufixo="h/mês"
-                          editavel={souAdmin} salvando={salvando}
-                          onSalvar={(v) => salvarMedicao("ganho_horas_mes", v)} />
-            <CampoMedicao rotulo="Valor da hora" valor={t.valor_hora} prefixo="R$"
-                          editavel={souAdmin} salvando={salvando}
-                          onSalvar={(v) => salvarMedicao("valor_hora", v)} />
+            <CampoMedicao
+              rotulo="Horas estimadas" valor={t.horas_estimadas} sufixo="h"
+              ajuda="Quanto tempo prevemos gastar para atender a demanda"
+              editavel={souAdmin} salvando={salvando}
+              onSalvar={(v) => salvarMedicao("horas_estimadas", v)} />
+            <CampoMedicao
+              rotulo="Horas realizadas" valor={t.horas_realizadas} sufixo="h"
+              ajuda="Quanto tempo gastamos de fato"
+              editavel={souAdmin} salvando={salvando}
+              onSalvar={(v) => salvarMedicao("horas_realizadas", v)}
+              dica={desvio !== null
+                ? `${desvio > 0 ? "+" : ""}${desvio.toFixed(0)}% em relação ao estimado`
+                : undefined} />
+          </div>
+
+          <h3>Retorno para quem solicitou</h3>
+          <div className="medicao">
+            <CampoMedicao
+              rotulo="Ganho de tempo" valor={t.ganho_horas_mes} sufixo="h/mês"
+              ajuda="Tempo que a entrega devolve por mês na rotina do solicitante"
+              editavel={souAdmin} salvando={salvando}
+              onSalvar={(v) => salvarMedicao("ganho_horas_mes", v)} />
+            <CampoMedicao
+              rotulo="Valor da hora" valor={t.valor_hora} prefixo="R$"
+              ajuda="Custo da hora da atividade que deixou de ser feita"
+              editavel={souAdmin} salvando={salvando}
+              onSalvar={(v) => salvarMedicao("valor_hora", v)} />
             <div className="med destaque">
               <div className="k">Ganho mensal</div>
               <div className="v">{formatReais(t.ganho_mensal)}</div>
-              <div className="dica">
-                {retorno !== null
-                  ? `se paga em ${retorno.toFixed(1)} ${retorno === 1 ? "mês" : "meses"}`
-                  : "ganho de tempo x valor da hora"}
-              </div>
+              <div className="ajuda">Ganho de tempo × valor da hora</div>
+              {retorno !== null && (
+                <div className="dica">
+                  O esforço se paga em {retorno.toFixed(1)} {retorno === 1 ? "mês" : "meses"}
+                </div>
+              )}
             </div>
           </div>
           {!souAdmin && (
@@ -509,7 +522,7 @@ function DetalheTicket({
 // ------------------------------------------------------------ campo de medição
 
 function CampoMedicao({
-  rotulo, valor, prefixo, sufixo, editavel, salvando, dica, onSalvar,
+  rotulo, valor, prefixo, sufixo, editavel, salvando, dica, ajuda, onSalvar,
 }: {
   rotulo: string;
   valor: number | null;
@@ -518,6 +531,8 @@ function CampoMedicao({
   editavel: boolean;
   salvando: boolean;
   dica?: string;
+  /** O que o campo significa — fica visível, não só no tooltip. */
+  ajuda?: string;
   onSalvar: (v: string) => void;
 }) {
   const [txt, setTxt] = useState(valor === null ? "" : String(valor));
@@ -533,7 +548,7 @@ function CampoMedicao({
     })}${sufixo ? " " + sufixo : ""}`;
 
   return (
-    <div className="med">
+    <div className="med" title={ajuda}>
       <div className="k">{rotulo}</div>
       {editavel ? (
         <input
@@ -551,6 +566,7 @@ function CampoMedicao({
       ) : (
         <div className="v">{exibicao}</div>
       )}
+      {ajuda && <div className="ajuda">{ajuda}</div>}
       {dica && <div className="dica">{dica}</div>}
     </div>
   );
