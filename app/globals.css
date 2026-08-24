@@ -942,3 +942,51 @@ html[data-theme="dark"] .tk-ganho { color: var(--text); }
 }
 .pessoa-chip button:hover { color: var(--div); }
 .pessoa-chip button:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---------- Medição: versão enxuta ----------
+   Uma faixa única dividida por linhas finas, em vez de cinco caixas. */
+.medicao {
+  display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 16px;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface); overflow: hidden;
+}
+.med {
+  flex: 1 1 132px; min-width: 132px;
+  background: transparent; border: 0; border-radius: 0;
+  border-left: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.med:first-child { border-left: 0; }
+.med .k {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 5px; white-space: nowrap;
+}
+.med .v { font-size: 16px; font-weight: 600; line-height: 1.25; }
+.med .dica {
+  font-size: 10.5px; color: var(--muted); margin-top: 4px; line-height: 1.35;
+}
+.med input {
+  width: 100%; padding: 0 0 3px; font-size: 16px; font-weight: 600;
+  background: transparent; color: var(--text);
+  border: 0; border-bottom: 1px dashed var(--border); border-radius: 0;
+}
+.med input:focus { outline: none; border-bottom: 1px solid var(--marca); }
+.med input::placeholder { color: var(--border); font-weight: 400; }
+.med.destaque { background: var(--accent-soft); border-left-color: var(--border); }
+.med.destaque .v { color: var(--marca); }
+html[data-theme="dark"] .med.destaque .v { color: var(--text); }
+
+/* ---------- Solicitante x quem atua ---------- */
+.pessoas-ticket {
+  display: grid; gap: 20px; margin-bottom: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.bloco-pessoa h3 { margin-top: 0; }
+.pessoa-chip.fixa {
+  background: transparent; border: 0; padding: 0; gap: 9px;
+  align-items: center; font-size: 13px;
+}
+.pessoa-chip.fixa .av { width: 28px; height: 28px; font-size: 11px; }
+.pessoa-chip.fixa em {
+  display: block; font-style: normal; font-size: 11px; color: var(--muted); margin-top: 1px;
+}

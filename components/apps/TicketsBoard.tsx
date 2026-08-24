@@ -353,34 +353,67 @@ function DetalheTicket({
             </button>
           </div>
 
-          <h3>Quem está atuando</h3>
-          <div className="atuando">
-            {responsaveis.map((r) => (
-              <span key={r.user_email} className="pessoa-chip">
-                <span className="av">{iniciais(r.user_name, r.user_email)}</span>
-                {r.user_name ?? r.user_email}
-                <button onClick={() => tirarPessoa(r.user_email)} disabled={salvando}
-                        title="Remover" aria-label={`Remover ${r.user_name ?? r.user_email}`}>✕</button>
+          <div className="pessoas-ticket">
+            <div className="bloco-pessoa">
+              <h3>Solicitante</h3>
+              <span className="pessoa-chip fixa">
+                <span className="av">{iniciais(t.created_by_name, t.created_by_email)}</span>
+                <span>
+                  {t.created_by_name ?? t.created_by_email}
+                  <em>{SETOR_NOME[t.sector] ?? t.sector} · há {tempoRelativo(t.created_at)}</em>
+                </span>
               </span>
-            ))}
-            {responsaveis.length === 0 && <span className="nota">Ninguém atuando ainda.</span>}
+            </div>
+
+            <div className="bloco-pessoa">
+              <h3>Atuando na demanda</h3>
+              <div className="atuando">
+                {responsaveis.map((r) => (
+                  <span key={r.user_email} className="pessoa-chip">
+                    <span className="av">{iniciais(r.user_name, r.user_email)}</span>
+                    {r.user_name ?? r.user_email}
+                    <button onClick={() => tirarPessoa(r.user_email)} disabled={salvando}
+                            title="Remover" aria-label={`Remover ${r.user_name ?? r.user_email}`}>✕</button>
+                  </span>
+                ))}
+                {responsaveis.length === 0 && <span className="nota">Ninguém atribuído ainda.</span>}
+              </div>
+              <select
+                className="sel"
+                value=""
+                disabled={salvando}
+                onChange={(e) => atribuirPessoa(e.target.value)}
+                style={{ maxWidth: 260, marginTop: 8 }}
+              >
+                <option value="">+ Atribuir alguém…</option>
+                {(() => {
+                  const livres = pessoas.filter(
+                    (p) => !responsaveis.some((r) => r.user_email.toLowerCase() === p.email.toLowerCase())
+                  );
+                  const ti = livres.filter((p) => p.sector === "ti");
+                  const outros = livres.filter((p) => p.sector !== "ti");
+                  return (
+                    <>
+                      {ti.length > 0 && (
+                        <optgroup label="Tecnologia">
+                          {ti.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
+                        </optgroup>
+                      )}
+                      {outros.length > 0 && (
+                        <optgroup label="Outros setores">
+                          {outros.map((p) => (
+                            <option key={p.email} value={p.email}>
+                              {p.name} · {SETOR_NOME[p.sector] ?? p.sector}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </>
+                  );
+                })()}
+              </select>
+            </div>
           </div>
-          <select
-            className="sel"
-            value=""
-            disabled={salvando}
-            onChange={(e) => atribuirPessoa(e.target.value)}
-            style={{ maxWidth: 280, marginTop: 8 }}
-          >
-            <option value="">+ Adicionar pessoa…</option>
-            {pessoas
-              .filter((p) => !responsaveis.some((r) => r.user_email.toLowerCase() === p.email.toLowerCase()))
-              .map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.name} · {SETOR_NOME[p.sector] ?? p.sector}
-                </option>
-              ))}
-          </select>
 
           <h3>Esforço e retorno</h3>
           <div className="medicao">
