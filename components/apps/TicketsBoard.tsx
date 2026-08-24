@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  SETORES, STATUS, PRIORIDADES, STATUS_NOME, PRIORIDADE_NOME, SETOR_NOME,
+  SETORES, STATUS, PRIORIDADES, PRIORIDADE_NOME, SETOR_NOME,
   iniciais, primeiroNome, tempoRelativo,
-  type Ticket, type Comentario, type Anexo, type Responsavel,
+  formatHoras, formatReais, desvioHoras, mesesRetorno,
+  type Ticket, type Comentario, type Anexo, type Responsavel, type PessoaTickets,
 } from "@/lib/tickets";
 
 interface Detalhe {
@@ -16,13 +17,15 @@ interface Detalhe {
 }
 
 export default function TicketsBoard({
-  setor, tickets, resumo, incluirFinalizados, meuEmail, erroServidor,
+  setor, tickets, resumo, incluirFinalizados, meuEmail, pessoas, souAdmin, erroServidor,
 }: {
   setor: string;
   tickets: Ticket[];
   resumo: Record<string, number>;
   incluirFinalizados: boolean;
   meuEmail: string | null;
+  pessoas: PessoaTickets[];
+  souAdmin: boolean;
   erroServidor: string | null;
 }) {
   const router = useRouter();
@@ -80,6 +83,11 @@ export default function TicketsBoard({
 
   const abertosNoSetor = tickets.filter((t) => t.status !== "finalizado").length;
 
+  // Soma apenas do que está na tela, para acompanhar o filtro em vigor.
+  const totalGanho = filtrados.reduce((s, t) => s + (t.ganho_mensal ?? 0), 0);
+  const totalHorasMes = filtrados.reduce((s, t) => s + (t.ganho_horas_mes ?? 0), 0);
+  const totalRealizadas = filtrados.reduce((s, t) => s + (t.horas_realizadas ?? 0), 0);
+
   return (
     <>
       {erroServidor && <div className="banner error">{erroServidor}</div>}
@@ -118,6 +126,24 @@ export default function TicketsBoard({
         </span>
       </div>
 
+      {(totalGanho > 0 || totalRealizadas > 0) && (
+        <div className="medicao" style={{ marginTop: 4 }}>
+          <div className="med">
+            <div className="k">Horas realizadas</div>
+            <div className="v">{formatHoras(totalRealizadas)}</div>
+          </div>
+          <div className="med">
+            <div className="k">Ganho de tempo</div>
+            <div className="v">{formatHoras(totalHorasMes)}<span style={{ fontSize: 11, fontWeight: 400 }}> /mês</span></div>
+          </div>
+          <div className="med destaque">
+            <div className="k">Ganho mensal</div>
+            <div className="v">{formatReais(totalGanho)}</div>
+            <div className="dica">{filtrados.length} tickets em tela</div>
+          </div>
+        </div>
+      )}
+
       <div className="kanban">
         {colunas.map((c) => (
           <div key={c.id} className="col">
@@ -131,6 +157,11 @@ export default function TicketsBoard({
                 <button key={t.id} className="tk" onClick={() => abrir(t.id)}>
                   <div className="tk-top">
                     <span className={`prio ${t.priority}`}>{PRIORIDADE_NOME[t.priority]}</span>
+                    {t.ganho_mensal ? (
+                      <span className="tk-ganho" title="Ganho mensal estimado">
+                        {formatReais(t.ganho_mensal)}/mês
+                      </span>
+                    ) : null}
                     <span className="tk-idade">{tempoRelativo(t.created_at)}</span>
                   </div>
                   <div className="tk-titulo">{t.title}</div>
@@ -163,6 +194,8 @@ export default function TicketsBoard({
         <DetalheTicket
           d={aberto}
           meuEmail={meuEmail}
+          pessoas={pessoas}
+          souAdmin={souAdmin}
           onFechar={() => setAberto(null)}
           onMudou={() => { setAberto(null); router.refresh(); }}
         />
@@ -182,10 +215,12 @@ export default function TicketsBoard({
 // ------------------------------------------------------------ detalhe
 
 function DetalheTicket({
-  d, meuEmail, onFechar, onMudou,
+  d, meuEmail, pessoas, souAdmin, onFechar, onMudou,
 }: {
   d: Detalhe;
   meuEmail: string | null;
+  pessoas: PessoaTickets[];
+  souAdmin: boolean;
   onFechar: () => void;
   onMudou: () => void;
 }) {
@@ -197,6 +232,8 @@ function DetalheTicket({
   const [erro, setErro] = useState<string | null>(null);
 
   const souResponsavel = !!meuEmail && responsaveis.some((r) => r.user_email.toLowerCase() === meuEmail);
+  const desvio = desvioHoras(t);
+  const retorno = mesesRetorno(t);
 
   async function patch(corpo: Record<string, unknown>) {
     setSalvando(true);
@@ -227,6 +264,37 @@ function DetalheTicket({
     setResponsaveis(souResponsavel
       ? responsaveis.filter((r) => r.user_email.toLowerCase() !== meuEmail)
       : [...responsaveis, { user_email: meuEmail, user_name: null }]);
+  }
+
+  async function atribuirPessoa(email: string) {
+    if (!email) return;
+    if (responsaveis.some((r) => r.user_email.toLowerCase() === email.toLowerCase())) return;
+    if (await patch({ atribuir: email })) {
+      const p = pessoas.find((x) => x.email.toLowerCase() === email.toLowerCase());
+      setResponsaveis([...responsaveis, { user_email: email, user_name: p?.name ?? null }]);
+    }
+  }
+
+  async function tirarPessoa(email: string) {
+    if (await patch({ desatribuir: email })) {
+      setResponsaveis(responsaveis.filter((r) => r.user_email.toLowerCase() !== email.toLowerCase()));
+    }
+  }
+
+  /** Salva um campo de medição no blur, para não bater no servidor a cada tecla. */
+  async function salvarMedicao(campo: keyof typeof t, valor: string) {
+    const limpo = valor.trim();
+    const enviar = limpo === "" ? null : limpo;
+    if (await patch({ [campo]: enviar })) {
+      const n = limpo === "" ? null : Number(limpo.replace(",", "."));
+      const novo = { ...t, [campo]: n } as Ticket;
+      // ganho mensal é derivado: espelha aqui o que o banco calcula
+      novo.ganho_mensal =
+        novo.ganho_horas_mes && novo.valor_hora
+          ? Math.round(novo.ganho_horas_mes * novo.valor_hora * 100) / 100
+          : null;
+      setT(novo);
+    }
   }
 
   async function comentar() {
@@ -285,9 +353,65 @@ function DetalheTicket({
             </button>
           </div>
 
-          {responsaveis.length > 0 && (
+          <h3>Quem está atuando</h3>
+          <div className="atuando">
+            {responsaveis.map((r) => (
+              <span key={r.user_email} className="pessoa-chip">
+                <span className="av">{iniciais(r.user_name, r.user_email)}</span>
+                {r.user_name ?? r.user_email}
+                <button onClick={() => tirarPessoa(r.user_email)} disabled={salvando}
+                        title="Remover" aria-label={`Remover ${r.user_name ?? r.user_email}`}>✕</button>
+              </span>
+            ))}
+            {responsaveis.length === 0 && <span className="nota">Ninguém atuando ainda.</span>}
+          </div>
+          <select
+            className="sel"
+            value=""
+            disabled={salvando}
+            onChange={(e) => atribuirPessoa(e.target.value)}
+            style={{ maxWidth: 280, marginTop: 8 }}
+          >
+            <option value="">+ Adicionar pessoa…</option>
+            {pessoas
+              .filter((p) => !responsaveis.some((r) => r.user_email.toLowerCase() === p.email.toLowerCase()))
+              .map((p) => (
+                <option key={p.email} value={p.email}>
+                  {p.name} · {SETOR_NOME[p.sector] ?? p.sector}
+                </option>
+              ))}
+          </select>
+
+          <h3>Esforço e retorno</h3>
+          <div className="medicao">
+            <CampoMedicao rotulo="Horas estimadas" valor={t.horas_estimadas} sufixo="h"
+                          editavel={souAdmin} salvando={salvando}
+                          onSalvar={(v) => salvarMedicao("horas_estimadas", v)} />
+            <CampoMedicao rotulo="Horas realizadas" valor={t.horas_realizadas} sufixo="h"
+                          editavel={souAdmin} salvando={salvando}
+                          onSalvar={(v) => salvarMedicao("horas_realizadas", v)}
+                          dica={desvio !== null
+                            ? `${desvio > 0 ? "+" : ""}${desvio.toFixed(0)}% vs. estimado`
+                            : undefined} />
+            <CampoMedicao rotulo="Ganho de tempo" valor={t.ganho_horas_mes} sufixo="h/mês"
+                          editavel={souAdmin} salvando={salvando}
+                          onSalvar={(v) => salvarMedicao("ganho_horas_mes", v)} />
+            <CampoMedicao rotulo="Valor da hora" valor={t.valor_hora} prefixo="R$"
+                          editavel={souAdmin} salvando={salvando}
+                          onSalvar={(v) => salvarMedicao("valor_hora", v)} />
+            <div className="med destaque">
+              <div className="k">Ganho mensal</div>
+              <div className="v">{formatReais(t.ganho_mensal)}</div>
+              <div className="dica">
+                {retorno !== null
+                  ? `se paga em ${retorno.toFixed(1)} ${retorno === 1 ? "mês" : "meses"}`
+                  : "ganho de tempo x valor da hora"}
+              </div>
+            </div>
+          </div>
+          {!souAdmin && (
             <p className="nota">
-              Responsáveis: {responsaveis.map((r) => r.user_name ?? r.user_email).join(", ")}
+              Só administradores e sub-administradores editam horas e valores.
             </p>
           )}
 
@@ -345,6 +469,56 @@ function DetalheTicket({
           <button className="btn primary" onClick={onMudou}>Fechar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ campo de medição
+
+function CampoMedicao({
+  rotulo, valor, prefixo, sufixo, editavel, salvando, dica, onSalvar,
+}: {
+  rotulo: string;
+  valor: number | null;
+  prefixo?: string;
+  sufixo?: string;
+  editavel: boolean;
+  salvando: boolean;
+  dica?: string;
+  onSalvar: (v: string) => void;
+}) {
+  const [txt, setTxt] = useState(valor === null ? "" : String(valor));
+
+  // Reflete mudanças vindas do servidor sem atropelar quem está digitando.
+  useEffect(() => {
+    setTxt(valor === null ? "" : String(valor));
+  }, [valor]);
+
+  const exibicao =
+    valor === null ? "—" : `${prefixo ? prefixo + " " : ""}${valor.toLocaleString("pt-BR", {
+      minimumFractionDigits: prefixo ? 2 : 0, maximumFractionDigits: 2,
+    })}${sufixo ? " " + sufixo : ""}`;
+
+  return (
+    <div className="med">
+      <div className="k">{rotulo}</div>
+      {editavel ? (
+        <input
+          inputMode="decimal"
+          value={txt}
+          disabled={salvando}
+          placeholder="—"
+          onChange={(e) => setTxt(e.target.value)}
+          onBlur={() => {
+            const atual = valor === null ? "" : String(valor);
+            if (txt.trim() !== atual) onSalvar(txt);
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        />
+      ) : (
+        <div className="v">{exibicao}</div>
+      )}
+      {dica && <div className="dica">{dica}</div>}
     </div>
   );
 }

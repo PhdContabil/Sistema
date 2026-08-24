@@ -92,7 +92,17 @@ export interface Comentario {
   created_at: string;
 }
 
-export interface Ticket {
+/** Esforço e retorno da demanda. Números vêm do Postgres como string. */
+export interface Medicao {
+  horas_estimadas: number | null;
+  horas_realizadas: number | null;
+  ganho_horas_mes: number | null;
+  valor_hora: number | null;
+  /** Calculado no banco: ganho_horas_mes x valor_hora. Nunca digitado. */
+  ganho_mensal: number | null;
+}
+
+export interface Ticket extends Medicao {
   id: string;
   title: string;
   description: string;
@@ -104,9 +114,36 @@ export interface Ticket {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  closed_at?: string | null;
   responsaveis: Responsavel[];
   qtdComentarios: number;
   qtdAnexos: number;
+}
+
+export interface PessoaTickets {
+  email: string;
+  name: string;
+  sector: string;
+  is_sub_admin: boolean;
+}
+
+/** Converte numeric do Postgres (que chega como string) em número. */
+export function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+const CAMPOS_MEDICAO = "horas_estimadas,horas_realizadas,ganho_horas_mes,valor_hora,ganho_mensal";
+
+function medicao(t: Record<string, unknown>): Medicao {
+  return {
+    horas_estimadas: num(t.horas_estimadas),
+    horas_realizadas: num(t.horas_realizadas),
+    ganho_horas_mes: num(t.ganho_horas_mes),
+    valor_hora: num(t.valor_hora),
+    ganho_mensal: num(t.ganho_mensal),
+  };
 }
 
 // ---------------------------------------------------------------- leitura
@@ -124,7 +161,10 @@ export async function listarTickets(
 
   let q = db
     .from("tickets")
-    .select("id,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at")
+    .select(
+      "id,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at," +
+      CAMPOS_MEDICAO
+    )
     .eq("sector", setor)
     .order("position", { ascending: true })
     .order("created_at", { ascending: false });
@@ -135,7 +175,10 @@ export async function listarTickets(
   const { data, error } = await q;
   if (error || !data) return [];
 
-  const ids = data.map((t) => t.id);
+  // A lista de colunas é montada por concatenação, então o cliente não
+  // consegue inferir o formato da linha; tipamos aqui.
+  const linhas = data as unknown as Record<string, unknown>[];
+  const ids = linhas.map((t) => t.id as string);
   if (ids.length === 0) return [];
 
   const [resp, coment, anexos] = await Promise.all([
@@ -158,12 +201,44 @@ export async function listarTickets(
   const nCom = contar(coment.data);
   const nAnex = contar(anexos.data);
 
-  return data.map((t) => ({
-    ...t,
-    responsaveis: porTicket.get(t.id) ?? [],
-    qtdComentarios: nCom.get(t.id) ?? 0,
-    qtdAnexos: nAnex.get(t.id) ?? 0,
-  }));
+  return linhas.map((t) => {
+    const id = t.id as string;
+    return {
+      ...(t as unknown as Ticket),
+      ...medicao(t),
+      responsaveis: porTicket.get(id) ?? [],
+      qtdComentarios: nCom.get(id) ?? 0,
+      qtdAnexos: nAnex.get(id) ?? 0,
+    };
+  });
+}
+
+/** Pessoas cadastradas (migradas do sistema antigo) para escolher responsável. */
+export async function listarPessoas(): Promise<PessoaTickets[]> {
+  const db = ticketsDb();
+  if (!db) return [];
+  const { data } = await db
+    .from("ticket_users")
+    .select("email,name,sector,is_sub_admin")
+    .order("name");
+  return (data ?? []) as PessoaTickets[];
+}
+
+/**
+ * Admin ou sub-admin. Só eles editam horas, valor/hora e ganho — são números
+ * que viram base de decisão, então não podem ficar soltos.
+ */
+export async function podeEditarMedicao(email: string | null | undefined): Promise<boolean> {
+  const e = email?.toLowerCase();
+  if (!e) return false;
+  const db = ticketsDb();
+  if (!db) return false;
+
+  const [adm, usr] = await Promise.all([
+    db.from("ticket_admins").select("email").ilike("email", e).maybeSingle(),
+    db.from("ticket_users").select("is_sub_admin").ilike("email", e).maybeSingle(),
+  ]);
+  return !!adm.data || !!usr.data?.is_sub_admin;
 }
 
 export async function detalheTicket(id: string) {
@@ -179,7 +254,7 @@ export async function detalheTicket(id: string) {
 
   if (!t.data) return null;
   return {
-    ticket: t.data,
+    ticket: { ...t.data, ...medicao(t.data as Record<string, unknown>) },
     comentarios: (c.data ?? []) as Comentario[],
     anexos: (a.data ?? []) as Anexo[],
     responsaveis: (r.data ?? []) as Responsavel[],
@@ -221,6 +296,29 @@ export function iniciais(nome: string | null, email: string): string {
 export function primeiroNome(nome: string | null, email: string): string {
   if (nome) return nome.split(/\s+/)[0];
   return email.split("@")[0];
+}
+
+export function formatHoras(v: number | null): string {
+  if (v === null) return "—";
+  return `${v.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} h`;
+}
+
+export function formatReais(v: number | null): string {
+  if (v === null) return "—";
+  return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Desvio entre realizado e estimado, em %. Null se não dá para comparar. */
+export function desvioHoras(t: Medicao): number | null {
+  if (!t.horas_estimadas || t.horas_realizadas === null) return null;
+  return ((t.horas_realizadas - t.horas_estimadas) / t.horas_estimadas) * 100;
+}
+
+/** Meses para o esforço se pagar. Null quando não há ganho declarado. */
+export function mesesRetorno(t: Medicao): number | null {
+  const horas = t.horas_realizadas ?? t.horas_estimadas;
+  if (!horas || !t.ganho_horas_mes || t.ganho_horas_mes <= 0) return null;
+  return horas / t.ganho_horas_mes;
 }
 
 export function tempoRelativo(iso: string): string {
