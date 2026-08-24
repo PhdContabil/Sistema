@@ -97,6 +97,16 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
+    id: "tecnologia", name: "Tecnologia e Inovação", initials: "TI", color: "oklch(0.62 0.13 280)",
+    desc: "Chamados, inventário, acessos e as ferramentas que sustentam o escritório.",
+    apps: [
+      { name: "Tickets", desc: "Chamados de cada setor, do backlog à finalização.", href: "/m/tecnologia/tickets" },
+      { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados." },
+      { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis e quem tem acesso." },
+      { name: "Base de Conhecimento", desc: "Tutoriais e procedimentos de TI para o time." },
+    ],
+  },
+  {
     id: "societario", name: "Societário", initials: "SO", color: "oklch(0.62 0.13 20)",
     desc: "Processos societários, empresas e atos societários — migrado do Societário PHD.",
     apps: [
