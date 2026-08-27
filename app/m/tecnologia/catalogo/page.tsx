@@ -23,6 +23,28 @@ export default async function Page() {
 
       <ApiManutencao souTI={souTI} />
 
+      {souTI && (
+        <div className="painel-api" style={{ marginTop: 18 }}>
+          <div className="painel-api-head">
+            <h3>Ferramentas internas</h3>
+          </div>
+          <div className="ferramentas">
+            <a className="ferramenta" href="http://10.11.1.14:8088/" target="_blank" rel="noreferrer">
+              <span className="ic mono">DB</span>
+              <span>
+                <strong>Monitor do banco (DBMON)</strong>
+                <em>10.11.1.14:8088 — conexões, carga e sessões do PostgreSQL</em>
+              </span>
+              <span className="seta">↗</span>
+            </a>
+          </div>
+          <p className="nota">
+            Abre em nova aba. Só responde de dentro da rede do escritório ou por VPN —
+            é um endereço interno, não fica acessível pela internet.
+          </p>
+        </div>
+      )}
+
       <div className="banner" style={{ marginTop: 18 }}>
         O restante do catálogo (lista de sistemas, responsáveis e quem tem acesso) ainda está em construção.
       </div>

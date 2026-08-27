@@ -1020,3 +1020,22 @@ html[data-theme="dark"] .med .dica { color: var(--marca-clara); }
 }
 .btn.danger { background: #dc2626; border-color: #dc2626; color: #fff; }
 .btn.danger:hover { background: #b91c1c; border-color: #b91c1c; }
+
+/* ---------- Atalhos de ferramentas internas ---------- */
+.ferramentas { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.ferramenta {
+  display: flex; align-items: center; gap: 11px; text-decoration: none;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 11px 13px; color: var(--text);
+}
+.ferramenta:hover { border-color: var(--marca); text-decoration: none; }
+.ferramenta .ic {
+  width: 32px; height: 32px; flex: none; border-radius: 8px;
+  background: var(--marca); color: #fff;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+}
+.ferramenta strong { display: block; font-size: 13px; font-weight: 600; }
+.ferramenta em {
+  display: block; font-style: normal; font-size: 11.5px; color: var(--muted); margin-top: 1px;
+}
+.ferramenta .seta { margin-left: auto; color: var(--muted); font-size: 14px; }
