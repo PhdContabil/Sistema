@@ -1000,4 +1000,46 @@ html[data-theme="dark"] .med.destaque .v { color: var(--text); }
   margin-top: 4px; font-weight: 500;
   color: var(--marca); white-space: normal;
 }
+
+/* ===== Catálogo de Sistemas — painel de manutenção da API Questor ===== */
+.painel-api {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: 18px 20px; box-shadow: var(--shadow);
+}
+.painel-api-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.painel-api-head h3 { margin: 0; font-size: 15.5px; font-weight: 600; }
+
+.estado-api { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.estado-api .ponto { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
+.estado-api.on .ponto { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 18%, transparent); }
+.estado-api.off .ponto { background: var(--div); box-shadow: 0 0 0 4px color-mix(in srgb, var(--div) 18%, transparent); }
+.estado-api-titulo { font-size: 14.5px; font-weight: 600; line-height: 1.3; }
+.estado-api-sub { font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+
+.acao-api { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.acao-api label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); flex: 1; min-width: 220px; }
+.acao-api input {
+  border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; font-size: 14px;
+  background: var(--surface); color: var(--text);
+}
+.btn.danger { background: var(--div); border-color: var(--div); color: #fff; }
+.btn.danger:hover { filter: brightness(0.92); }
+
+.painel-api .nota { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.painel-api .nota code { background: var(--surface2); padding: 1px 5px; border-radius: 5px; }
+
+.ferramentas { display: flex; flex-direction: column; gap: 8px; }
+.ferramenta {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 12px; text-decoration: none; color: var(--text); background: var(--surface2);
+  transition: border-color .12s, background .12s;
+}
+.ferramenta:hover { border-color: var(--accent); background: var(--accent-soft); }
+.ferramenta .ic {
+  width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; flex: none;
+}
+.ferramenta strong { display: block; font-size: 14px; font-weight: 600; }
+.ferramenta em { display: block; font-style: normal; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.ferramenta .seta { margin-left: auto; color: var(--muted); font-size: 14px; }
 html[data-theme="dark"] .med .dica { color: var(--marca-clara); }
