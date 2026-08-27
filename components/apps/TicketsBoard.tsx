@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  SETORES, STATUS, PRIORIDADES, PRIORIDADE_NOME, SETOR_NOME,
+  STATUS, PRIORIDADES, PRIORIDADE_NOME, SETOR_NOME,
   iniciais, primeiroNome, tempoRelativo,
   formatHoras, formatReais, desvioHoras, mesesRetorno,
   type Ticket, type Comentario, type Anexo, type Responsavel, type PessoaTickets,
@@ -16,16 +16,41 @@ interface Detalhe {
   responsaveis: Responsavel[];
 }
 
+// Visual do módulo de Tickets, no estilo do sistema antigo — segue o mesmo
+// interruptor claro/escuro do resto do Núcleo Contábil (ver tailwind.config.ts).
+export const INPUT =
+  "bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500";
+export const BTN =
+  "px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed";
+export const BTN_PRIMARY =
+  "px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed";
+export const CARD = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg";
+
+// Mesmas cores do sistema de tickets antigo (src/lib/types.ts).
+const PRIORIDADE_COR: Record<string, string> = {
+  baixa: "bg-slate-500",
+  media: "bg-green-600",
+  alta: "bg-red-600",
+};
+
+const STATUS_COR: Record<string, string> = {
+  backlog: "bg-slate-400 dark:bg-slate-500",
+  analise: "bg-blue-500",
+  desenvolvimento: "bg-purple-500",
+  operacao_assistida: "bg-amber-500",
+  finalizado: "bg-emerald-500",
+};
+
 export default function TicketsBoard({
-  setor, tickets, resumo, incluirFinalizados, meuEmail, pessoas, souAdmin, erroServidor,
+  setor, tickets, meuEmail, pessoas, souAdmin, souAdminGeral, erroServidor,
 }: {
   setor: string;
   tickets: Ticket[];
-  resumo: Record<string, number>;
-  incluirFinalizados: boolean;
   meuEmail: string | null;
   pessoas: PessoaTickets[];
   souAdmin: boolean;
+  /** Admin pleno — só ele vê o filtro de prioridade e edita a prioridade do ticket. */
+  souAdminGeral: boolean;
   erroServidor: string | null;
 }) {
   const router = useRouter();
@@ -54,10 +79,11 @@ export default function TicketsBoard({
     });
   }, [tickets, busca, prioridade, soMeus, meuEmail]);
 
-  const colunas = useMemo(() => {
-    const visiveis = incluirFinalizados ? STATUS : STATUS.filter((s) => s.id !== "finalizado");
-    return visiveis.map((s) => ({ ...s, itens: filtrados.filter((t) => t.status === s.id) }));
-  }, [filtrados, incluirFinalizados]);
+  // Todas as colunas aparecem sempre, Finalizado incluso — igual ao sistema antigo.
+  const colunas = useMemo(
+    () => STATUS.map((s) => ({ ...s, itens: filtrados.filter((t) => t.status === s.id) })),
+    [filtrados]
+  );
 
   async function abrir(id: string) {
     setCarregando(true);
@@ -69,18 +95,6 @@ export default function TicketsBoard({
     }
   }
 
-  function trocarSetor(s: string) {
-    const p = new URLSearchParams({ setor: s });
-    if (incluirFinalizados) p.set("finalizados", "1");
-    window.location.href = `/m/tecnologia/tickets?${p.toString()}`;
-  }
-
-  function alternarFinalizados() {
-    const p = new URLSearchParams({ setor });
-    if (!incluirFinalizados) p.set("finalizados", "1");
-    window.location.href = `/m/tecnologia/tickets?${p.toString()}`;
-  }
-
   const abertosNoSetor = tickets.filter((t) => t.status !== "finalizado").length;
 
   // Soma apenas do que está na tela, para acompanhar o filtro em vigor.
@@ -90,105 +104,128 @@ export default function TicketsBoard({
 
   return (
     <>
-      {erroServidor && <div className="banner error">{erroServidor}</div>}
+      {erroServidor && (
+        <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-200 text-sm rounded-lg px-4 py-3">
+          {erroServidor}
+        </div>
+      )}
 
-      <div className="setor-tabs">
-        {SETORES.map((s) => (
-          <button
-            key={s.id}
-            className={`setor-tab ${s.id === setor ? "on" : ""}`}
-            onClick={() => trocarSetor(s.id)}
-          >
-            {s.nome}
-            {resumo[s.id] ? <span className="badge">{resumo[s.id]}</span> : null}
-          </button>
-        ))}
-      </div>
-
-      <div className="toolbar">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <h2 className="text-lg font-bold mr-1">{SETOR_NOME[setor] ?? setor}</h2>
         <input
-          className="search"
+          className={`${INPUT} flex-1 min-w-[200px]`}
           placeholder="Buscar por título, descrição ou autor…"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        <select className="sel" value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
-          <option value="">Toda prioridade</option>
-          {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-        </select>
-        <span className={`chip ${soMeus ? "on" : ""}`} onClick={() => setSoMeus((v) => !v)}>Meus</span>
-        <span className={`chip ${incluirFinalizados ? "on" : ""}`} onClick={alternarFinalizados}>
-          Ver finalizados
-        </span>
-        <button className="btn primary" onClick={() => setNovo(true)}>+ Novo ticket</button>
-        <span className="contador">
+        {souAdminGeral && (
+          <select className={INPUT} value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
+            <option value="">Toda prioridade</option>
+            {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+        )}
+        <button
+          onClick={() => setSoMeus((v) => !v)}
+          className={`px-3 py-2 rounded-lg text-sm border transition ${
+            soMeus
+              ? "bg-blue-600 border-blue-600 text-white"
+              : "border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          }`}
+        >
+          Meus
+        </button>
+        <button className={BTN_PRIMARY} onClick={() => setNovo(true)}>+ Novo ticket</button>
+        <span className="text-xs text-slate-500 dark:text-slate-500 ml-auto whitespace-nowrap">
           {filtrados.length} de {tickets.length} · {abertosNoSetor} em aberto
         </span>
       </div>
 
       {(totalGanho > 0 || totalRealizadas > 0) && (
-        <div className="medicao" style={{ marginTop: 4 }}>
-          <div className="med">
-            <div className="k">Horas realizadas</div>
-            <div className="v">{formatHoras(totalRealizadas)}</div>
+        <div className="flex flex-wrap gap-3 mb-4">
+          <div className={`${CARD} px-4 py-2.5`}>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Horas realizadas</div>
+            <div className="text-lg font-semibold">{formatHoras(totalRealizadas)}</div>
           </div>
-          <div className="med">
-            <div className="k">Ganho de tempo</div>
-            <div className="v">{formatHoras(totalHorasMes)}<span style={{ fontSize: 11, fontWeight: 400 }}> /mês</span></div>
+          <div className={`${CARD} px-4 py-2.5`}>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Ganho de tempo</div>
+            <div className="text-lg font-semibold">
+              {formatHoras(totalHorasMes)}<span className="text-xs font-normal text-slate-400"> /mês</span>
+            </div>
           </div>
-          <div className="med destaque">
-            <div className="k">Ganho mensal</div>
-            <div className="v">{formatReais(totalGanho)}</div>
-            <div className="dica">{filtrados.length} tickets em tela</div>
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-900 rounded-lg px-4 py-2.5">
+            <div className="text-[11px] uppercase tracking-wide text-emerald-600 dark:text-emerald-500">Ganho mensal</div>
+            <div className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">{formatReais(totalGanho)}</div>
+            <div className="text-[11px] text-emerald-600">{filtrados.length} tickets em tela</div>
           </div>
         </div>
       )}
 
-      <div className="kanban">
+      <div className="flex gap-4 overflow-x-auto pb-2">
         {colunas.map((c) => (
-          <div key={c.id} className="col">
-            <div className="col-head">
-              <span className={`pt ${c.id}`} />
-              {c.nome}
-              <span className="qtd">{c.itens.length}</span>
+          <div
+            key={c.id}
+            className="w-72 shrink-0 bg-slate-100/70 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[72vh]"
+          >
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${STATUS_COR[c.id] ?? "bg-slate-500"}`} />
+              <h3 className="font-semibold text-sm flex-1">{c.nome}</h3>
+              <span className="text-xs text-slate-500">{c.itens.length}</span>
             </div>
-            <div className="col-body">
+            <div className="p-3 space-y-2 overflow-y-auto flex-1">
               {c.itens.map((t) => (
-                <button key={t.id} className="tk" onClick={() => abrir(t.id)}>
-                  <div className="tk-top">
-                    <span className={`prio ${t.priority}`}>{PRIORIDADE_NOME[t.priority]}</span>
+                <button
+                  key={t.id}
+                  onClick={() => abrir(t.id)}
+                  className="w-full text-left bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-lg p-3 transition shadow-sm dark:shadow-none"
+                >
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] text-white ${PRIORIDADE_COR[t.priority] ?? "bg-slate-500"}`}>
+                      {PRIORIDADE_NOME[t.priority]}
+                    </span>
                     {t.ganho_mensal ? (
-                      <span className="tk-ganho" title="Ganho mensal estimado">
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400" title="Ganho mensal estimado">
                         {formatReais(t.ganho_mensal)}/mês
                       </span>
                     ) : null}
-                    <span className="tk-idade">{tempoRelativo(t.created_at)}</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 ml-auto">{tempoRelativo(t.created_at)}</span>
                   </div>
-                  <div className="tk-titulo">{t.title}</div>
-                  {t.description && <div className="tk-desc">{t.description}</div>}
-                  <div className="tk-pe">
-                    <span className="tk-autor">{primeiroNome(t.created_by_name, t.created_by_email)}</span>
-                    <span className="tk-icones">
+                  <div className="text-sm font-medium leading-snug mb-1">{t.title}</div>
+                  {t.description && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 leading-snug mb-2 line-clamp-2 whitespace-pre-line">
+                      {t.description}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-2">
+                    <span className="truncate">{primeiroNome(t.created_by_name, t.created_by_email)}</span>
+                    <span className="flex items-center gap-2 shrink-0">
                       {t.qtdComentarios > 0 && <span title="comentários">💬 {t.qtdComentarios}</span>}
                       {t.qtdAnexos > 0 && <span title="anexos">📎 {t.qtdAnexos}</span>}
-                    </span>
-                    <span className="avatares">
-                      {t.responsaveis.map((r) => (
-                        <span key={r.user_email} className="av" title={r.user_name ?? r.user_email}>
-                          {iniciais(r.user_name, r.user_email)}
-                        </span>
-                      ))}
+                      <span className="flex -space-x-1.5">
+                        {t.responsaveis.map((r) => (
+                          <span
+                            key={r.user_email}
+                            title={r.user_name ?? r.user_email}
+                            className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 border border-white dark:border-slate-900 text-[9px] flex items-center justify-center font-semibold text-slate-700 dark:text-slate-200"
+                          >
+                            {iniciais(r.user_name, r.user_email)}
+                          </span>
+                        ))}
+                      </span>
                     </span>
                   </div>
                 </button>
               ))}
-              {c.itens.length === 0 && <div className="col-vazia">Nada aqui</div>}
+              {c.itens.length === 0 && <div className="text-slate-400 dark:text-slate-600 text-xs italic px-1 py-2">Nada aqui</div>}
             </div>
           </div>
         ))}
       </div>
 
-      {carregando && <div className="toast">Abrindo…</div>}
+      {carregando && (
+        <div className="fixed bottom-6 right-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm rounded-lg px-4 py-2 shadow-xl z-50">
+          Abrindo…
+        </div>
+      )}
 
       {aberto && (
         <DetalheTicket
@@ -196,6 +233,7 @@ export default function TicketsBoard({
           meuEmail={meuEmail}
           pessoas={pessoas}
           souAdmin={souAdmin}
+          souAdminGeral={souAdminGeral}
           onFechar={() => setAberto(null)}
           onMudou={() => { setAberto(null); router.refresh(); }}
         />
@@ -215,12 +253,13 @@ export default function TicketsBoard({
 // ------------------------------------------------------------ detalhe
 
 function DetalheTicket({
-  d, meuEmail, pessoas, souAdmin, onFechar, onMudou,
+  d, meuEmail, pessoas, souAdmin, souAdminGeral, onFechar, onMudou,
 }: {
   d: Detalhe;
   meuEmail: string | null;
   pessoas: PessoaTickets[];
   souAdmin: boolean;
+  souAdminGeral: boolean;
   onFechar: () => void;
   onMudou: () => void;
 }) {
@@ -318,72 +357,99 @@ function DetalheTicket({
   }
 
   return (
-    <div className="modal-bg" onClick={onMudou}>
-      <div className="modal larga" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
+    <div className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 flex items-start justify-center p-4 overflow-y-auto" onClick={onMudou}>
+      <div
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl my-6 shadow-2xl text-slate-900 dark:text-slate-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-slate-200 dark:border-slate-800">
           <div>
-            <div className="tk-crumbs">
+            <div className="text-xs text-slate-500 mb-1">
               {SETOR_NOME[t.sector]} · aberto por {primeiroNome(t.created_by_name, t.created_by_email)} há {tempoRelativo(t.created_at)}
             </div>
-            <h2>{t.title}</h2>
+            <h2 className="text-xl font-bold">{t.title}</h2>
           </div>
-          <button className="btn icon" onClick={onFechar} aria-label="Fechar">✕</button>
+          <button
+            onClick={onFechar}
+            aria-label="Fechar"
+            className="w-8 h-8 shrink-0 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="modal-body">
-          {erro && <div className="banner error">{erro}</div>}
+        <div className="px-6 py-5 space-y-6 max-h-[75vh] overflow-y-auto">
+          {erro && <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-200 text-sm rounded-lg px-4 py-3">{erro}</div>}
 
-          <div className="tk-controles">
-            <label>
-              <span>Status</span>
-              <select className="sel" value={t.status} disabled={salvando}
-                      onChange={(e) => mudarStatus(e.target.value)}>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Status</span>
+              <select className={INPUT} value={t.status} disabled={salvando} onChange={(e) => mudarStatus(e.target.value)}>
                 {STATUS.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
               </select>
             </label>
-            <label>
-              <span>Prioridade</span>
-              <select className="sel" value={t.priority} disabled={salvando}
-                      onChange={(e) => mudarPrioridade(e.target.value)}>
-                {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
+            <label className="block">
+              <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Prioridade</span>
+              {souAdminGeral ? (
+                <select className={INPUT} value={t.priority} disabled={salvando} onChange={(e) => mudarPrioridade(e.target.value)}>
+                  {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+              ) : (
+                <div className={`${INPUT} inline-flex items-center opacity-80`}>
+                  {PRIORIDADE_NOME[t.priority] ?? t.priority}
+                </div>
+              )}
             </label>
-            <button className="btn" onClick={alternarResponsavel} disabled={salvando || !meuEmail}>
+            <button className={BTN} onClick={alternarResponsavel} disabled={salvando || !meuEmail}>
               {souResponsavel ? "Deixar de ser responsável" : "Assumir este ticket"}
             </button>
           </div>
 
-          <div className="pessoas-ticket">
-            <div className="bloco-pessoa">
-              <h3>Solicitante</h3>
-              <span className="pessoa-chip fixa">
-                <span className="av">{iniciais(t.created_by_name, t.created_by_email)}</span>
-                <span>
-                  {t.created_by_name ?? t.created_by_email}
-                  <em>{SETOR_NOME[t.sector] ?? t.sector} · há {tempoRelativo(t.created_at)}</em>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Solicitante</h3>
+              <div className={`${CARD} flex items-center gap-3 px-3 py-2.5`}>
+                <span className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-semibold shrink-0">
+                  {iniciais(t.created_by_name, t.created_by_email)}
                 </span>
-              </span>
+                <span className="text-sm">
+                  <span className="block text-slate-900 dark:text-slate-100">{t.created_by_name ?? t.created_by_email}</span>
+                  <span className="block text-xs text-slate-500">
+                    {SETOR_NOME[t.sector] ?? t.sector} · há {tempoRelativo(t.created_at)}
+                  </span>
+                </span>
+              </div>
             </div>
 
-            <div className="bloco-pessoa">
-              <h3>Atuando na demanda</h3>
-              <div className="atuando">
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Atuando na demanda</h3>
+              <div className="space-y-2 mb-2">
                 {responsaveis.map((r) => (
-                  <span key={r.user_email} className="pessoa-chip">
-                    <span className="av">{iniciais(r.user_name, r.user_email)}</span>
-                    {r.user_name ?? r.user_email}
-                    <button onClick={() => tirarPessoa(r.user_email)} disabled={salvando}
-                            title="Remover" aria-label={`Remover ${r.user_name ?? r.user_email}`}>✕</button>
-                  </span>
+                  <div key={r.user_email} className={`${CARD} flex items-center justify-between px-3 py-2 text-sm`}>
+                    <span className="flex items-center gap-2 truncate">
+                      <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-semibold shrink-0">
+                        {iniciais(r.user_name, r.user_email)}
+                      </span>
+                      <span className="truncate">{r.user_name ?? r.user_email}</span>
+                    </span>
+                    <button
+                      onClick={() => tirarPessoa(r.user_email)}
+                      disabled={salvando}
+                      title="Remover"
+                      aria-label={`Remover ${r.user_name ?? r.user_email}`}
+                      className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 ml-2 shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
-                {responsaveis.length === 0 && <span className="nota">Ninguém atribuído ainda.</span>}
+                {responsaveis.length === 0 && <div className="text-sm text-slate-500 italic">Ninguém atribuído ainda.</div>}
               </div>
               <select
-                className="sel"
+                className={`${INPUT} w-full`}
                 value=""
                 disabled={salvando}
                 onChange={(e) => atribuirPessoa(e.target.value)}
-                style={{ maxWidth: 260, marginTop: 8 }}
               >
                 <option value="">+ Atribuir alguém…</option>
                 {(() => {
@@ -415,104 +481,117 @@ function DetalheTicket({
             </div>
           </div>
 
-          <h3>Esforço do time de TI</h3>
-          <div className="medicao">
-            <CampoMedicao
-              rotulo="Horas estimadas" valor={t.horas_estimadas} sufixo="h"
-              ajuda="Quanto tempo prevemos gastar para atender a demanda"
-              editavel={souAdmin} salvando={salvando}
-              onSalvar={(v) => salvarMedicao("horas_estimadas", v)} />
-            <CampoMedicao
-              rotulo="Horas realizadas" valor={t.horas_realizadas} sufixo="h"
-              ajuda="Quanto tempo gastamos de fato"
-              editavel={souAdmin} salvando={salvando}
-              onSalvar={(v) => salvarMedicao("horas_realizadas", v)}
-              dica={desvio !== null
-                ? `${desvio > 0 ? "+" : ""}${desvio.toFixed(0)}% em relação ao estimado`
-                : undefined} />
-          </div>
-
-          <h3>Retorno para quem solicitou</h3>
-          <div className="medicao">
-            <CampoMedicao
-              rotulo="Ganho de tempo" valor={t.ganho_horas_mes} sufixo="h/mês"
-              ajuda="Tempo que a entrega devolve por mês na rotina do solicitante"
-              editavel={souAdmin} salvando={salvando}
-              onSalvar={(v) => salvarMedicao("ganho_horas_mes", v)} />
-            <CampoMedicao
-              rotulo="Valor da hora" valor={t.valor_hora} prefixo="R$"
-              ajuda="Custo da hora da atividade que deixou de ser feita"
-              editavel={souAdmin} salvando={salvando}
-              onSalvar={(v) => salvarMedicao("valor_hora", v)} />
-            <div className="med destaque">
-              <div className="k">Ganho mensal</div>
-              <div className="v">{formatReais(t.ganho_mensal)}</div>
-              <div className="ajuda">Ganho de tempo × valor da hora</div>
-              {retorno !== null && (
-                <div className="dica">
-                  O esforço se paga em {retorno.toFixed(1)} {retorno === 1 ? "mês" : "meses"}
-                </div>
-              )}
-            </div>
-          </div>
-          {!souAdmin && (
-            <p className="nota">
-              Só administradores e sub-administradores editam horas e valores.
-            </p>
-          )}
-
-          {t.description && (
+          {souAdmin && (
             <>
-              <h3>Descrição</h3>
-              <p className="tk-descricao">{t.description}</p>
+              <div>
+                <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Esforço do time de TI</h3>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <CampoMedicao
+                    rotulo="Horas estimadas" valor={t.horas_estimadas} sufixo="h"
+                    ajuda="Quanto tempo prevemos gastar para atender a demanda"
+                    editavel={souAdmin} salvando={salvando}
+                    onSalvar={(v) => salvarMedicao("horas_estimadas", v)} />
+                  <CampoMedicao
+                    rotulo="Horas realizadas" valor={t.horas_realizadas} sufixo="h"
+                    ajuda="Quanto tempo gastamos de fato"
+                    editavel={souAdmin} salvando={salvando}
+                    onSalvar={(v) => salvarMedicao("horas_realizadas", v)}
+                    dica={desvio !== null
+                      ? `${desvio > 0 ? "+" : ""}${desvio.toFixed(0)}% em relação ao estimado`
+                      : undefined} />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Retorno para quem solicitou</h3>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <CampoMedicao
+                    rotulo="Ganho de tempo" valor={t.ganho_horas_mes} sufixo="h/mês"
+                    ajuda="Tempo que a entrega devolve por mês na rotina do solicitante"
+                    editavel={souAdmin} salvando={salvando}
+                    onSalvar={(v) => salvarMedicao("ganho_horas_mes", v)} />
+                  <CampoMedicao
+                    rotulo="Valor da hora" valor={t.valor_hora} prefixo="R$"
+                    ajuda="Custo da hora da atividade que deixou de ser feita"
+                    editavel={souAdmin} salvando={salvando}
+                    onSalvar={(v) => salvarMedicao("valor_hora", v)} />
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-900 rounded-lg px-3 py-2.5">
+                    <div className="text-xs text-emerald-600 dark:text-emerald-500">Ganho mensal</div>
+                    <div className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">{formatReais(t.ganho_mensal)}</div>
+                    <div className="text-[11px] text-emerald-600 mt-1">Ganho de tempo × valor da hora</div>
+                    {retorno !== null && (
+                      <div className="text-[11px] text-emerald-600">
+                        O esforço se paga em {retorno.toFixed(1)} {retorno === 1 ? "mês" : "meses"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </>
           )}
 
+          {t.description && (
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Descrição</h3>
+              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">{t.description}</p>
+            </div>
+          )}
+
           {d.anexos.length > 0 && (
-            <>
-              <h3>Anexos ({d.anexos.length})</h3>
-              <div className="anexos">
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Anexos ({d.anexos.length})</h3>
+              <div className="flex flex-wrap gap-2">
                 {d.anexos.map((a) => (
-                  <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="anexo">
+                  <a
+                    key={a.id} href={a.url} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200"
+                  >
                     📎 {a.filename ?? "arquivo"}
                   </a>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
-          <h3>Comentários ({comentarios.length})</h3>
-          {comentarios.length === 0 && <p className="nota">Nenhum comentário ainda.</p>}
-          <div className="comentarios">
-            {comentarios.map((c) => (
-              <div key={c.id} className="cmt">
-                <span className="av">{iniciais(c.author_name, c.author_email)}</span>
-                <div>
-                  <div className="cmt-head">
-                    <strong>{c.author_name ?? c.author_email}</strong>
-                    <span>{tempoRelativo(c.created_at)}</span>
+          <div>
+            <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Comentários ({comentarios.length})</h3>
+            {comentarios.length === 0 && <p className="text-sm text-slate-500 italic mb-2">Nenhum comentário ainda.</p>}
+            <div className="space-y-3 mb-3">
+              {comentarios.map((c) => (
+                <div key={c.id} className="flex gap-3">
+                  <span className="w-7 h-7 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-semibold">
+                    {iniciais(c.author_name, c.author_email)}
+                  </span>
+                  <div className={`${CARD} flex-1 px-3 py-2`}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <strong className="text-sm text-slate-900 dark:text-slate-100">{c.author_name ?? c.author_email}</strong>
+                      <span className="text-[11px] text-slate-500 shrink-0">{tempoRelativo(c.created_at)}</span>
+                    </div>
+                    <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">{c.body}</div>
                   </div>
-                  <div className="cmt-body">{c.body}</div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div className="cmt-novo">
-            <textarea
-              rows={3}
-              placeholder="Escreva um comentário…"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-            />
-            <button className="btn primary" onClick={comentar} disabled={salvando || !texto.trim()}>
-              {salvando ? "Enviando…" : "Comentar"}
-            </button>
+            <div className="space-y-2">
+              <textarea
+                rows={3}
+                placeholder="Escreva um comentário…"
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                className={`${INPUT} w-full resize-y`}
+              />
+              <div className="flex justify-end">
+                <button className={BTN_PRIMARY} onClick={comentar} disabled={salvando || !texto.trim()}>
+                  {salvando ? "Enviando…" : "Comentar"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="modal-foot">
-          <button className="btn primary" onClick={onMudou}>Fechar</button>
+        <div className="flex justify-end px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+          <button className={BTN_PRIMARY} onClick={onMudou}>Fechar</button>
         </div>
       </div>
     </div>
@@ -548,8 +627,8 @@ function CampoMedicao({
     })}${sufixo ? " " + sufixo : ""}`;
 
   return (
-    <div className="med" title={ajuda}>
-      <div className="k">{rotulo}</div>
+    <div className={`${CARD} px-3 py-2.5`} title={ajuda}>
+      <div className="text-xs text-slate-500">{rotulo}</div>
       {editavel ? (
         <input
           inputMode="decimal"
@@ -562,12 +641,13 @@ function CampoMedicao({
             if (txt.trim() !== atual) onSalvar(txt);
           }}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className="w-full bg-transparent text-lg font-semibold outline-none border-b border-transparent focus:border-blue-500 py-0.5"
         />
       ) : (
-        <div className="v">{exibicao}</div>
+        <div className="text-lg font-semibold">{exibicao}</div>
       )}
-      {ajuda && <div className="ajuda">{ajuda}</div>}
-      {dica && <div className="dica">{dica}</div>}
+      {ajuda && <div className="text-[11px] text-slate-500 mt-1">{ajuda}</div>}
+      {dica && <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">{dica}</div>}
     </div>
   );
 }
@@ -583,7 +663,6 @@ function NovoTicket({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [sector, setSector] = useState(setor);
   const [priority, setPriority] = useState("media");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -595,7 +674,7 @@ function NovoTicket({
       const r = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, sector, priority }),
+        body: JSON.stringify({ title, description, sector: setor, priority }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(j.error ?? "Não foi possível criar."); return; }
@@ -606,45 +685,50 @@ function NovoTicket({
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>Novo ticket</h2>
-          <button className="btn icon" onClick={onFechar} aria-label="Fechar">✕</button>
+    <div className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4" onClick={onFechar}>
+      <div
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl text-slate-900 dark:text-slate-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-semibold">Novo ticket em {SETOR_NOME[setor] ?? setor}</h2>
+          <button
+            onClick={onFechar}
+            aria-label="Fechar"
+            className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+          >
+            ✕
+          </button>
         </div>
-        <div className="modal-body">
-          {erro && <div className="banner error">{erro}</div>}
-          <div className="form">
-            <label>
-              <span>Título</span>
-              <input value={title} onChange={(e) => setTitle(e.target.value)}
-                     placeholder="Resuma o pedido em uma linha" />
-            </label>
-            <label>
-              <span>Descrição</span>
-              <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)}
-                        placeholder="O que precisa ser feito, para quem e até quando" />
-            </label>
-            <div className="form-linha">
-              <label>
-                <span>Setor</span>
-                <select className="sel" value={sector} onChange={(e) => setSector(e.target.value)}>
-                  {SETORES.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Prioridade</span>
-                <select className="sel" value={priority} onChange={(e) => setPriority(e.target.value)}>
-                  {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
-              </label>
-            </div>
-          </div>
-          <p className="nota">O ticket entra no Backlog do setor escolhido.</p>
+        <div className="px-6 py-5 space-y-4">
+          {erro && <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-200 text-sm rounded-lg px-4 py-3">{erro}</div>}
+          <label className="block">
+            <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Título</span>
+            <input
+              value={title} onChange={(e) => setTitle(e.target.value)}
+              placeholder="Resuma o pedido em uma linha"
+              className={`${INPUT} w-full`}
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Descrição</span>
+            <textarea
+              rows={5} value={description} onChange={(e) => setDescription(e.target.value)}
+              placeholder="O que precisa ser feito, para quem e até quando"
+              className={`${INPUT} w-full resize-y`}
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Prioridade</span>
+            <select className={`${INPUT} w-full`} value={priority} onChange={(e) => setPriority(e.target.value)}>
+              {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </label>
+          <p className="text-xs text-slate-500">O ticket entra no Backlog de {SETOR_NOME[setor] ?? setor}.</p>
         </div>
-        <div className="modal-foot">
-          <button className="btn" onClick={onFechar}>Cancelar</button>{" "}
-          <button className="btn primary" onClick={criar} disabled={salvando || !title.trim()}>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+          <button className={BTN} onClick={onFechar}>Cancelar</button>
+          <button className={BTN_PRIMARY} onClick={criar} disabled={salvando || !title.trim()}>
             {salvando ? "Criando…" : "Criar ticket"}
           </button>
         </div>

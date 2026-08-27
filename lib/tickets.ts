@@ -19,6 +19,18 @@ export function ticketsDb(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+/**
+ * Cliente do projeto Supabase do sistema antigo de tickets — continua no ar e
+ * recebendo tickets novos, então de tempos em tempos alguém (admin) aciona a
+ * sincronização manual pra trazer o que ainda não veio pro Núcleo.
+ */
+function origemDb(): SupabaseClient | null {
+  const url = process.env.TICKETS_ORIGEM_SUPABASE_URL;
+  const key = process.env.TICKETS_ORIGEM_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 // ---------------------------------------------------------------- domínio
 
 export const SETORES = [
@@ -224,17 +236,6 @@ export async function listarPessoas(): Promise<PessoaTickets[]> {
   return (data ?? []) as PessoaTickets[];
 }
 
-/** Pessoa cadastrada no setor de TI (`ticket_users.sector = 'ti'`). */
-export async function ehDaTI(email: string | null | undefined): Promise<boolean> {
-  const e = email?.toLowerCase();
-  if (!e) return false;
-  const db = ticketsDb();
-  if (!db) return false;
-  const { data } = await db
-    .from("ticket_users").select("sector").ilike("email", e).eq("sector", "ti").maybeSingle();
-  return !!data;
-}
-
 /**
  * Admin ou sub-admin. Só eles editam horas, valor/hora e ganho — são números
  * que viram base de decisão, então não podem ficar soltos.
@@ -250,6 +251,180 @@ export async function podeEditarMedicao(email: string | null | undefined): Promi
     db.from("ticket_users").select("is_sub_admin").ilike("email", e).maybeSingle(),
   ]);
   return !!adm.data || !!usr.data?.is_sub_admin;
+}
+
+/**
+ * Admin "de verdade" (linha em ticket_admins) — diferente de podeEditarMedicao,
+ * que também inclui sub-admins. Usado para o que só o admin pleno pode ver:
+ * todos os setores na barra lateral e o filtro de prioridade.
+ */
+export async function ehAdminGeral(email: string | null | undefined): Promise<boolean> {
+  const e = email?.toLowerCase();
+  if (!e) return false;
+  const db = ticketsDb();
+  if (!db) return false;
+  const { data } = await db.from("ticket_admins").select("email").ilike("email", e).maybeSingle();
+  return !!data;
+}
+
+/** Setor cadastrado da pessoa em ticket_users — define o que ela enxerga quando não é admin. */
+export async function obterSetorUsuario(email: string | null | undefined): Promise<SetorId | null> {
+  const e = email?.toLowerCase();
+  if (!e) return null;
+  const db = ticketsDb();
+  if (!db) return null;
+  const { data } = await db.from("ticket_users").select("sector").ilike("email", e).maybeSingle();
+  const setor = (data as { sector?: string } | null)?.sector;
+  return ehSetor(setor) ? setor : null;
+}
+
+/**
+ * Verdadeiro se a pessoa pertence ao setor de TI (ticket_users.sector = "ti")
+ * ou é admin de Tickets. Usado pelo Catálogo de Sistemas (Tecnologia) para
+ * mostrar as ferramentas internas só a quem é da área.
+ */
+export async function ehDaTI(email: string | null | undefined): Promise<boolean> {
+  const e = email?.toLowerCase();
+  if (!e) return false;
+  const db = ticketsDb();
+  if (!db) return false;
+
+  const [usr, adm] = await Promise.all([
+    db.from("ticket_users").select("sector").ilike("email", e).maybeSingle(),
+    db.from("ticket_admins").select("email").ilike("email", e).maybeSingle(),
+  ]);
+  return usr.data?.sector === "ti" || !!adm.data;
+}
+
+// ---------------------------------------------------------------- admins
+
+/** Lista de e-mails com acesso de administrador aos Tickets. */
+export async function listarAdmins(): Promise<string[]> {
+  const db = ticketsDb();
+  if (!db) return [];
+  const { data } = await db.from("ticket_admins").select("email").order("email");
+  return (data ?? []).map((r) => (r as { email: string }).email);
+}
+
+export async function adicionarAdmin(email: string): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco não configurado.";
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes("@")) return "E-mail inválido.";
+  const { error } = await db.from("ticket_admins").insert({ email: e });
+  if (error) return error.message;
+  return null;
+}
+
+export async function removerAdmin(email: string): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco não configurado.";
+  const { error } = await db.from("ticket_admins").delete().ilike("email", email.trim());
+  if (error) return error.message;
+  return null;
+}
+
+// ---------------------------------------------------------------- usuários (ticket_users)
+
+export async function salvarUsuario(dados: {
+  email: string; name: string; sector: string; is_sub_admin: boolean;
+}): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco não configurado.";
+  const email = dados.email.trim().toLowerCase();
+  const name = dados.name.trim();
+  if (!email || !email.includes("@")) return "E-mail inválido.";
+  if (!name) return "Informe o nome.";
+  if (!ehSetor(dados.sector)) return "Setor inválido.";
+  const { error } = await db
+    .from("ticket_users")
+    .upsert(
+      { email, name, sector: dados.sector, is_sub_admin: !!dados.is_sub_admin },
+      { onConflict: "email" }
+    );
+  if (error) return error.message;
+  return null;
+}
+
+export async function removerUsuario(email: string): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco não configurado.";
+  const { error } = await db.from("ticket_users").delete().ilike("email", email.trim());
+  if (error) return error.message;
+  return null;
+}
+
+// ---------------------------------------------------------------- dashboard (log + filtros)
+
+export interface FiltroDashboard {
+  busca?: string;
+  setor?: string;
+  status?: string;
+  responsavel?: string;
+  criadoDe?: string;
+  criadoAte?: string;
+  finalizadoDe?: string;
+  finalizadoAte?: string;
+}
+
+/** Log de tickets para o dashboard administrativo — sem gráficos, só a lista filtrada. */
+export async function listarTicketsDashboard(f: FiltroDashboard): Promise<Ticket[]> {
+  const db = ticketsDb();
+  if (!db) return [];
+
+  let q = db
+    .from("tickets")
+    .select(
+      "id,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at," +
+      CAMPOS_MEDICAO
+    )
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (f.setor && ehSetor(f.setor)) q = q.eq("sector", f.setor);
+  if (f.status && ehStatus(f.status)) q = q.eq("status", f.status);
+  if (f.busca) {
+    const termo = f.busca.trim().replace(/[%,]/g, "");
+    if (termo) q = q.or(`title.ilike.%${termo}%,description.ilike.%${termo}%`);
+  }
+  if (f.criadoDe) q = q.gte("created_at", f.criadoDe);
+  if (f.criadoAte) q = q.lte("created_at", f.criadoAte);
+  if (f.finalizadoDe) q = q.gte("closed_at", f.finalizadoDe);
+  if (f.finalizadoAte) q = q.lte("closed_at", f.finalizadoAte);
+
+  const { data, error } = await q;
+  if (error || !data) return [];
+  const linhas = data as unknown as Record<string, unknown>[];
+  const ids = linhas.map((t) => t.id as string);
+
+  const resp = ids.length
+    ? await db.from("ticket_assignees").select("ticket_id,user_email,user_name").in("ticket_id", ids)
+    : { data: [] as { ticket_id: string; user_email: string; user_name: string | null }[] };
+
+  const porTicket = new Map<string, Responsavel[]>();
+  for (const r of resp.data ?? []) {
+    const lista = porTicket.get(r.ticket_id) ?? [];
+    lista.push({ user_email: r.user_email, user_name: r.user_name });
+    porTicket.set(r.ticket_id, lista);
+  }
+
+  let tickets = linhas.map((t) => {
+    const id = t.id as string;
+    return {
+      ...(t as unknown as Ticket),
+      ...medicao(t),
+      responsaveis: porTicket.get(id) ?? [],
+      qtdComentarios: 0,
+      qtdAnexos: 0,
+    };
+  });
+
+  if (f.responsavel) {
+    const alvo = f.responsavel.toLowerCase();
+    tickets = tickets.filter((t) => t.responsaveis.some((r) => r.user_email.toLowerCase() === alvo));
+  }
+
+  return tickets;
 }
 
 export async function detalheTicket(id: string) {
@@ -330,6 +505,71 @@ export function mesesRetorno(t: Medicao): number | null {
   const horas = t.horas_realizadas ?? t.horas_estimadas;
   if (!horas || !t.ganho_horas_mes || t.ganho_horas_mes <= 0) return null;
   return horas / t.ganho_horas_mes;
+}
+
+// ---------------------------------------------------------------- sincronização com o sistema antigo
+
+export interface ResultadoSincronizacao {
+  novosTickets: number;
+  comentarios: number;
+  anexos: number;
+  atribuicoes: number;
+  erro?: string;
+}
+
+/**
+ * Backfill manual: traz do sistema antigo de tickets (ainda em uso) tudo que
+ * foi criado por lá e ainda não existe no Núcleo — comparando pelo mesmo `id`
+ * usado na migração original de 24/08/2026, então rodar de novo não duplica
+ * nada. Só admin pleno aciona (checado na API route).
+ */
+export async function sincronizarTicketsOrigem(): Promise<ResultadoSincronizacao> {
+  const vazio: ResultadoSincronizacao = { novosTickets: 0, comentarios: 0, anexos: 0, atribuicoes: 0 };
+  const local = ticketsDb();
+  if (!local) return { ...vazio, erro: "Banco do Núcleo não configurado no servidor." };
+  const origem = origemDb();
+  if (!origem) {
+    return {
+      ...vazio,
+      erro: "Credenciais do sistema antigo não configuradas (TICKETS_ORIGEM_SUPABASE_URL / TICKETS_ORIGEM_SERVICE_ROLE_KEY no .env.local).",
+    };
+  }
+
+  const { data: existentes, error: eLocal } = await local.from("tickets").select("id");
+  if (eLocal) return { ...vazio, erro: `Falha ao ler tickets do Núcleo: ${eLocal.message}` };
+  const idsLocais = new Set((existentes ?? []).map((r) => (r as { id: string }).id));
+
+  const { data: todosOrigem, error: eOrigem } = await origem.from("tickets").select("*");
+  if (eOrigem) return { ...vazio, erro: `Falha ao ler o sistema antigo: ${eOrigem.message}` };
+
+  const novos = (todosOrigem ?? []).filter((t) => !idsLocais.has((t as { id: string }).id));
+  if (novos.length === 0) return vazio;
+  const novosIds = novos.map((t) => (t as { id: string }).id);
+
+  const [comentarios, anexos, atribuicoes] = await Promise.all([
+    origem.from("ticket_comments").select("*").in("ticket_id", novosIds),
+    origem.from("ticket_attachments").select("*").in("ticket_id", novosIds),
+    origem.from("ticket_assignees").select("*").in("ticket_id", novosIds),
+  ]);
+
+  const { error: eIns } = await local.from("tickets").insert(novos);
+  if (eIns) return { ...vazio, erro: `Falha ao gravar os tickets novos no Núcleo: ${eIns.message}` };
+
+  let nComentarios = 0, nAnexos = 0, nAtribuicoes = 0;
+  if (comentarios.data?.length) {
+    const { error } = await local.from("ticket_comments").insert(comentarios.data);
+    if (!error) nComentarios = comentarios.data.length;
+  }
+  if (anexos.data?.length) {
+    const { error } = await local.from("ticket_attachments").insert(anexos.data);
+    if (!error) nAnexos = anexos.data.length;
+  }
+  if (atribuicoes.data?.length) {
+    const { error } = await local.from("ticket_assignees").insert(atribuicoes.data);
+    if (!error) nAtribuicoes = atribuicoes.data.length;
+  }
+
+  return { novosTickets: novos.length, comentarios: nComentarios, anexos: nAnexos, atribuicoes: nAtribuicoes };
 }
 
 export function tempoRelativo(iso: string): string {

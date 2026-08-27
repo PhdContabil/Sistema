@@ -1,13 +1,20 @@
 import type { Config } from "tailwindcss";
 
-// Tailwind é usado apenas pelo módulo Societário (migrado do app
-// societario-phd). O restante do hub usa CSS puro — por isso o "content"
-// fica restrito às pastas do módulo, e o preflight (reset global de estilos)
-// fica desligado para não afetar os outros módulos (Fiscal, Financeiro etc.).
+// Tailwind é usado pelo módulo Societário (migrado do app societario-phd) e,
+// desde 08/2026, pelo visual escuro do módulo de Tickets (Tecnologia). O
+// restante do hub usa CSS puro — por isso o "content" fica restrito a essas
+// pastas, e o preflight (reset global de estilos) fica desligado para não
+// afetar os outros módulos (Fiscal, Financeiro etc.).
 const config: Config = {
+  // O Tickets segue o mesmo interruptor claro/escuro do resto do hub
+  // (document.documentElement.dataset.theme, ver components/ThemeToggle.tsx)
+  // em vez do prefers-color-scheme do navegador.
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: [
     "./app/m/societario/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/societario/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/m/tecnologia/tickets/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/apps/Tickets*.{js,ts,jsx,tsx,mdx}",
   ],
   corePlugins: {
     preflight: false,

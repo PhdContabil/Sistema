@@ -15,10 +15,22 @@ export function useUsuario(): Dados | null {
   const [u, setU] = useState<Dados | null>(null);
   useEffect(() => {
     const sb = createSupabaseBrowserClient();
-    sb.auth.getUser().then(({ data }) => {
+    sb.auth.getUser().then(async ({ data }) => {
       const user = data.user;
       if (!user?.email) return;
+
+      // Se o e-mail está vinculado a um cadastro em Pessoas, o nome de lá
+      // manda — é o caso de contas de setor/compartilhadas (ex.: o e-mail
+      // "tecnologia" logado por uma pessoa específica), onde o nome da conta
+      // Microsoft não é quem realmente está usando o sistema.
+      const { data: perfil } = await sb
+        .from("pessoas_perfil")
+        .select("nome")
+        .ilike("email", user.email)
+        .maybeSingle();
+
       const nome =
+        (perfil?.nome as string) ||
         (user.user_metadata?.full_name as string) ||
         (user.user_metadata?.name as string) ||
         user.email.split("@")[0];
