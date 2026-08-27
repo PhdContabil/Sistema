@@ -14,6 +14,7 @@ export interface Perfil {
   cargo: string | null; setor: string; funcao: string | null;
   email: string | null; foto_url: string | null;
   historico: string | null; espaco_cultural: string | null;
+  transporte: string | null;
   modelo: boolean;
   formacoes?: Formacao[];
   cursos?: CursoEvento[];
@@ -32,7 +33,7 @@ export async function listarPessoas(): Promise<Perfil[]> {
   if (!sb) return [];
   const { data, error } = await sb
     .from("pessoas_perfil")
-    .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo")
+    .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo,transporte")
     .eq("ativo", true)
     .order("nome");
   if (error || !data) return [];
@@ -45,7 +46,7 @@ export async function obterPessoa(slug: string): Promise<Perfil | null> {
   if (!sb) return null;
   const { data: p } = await sb
     .from("pessoas_perfil")
-    .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo")
+    .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo,transporte")
     .eq("slug", slug)
     .maybeSingle();
   if (!p) return null;

@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { TRANSPORTES } from "@/lib/pessoas/transporte";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/societario/supabase-browser";
 
 interface Form {
   tratamento: string; cargo: string; historico: string; espaco_cultural: string; foto_url: string;
+  transporte: string;
 }
 interface Formacao {
   id: number; curso: string; grau: string | null; instituicao: string | null;
@@ -16,7 +18,11 @@ interface CursoEvento {
   participacao: string | null; competencia: string | null;
 }
 
-const VAZIO: Form = { tratamento: "", cargo: "", historico: "", espaco_cultural: "", foto_url: "" };
+const VAZIO: Form = {
+  tratamento: "", cargo: "", historico: "", espaco_cultural: "", foto_url: "",
+  transporte: "",
+};
+
 
 export default function EditarPerfil({ slug }: { slug: string }) {
   const [email, setEmail] = useState<string | null>(null);
@@ -54,7 +60,7 @@ export default function EditarPerfil({ slug }: { slug: string }) {
       setEmail(mail);
 
       const { data } = await sb.from("pessoas_perfil")
-        .select("id,nome,email,tratamento,cargo,historico,espaco_cultural,foto_url")
+        .select("id,nome,email,tratamento,cargo,historico,espaco_cultural,foto_url,transporte")
         .eq("slug", slug).maybeSingle();
 
       if (data) {
@@ -63,6 +69,7 @@ export default function EditarPerfil({ slug }: { slug: string }) {
         setForm({
           tratamento: data.tratamento ?? "", cargo: data.cargo ?? "",
           historico: data.historico ?? "", espaco_cultural: data.espaco_cultural ?? "",
+          transporte: data.transporte ?? "",
           foto_url: data.foto_url ?? "",
         });
         setPermitido(Boolean(mail && data.email && String(data.email).toLowerCase() === mail));
@@ -96,6 +103,7 @@ export default function EditarPerfil({ slug }: { slug: string }) {
     const { error } = await sb.from("pessoas_perfil").update({
       tratamento: form.tratamento || null, cargo: form.cargo || null,
       historico: form.historico || null, espaco_cultural: form.espaco_cultural || null,
+      transporte: form.transporte || null,
       foto_url: form.foto_url || null, atualizado_em: new Date().toISOString(),
     }).eq("slug", slug);
     setSalvando(false);
@@ -206,6 +214,20 @@ export default function EditarPerfil({ slug }: { slug: string }) {
         <label className="campo">
           <span>Cargo</span>
           <input className="search" value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} placeholder="Ex.: Encarregado de Tecnologia" />
+        </label>
+
+        <label className="campo">
+          <span>Transporte</span>
+          <select
+            className="search"
+            value={form.transporte}
+            onChange={(e) => setForm({ ...form, transporte: e.target.value })}
+          >
+            <option value="">Não informado</option>
+            {TRANSPORTES.map((t) => (
+              <option key={t.id} value={t.id}>{t.nome}</option>
+            ))}
+          </select>
         </label>
 
         <label className="campo">

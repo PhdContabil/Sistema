@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/societario/supabase-browser";
 import type { Perfil } from "@/lib/pessoas/dados";
+import { TRANSPORTE_NOME } from "@/lib/pessoas/transporte";
 
 function iniciais(nome: string) {
   const w = nome.replace(/^(Sra?\.)\s*/i, "").trim().split(/\s+/);
@@ -41,7 +42,7 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
 
         const { data: perfil, error: e1 } = await sb
           .from("pessoas_perfil")
-          .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo")
+          .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo,transporte")
           .eq("slug", slug)
           .maybeSingle();
 
@@ -93,6 +94,11 @@ export default function PerfilPainel({ slug, onFechar }: { slug: string; onFecha
               <h2>{p.nome}</h2>
               {p.tratamento && <div className="perfil-trat">Como gosta de ser chamado: <strong>{p.tratamento}</strong></div>}
               <div className="perfil-cargo">{p.cargo ?? `${p.setor} — ${p.funcao ?? ""}`}</div>
+              {p.transporte && (
+                <div className="perfil-trat">
+                  Transporte: <strong>{TRANSPORTE_NOME[p.transporte] ?? p.transporte}</strong>
+                </div>
+              )}
               {p.modelo && <span className="perfil-badge mono">perfil modelo</span>}
             </div>
             <div className="perfil-acoes">

@@ -16,7 +16,7 @@ export default function Equipe() {
         const sb = createSupabaseBrowserClient();
         const { data, error } = await sb
           .from("pessoas_perfil")
-          .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo")
+          .select("id,slug,nome,tratamento,cargo,setor,funcao,email,foto_url,historico,espaco_cultural,modelo,transporte")
           .eq("ativo", true)
           .order("nome");
         if (error) throw new Error(error.message);
