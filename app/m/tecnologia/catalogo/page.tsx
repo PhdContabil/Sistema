@@ -21,7 +21,7 @@ export default async function Page() {
         </div>
       </div>
 
-      <ApiManutencao souTI={souTI} />
+      <ApiManutencao />
 
       {souTI && (
         <div className="painel-api" style={{ marginTop: 18 }}>

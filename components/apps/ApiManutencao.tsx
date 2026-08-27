@@ -1,40 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-interface Status {
-  ativo?: boolean; // true = EM MANUTENÇÃO (API desligada para os clientes)
-  motivo?: string | null;
-  desde?: string | null;
+/**
+ * Espelha o que a API devolve. Nada de deduzir estado aqui: `online` e
+ * `status_label` vêm prontos do servidor.
+ *
+ * Cuidado herdado de um bug real: o /health responde HTTP 200 mesmo em
+ * manutenção (é o liveness do HAProxy). Quem diz se está no ar é o campo
+ * `manutencao`, nunca o código HTTP.
+ */
+interface Estado {
+  manutencao: boolean;
+  online: boolean;
+  status: string | null;
+  status_label: string | null;
+  mensagem: string | null;
+  desde: string | null;
+  motivo: string | null;
+  podeOperar: boolean;
+  erro_leitura?: string;
 }
 
-export default function ApiManutencao({ souTI }: { souTI: boolean }) {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [carregando, setCarregando] = useState(false);
+export default function ApiManutencao() {
+  const [estado, setEstado] = useState<Estado | null>(null);
+  const [carregando, setCarregando] = useState(true);
   const [alternando, setAlternando] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
-  const [consultado, setConsultado] = useState(false);
 
-  async function consultar() {
+  const consultar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
     try {
       const r = await fetch("/api/tecnologia/questor-manutencao", { cache: "no-store" });
       const j = await r.json();
-      if (!r.ok) { setErro(j.error ?? "Falha ao consultar."); return; }
-      setStatus(j);
-      setConsultado(true);
+      setEstado(j);
+      if (j.erro_leitura) setErro(j.erro_leitura);
+      else if (!r.ok) setErro(j.error ?? "Falha ao consultar.");
     } catch {
-      setErro("Falha de rede ao consultar a API.");
+      setErro("Falha de rede ao consultar o estado.");
     } finally {
       setCarregando(false);
     }
-  }
+  }, []);
+
+  // O estado é público (vem do /health), então já carrega ao abrir a tela.
+  useEffect(() => { consultar(); }, [consultar]);
 
   async function alternar(ligar: boolean) {
     if (!ligar && !confirm(
-      "Desligar a API Questor agora?\n\nTodas as rotas de dados vão parar de responder (503) para todos os sistemas que consomem — inclusive o Financeiro e o Fiscal deste Núcleo. Use antes de uma atualização."
+      "Desligar a API Questor agora?\n\nTodas as rotas de dados passam a responder 503 para todos os consumidores — inclusive o Financeiro e o Fiscal deste Núcleo. Use antes de uma atualização."
     )) return;
 
     setAlternando(true);
@@ -47,8 +63,8 @@ export default function ApiManutencao({ souTI }: { souTI: boolean }) {
       });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao alterar o estado."); return; }
-      await consultar();
       if (ligar) setMotivo("");
+      await consultar();
     } catch {
       setErro("Falha de rede ao alterar o estado.");
     } finally {
@@ -56,58 +72,46 @@ export default function ApiManutencao({ souTI }: { souTI: boolean }) {
     }
   }
 
-  if (!souTI) {
-    return (
-      <div className="painel-api">
-        <div className="painel-api-head">
-          <h3>API Questor</h3>
-        </div>
-        <p className="nota">
-          Ligar/desligar a API é restrito às pessoas cadastradas no setor de TI.
-          Fale com a Tecnologia se precisar de uma manutenção.
-        </p>
-      </div>
-    );
-  }
-
-  const desligada = consultado && status?.ativo === true;
+  const podeOperar = estado?.podeOperar ?? false;
+  const leituraOk = !!estado && typeof estado.manutencao === "boolean";
 
   return (
     <div className="painel-api">
       <div className="painel-api-head">
         <h3>API Questor</h3>
-        {!consultado ? (
-          <button className="btn" onClick={consultar} disabled={carregando}>
-            {carregando ? "Consultando…" : "Ver estado atual"}
-          </button>
-        ) : (
-          <button className="btn" onClick={consultar} disabled={carregando}>↻ Atualizar</button>
-        )}
+        <button className="btn" onClick={consultar} disabled={carregando}>
+          {carregando ? "Consultando…" : "↻ Atualizar"}
+        </button>
       </div>
 
       {erro && <div className="banner error">{erro}</div>}
 
-      {consultado && (
-        <div className={`estado-api ${desligada ? "off" : "on"}`}>
+      {leituraOk && (
+        <div className={`estado-api ${estado.online ? "on" : "off"}`}>
           <span className="ponto" />
           <div>
             <div className="estado-api-titulo">
-              {desligada ? "Em manutenção — clientes recebem 503" : "No ar — respondendo normalmente"}
+              {estado.status_label ?? (estado.online ? "No ar" : "Em manutenção")}
             </div>
-            {desligada && status?.motivo && (
-              <div className="estado-api-sub">Motivo: {status.motivo}</div>
-            )}
-            {status?.desde && (
-              <div className="estado-api-sub">Desde {new Date(status.desde).toLocaleString("pt-BR")}</div>
-            )}
+            {estado.mensagem && <div className="estado-api-sub">{estado.mensagem}</div>}
           </div>
         </div>
       )}
 
-      {consultado && !desligada && (
+      {!leituraOk && !carregando && (
+        <div className="estado-api off">
+          <span className="ponto" />
+          <div>
+            <div className="estado-api-titulo">Estado desconhecido</div>
+            <div className="estado-api-sub">Não foi possível ler o estado da API.</div>
+          </div>
+        </div>
+      )}
+
+      {podeOperar && leituraOk && !estado.manutencao && (
         <div className="acao-api">
           <label>
-            <span>Motivo (aparece para quem consultar o estado)</span>
+            <span>Motivo (aparece na mensagem de manutenção)</span>
             <input
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
@@ -120,7 +124,7 @@ export default function ApiManutencao({ souTI }: { souTI: boolean }) {
         </div>
       )}
 
-      {consultado && desligada && (
+      {podeOperar && leituraOk && estado.manutencao && (
         <div className="acao-api">
           <button className="btn primary" onClick={() => alternar(true)} disabled={alternando}>
             {alternando ? "Religando…" : "Religar API"}
@@ -129,10 +133,19 @@ export default function ApiManutencao({ souTI }: { souTI: boolean }) {
       )}
 
       <p className="nota">
-        Ao desligar, todas as rotas de dados da API Questor (Financeiro, Fiscal e demais consumidores)
-        passam a responder <code>503</code> e o pool de conexão com o banco do Questor é fechado — nenhuma
-        consulta é feita enquanto estiver desligada. Use antes de subir uma atualização e religue assim
-        que terminar. O estado é lido em tempo real, direto da API.
+        {podeOperar ? (
+          <>
+            Ao desligar, todas as rotas de dados da API Questor (Financeiro, Fiscal e demais
+            consumidores) passam a responder <code>503</code> e o pool de conexão com o banco do
+            Questor é fechado. Religue assim que a atualização terminar.
+          </>
+        ) : (
+          <>
+            Ligar e desligar a API é restrito às pessoas cadastradas no setor de TI.
+            O estado acima é informativo — se estiver em manutenção, as telas de Financeiro
+            e Fiscal não vão carregar dados até religarem.
+          </>
+        )}
       </p>
     </div>
   );

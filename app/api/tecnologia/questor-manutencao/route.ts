@@ -38,43 +38,66 @@ async function obterChaveAdmin(): Promise<string | null> {
   }
 }
 
-async function exigirTI() {
+async function exigirLogin() {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase();
   if (!email) return { ok: false as const, resp: NextResponse.json({ error: "Não autenticado." }, { status: 401 }) };
-  if (!(await ehDaTI(email))) {
-    return {
-      ok: false as const,
-      resp: NextResponse.json({ error: "Só pessoas do setor de TI podem operar a API." }, { status: 403 }),
-    };
-  }
   return { ok: true as const, email };
 }
 
-/** Estado atual da API (ligada/desligada). */
+/**
+ * Estado da API. Lido do /health, que é público e não exige a chave de admin.
+ *
+ * ATENÇÃO: /health responde HTTP 200 mesmo em manutenção — de propósito, é o
+ * liveness do HAProxy; se falhasse, o pfSense derrubaria o backend e ninguém
+ * conseguiria religar pelo /admin. Portanto o código HTTP NÃO diz se a API
+ * está no ar: quem diz é o campo `manutencao` / `status_api` do corpo.
+ */
 export async function GET() {
-  const guarda = await exigirTI();
+  const guarda = await exigirLogin();
   if (!guarda.ok) return guarda.resp;
-  const ADMIN_KEY = await obterChaveAdmin();
-  if (!ADMIN_KEY) return NextResponse.json({ error: "Chave admin da API Questor não encontrada." }, { status: 500 });
+
+  const podeOperar = await ehDaTI(guarda.email).catch(() => false);
 
   try {
-    const r = await fetch(`${BASE}/admin/status`, {
-      headers: { "X-Admin-Key": ADMIN_KEY },
-      cache: "no-store",
+    const r = await fetch(`${BASE}/health`, { cache: "no-store" });
+    const d = await r.json().catch(() => null);
+
+    if (!d || typeof d.manutencao !== "boolean") {
+      return NextResponse.json(
+        { erro_leitura: "A API respondeu sem o campo de manutenção.", podeOperar },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      manutencao: d.manutencao,
+      online: d.online ?? !d.manutencao,
+      status: d.status_api ?? d.status ?? null,
+      status_label: d.status_label ?? null,
+      mensagem: d.mensagem ?? null,
+      desde: d.desde ?? null,
+      motivo: d.motivo ?? null,
+      podeOperar,
     });
-    const dados = await r.json().catch(() => ({}));
-    if (!r.ok) return NextResponse.json({ error: dados?.detail ?? `Erro ${r.status}` }, { status: r.status });
-    return NextResponse.json(dados);
   } catch {
-    return NextResponse.json({ error: "Não foi possível consultar a API Questor (rede)." }, { status: 502 });
+    // Aqui sim é queda de verdade: nem o /health respondeu.
+    return NextResponse.json(
+      { erro_leitura: "A API Questor não respondeu (fora do ar ou sem rede).", podeOperar },
+      { status: 502 }
+    );
   }
 }
 
 /** Liga ou desliga a API. Body: { ativo: boolean, motivo?: string } */
 export async function POST(req: Request) {
-  const guarda = await exigirTI();
+  const guarda = await exigirLogin();
   if (!guarda.ok) return guarda.resp;
+
+  if (!(await ehDaTI(guarda.email))) {
+    return NextResponse.json({ error: "Só pessoas do setor de TI podem operar a API." }, { status: 403 });
+  }
+
   const ADMIN_KEY = await obterChaveAdmin();
   if (!ADMIN_KEY) return NextResponse.json({ error: "Chave admin da API Questor não encontrada." }, { status: 500 });
 
