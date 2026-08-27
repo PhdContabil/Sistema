@@ -224,6 +224,17 @@ export async function listarPessoas(): Promise<PessoaTickets[]> {
   return (data ?? []) as PessoaTickets[];
 }
 
+/** Pessoa cadastrada no setor de TI (`ticket_users.sector = 'ti'`). */
+export async function ehDaTI(email: string | null | undefined): Promise<boolean> {
+  const e = email?.toLowerCase();
+  if (!e) return false;
+  const db = ticketsDb();
+  if (!db) return false;
+  const { data } = await db
+    .from("ticket_users").select("sector").ilike("email", e).eq("sector", "ti").maybeSingle();
+  return !!data;
+}
+
 /**
  * Admin ou sub-admin. Só eles editam horas, valor/hora e ganho — são números
  * que viram base de decisão, então não podem ficar soltos.

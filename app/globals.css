@@ -989,3 +989,34 @@ html[data-theme="dark"] .med.destaque .v { color: var(--text); }
   color: var(--marca); white-space: normal;
 }
 html[data-theme="dark"] .med .dica { color: var(--marca-clara); }
+
+/* ---------- Painel: liga/desliga da API Questor ---------- */
+.painel-api {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 18px 20px; max-width: 520px;
+}
+.painel-api-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+.painel-api-head h3 { margin: 0; font-size: 14px; }
+
+.estado-api {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 13px; border-radius: var(--r-sm); margin: 10px 0;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.estado-api .ponto { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.estado-api.on .ponto { background: var(--ok); }
+.estado-api.off .ponto { background: var(--div); }
+.estado-api-titulo { font-size: 13px; font-weight: 600; }
+.estado-api-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+.acao-api { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.acao-api label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); flex: 1; min-width: 180px; }
+.acao-api input {
+  font-family: inherit; font-size: 13px; color: var(--text);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px;
+}
+.btn.danger { background: #dc2626; border-color: #dc2626; color: #fff; }
+.btn.danger:hover { background: #b91c1c; border-color: #b91c1c; }

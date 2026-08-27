@@ -102,7 +102,7 @@ export const MODULES: ModuleDef[] = [
     apps: [
       { name: "Tickets", desc: "Chamados de cada setor, do backlog à finalização.", href: "/m/tecnologia/tickets" },
       { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados." },
-      { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis e quem tem acesso." },
+      { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis, quem tem acesso e controle da API Questor.", href: "/m/tecnologia/catalogo" },
       { name: "Base de Conhecimento", desc: "Tutoriais e procedimentos de TI para o time." },
     ],
   },
