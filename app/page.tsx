@@ -5,6 +5,7 @@ import { useState } from "react";
 import { MODULES } from "@/lib/modules";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AvatarUsuario, useUsuario } from "@/components/UsuarioAtual";
+import ModuloIcon, { IconePonto } from "@/components/ModuloIcon";
 
 export default function Launcher() {
   const usuario = useUsuario();
@@ -41,7 +42,9 @@ export default function Launcher() {
           <p className="lead">Selecione uma área para acessar suas aplicações.</p>
 
           <Link className="destaque" href="/m/pessoas/ponto">
-            <span className="destaque-ic mono">PD</span>
+            <span className="destaque-ic">
+              <IconePonto />
+            </span>
             <span className="destaque-txt">
               <span className="destaque-nome">Ponto Digital</span>
               <span className="destaque-desc">Registre seu ponto pelo computador, sem sair do sistema.</span>
@@ -55,7 +58,9 @@ export default function Launcher() {
               return (
                 <Link key={m.id} href={`/m/${m.id}`} className="module-card">
                   <div className="row">
-                    <span className="module-ic mono" style={{ background: m.color }}>{m.initials}</span>
+                    <span className="module-ic" style={{ background: m.color }}>
+                      <ModuloIcon id={m.id} />
+                    </span>
                     <span className="count mono">
                       {m.apps.length} apps{prontos ? ` · ${prontos} ativo${prontos > 1 ? "s" : ""}` : ""}
                     </span>

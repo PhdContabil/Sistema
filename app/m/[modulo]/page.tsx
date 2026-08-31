@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getModule, appInitials } from "@/lib/modules";
+import { getModule } from "@/lib/modules";
 import Workspace from "@/components/Workspace";
+import AppIcon from "@/components/AppIcon";
+import ModuloIcon from "@/components/ModuloIcon";
 
 export default function ModuloPage({ params }: { params: { modulo: string } }) {
   const m = getModule(params.modulo);
@@ -10,7 +12,7 @@ export default function ModuloPage({ params }: { params: { modulo: string } }) {
   return (
     <Workspace moduleId={m.id}>
       <div className="app-head">
-        <div className="app-ic mono" style={{ background: m.color }}>{m.initials}</div>
+        <div className="app-ic" style={{ background: m.color }}><ModuloIcon id={m.id} /></div>
         <div>
           <h1>{m.name}</h1>
           <div className="desc">{m.desc}</div>
@@ -22,7 +24,7 @@ export default function ModuloPage({ params }: { params: { modulo: string } }) {
         {m.apps.map((a) => {
           const inner = (
             <>
-              <div className="app-ic-sm mono" style={{ color: m.color }}>{appInitials(a.name)}</div>
+              <div className="app-ic-sm" style={{ color: m.color }}><AppIcon nome={a.name} /></div>
               <div className="nm">{a.name}</div>
               <div className="desc">{a.desc}</div>
               {a.href ? <div className="go mono">ABRIR ›</div> : <span className="soon mono">Em breve</span>}

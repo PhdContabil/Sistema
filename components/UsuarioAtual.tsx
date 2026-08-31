@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/societario/supabase-browser";
 
@@ -56,12 +57,14 @@ export default function UsuarioAtual() {
   );
 }
 
-/** Avatar compacto do topo (launcher). */
+/** Avatar compacto do topo (launcher) — leva direto ao perfil que a pessoa personaliza em Pessoas. */
 export function AvatarUsuario() {
   const u = useUsuario();
   return (
     <span className="avatar-wrap">
-      <span className="avatar mono" title={u?.email}>{u?.iniciais ?? "··"}</span>
+      <Link href="/m/pessoas/meu-perfil" className="avatar mono" title={u ? `${u.nome} — abrir meu perfil` : "Meu perfil"}>
+        {u?.iniciais ?? "··"}
+      </Link>
       <a className="sair" href="/auth/sair" title="Sair do sistema" aria-label="Sair">⏻</a>
     </span>
   );

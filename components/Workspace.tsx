@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { MODULES } from "@/lib/modules";
 import ThemeToggle from "./ThemeToggle";
 import UsuarioAtual from "./UsuarioAtual";
+import ModuloIcon from "./ModuloIcon";
 
 const CHAVE_MENU = "nc-menu-recolhido";
 
@@ -70,7 +71,7 @@ export default function Workspace({
                 title={recolhido ? m.name : undefined}
               >
                 {active && <span className="bar" />}
-                <span className="ic mono" style={{ background: m.color }}>{m.initials}</span>
+                <span className="ic" style={{ background: m.color }}><ModuloIcon id={m.id} /></span>
                 <span className="nm">{m.name}</span>
               </Link>
             );

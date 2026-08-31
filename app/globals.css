@@ -79,34 +79,84 @@ a { color: var(--accent); text-decoration: none; }
 ::selection { background: rgba(91, 141, 239, .25); }
 
 /* ===== Launcher (home) ===== */
-/* ===== Login ===== */
+/* ===== Login =====
+   Tela fixa (não segue --bg/--text do tema): é a porta de entrada, antes de
+   qualquer sessão, e o visual institucional (painel azul + card claro) é o
+   mesmo pro escritório inteiro, dia ou noite. Handoff: design_handoff_login_nucleo_contabil. */
 .login-tela {
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  padding: 24px; background: var(--bg);
+  min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr;
+  background: #f7f8fb; color: #0f172a;
 }
-.login-card {
-  width: 100%; max-width: 420px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 18px; padding: 34px 32px;
-  box-shadow: var(--shadow);
+@media (max-width: 860px) {
+  .login-tela { grid-template-columns: 1fr; }
+  .login-painel { min-height: 280px; }
 }
-.login-marca { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
-.login-nome { display: block; font-size: 16px; font-weight: 600; line-height: 1.2; }
-.login-sub { display: block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.login-titulo { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
-.login-lead { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.55; }
+
+.login-painel {
+  position: relative; overflow: hidden; display: flex; flex-direction: column;
+  justify-content: space-between; gap: 28px; padding: 32px;
+  background: linear-gradient(135deg, #0a1f4d, #2f5fc4); color: #fff;
+}
+.login-painel::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .08) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+.login-painel::after {
+  content: ""; position: absolute; width: 480px; height: 480px; right: -160px; bottom: -160px;
+  border-radius: 50%; background: rgba(255, 255, 255, .06); pointer-events: none;
+}
+.login-marca-topo { position: relative; font-weight: 800; font-size: 18px; letter-spacing: -.01em; }
+.login-meio { position: relative; }
+.login-titulo-grande { font-size: 44px; line-height: 1.14; max-width: 12ch; margin: 0 0 22px; font-weight: 800; letter-spacing: -.01em; }
+.login-divisor { height: 2px; background: rgba(255, 255, 255, .4); margin-bottom: 16px; max-width: 420px; }
+.login-desc { position: relative; max-width: 42ch; font-size: 15px; opacity: .9; margin: 0; line-height: 1.55; }
+.login-tags { position: relative; display: flex; gap: 8px; flex-wrap: wrap; }
+.login-tag {
+  font-size: 12px; padding: 5px 13px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .55); color: #fff; background: transparent;
+}
+
+.login-lado-claro {
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  padding: 32px; background: #f7f8fb;
+}
+.login-lado-claro::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(10, 31, 77, .04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 31, 77, .04) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+.login-card { position: relative; width: 100%; max-width: 380px; }
+.login-logo { display: block; height: 72px; width: auto; margin: 0 auto 24px; }
+.login-saudacao-wrap { text-align: center; }
+.login-saudacao {
+  display: inline-block; margin: 0 0 12px; padding: 5px 13px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; background: #eaf0fd; color: #1a3d8f;
+}
+.login-titulo { margin: 0 0 6px; font-size: 22px; font-weight: 700; text-align: center; color: #0f172a; }
+.login-lead { margin: 0 0 24px; font-size: 14px; color: rgba(15, 23, 42, .65); line-height: 1.55; text-align: center; }
 .login-aviso { margin-bottom: 18px; }
 .btn-microsoft {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
-  background: #2f2f2f; color: #fff; border: none; border-radius: 10px;
+  background: #201e1d; color: #fff; border: none; border-radius: 10px;
   padding: 12px 16px; font-size: 14.5px; font-weight: 500; cursor: pointer;
   font-family: inherit; transition: background .15s;
 }
 .btn-microsoft:hover { background: #000; }
 .btn-microsoft:disabled { opacity: .6; cursor: not-allowed; }
-html[data-theme="dark"] .btn-microsoft { background: #f5f5f5; color: #151922; }
-html[data-theme="dark"] .btn-microsoft:hover { background: #fff; }
-.login-erro { margin: 12px 0 0; font-size: 13px; color: var(--div); text-align: center; }
-.login-rodape { margin: 22px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+.login-erro { margin: 12px 0 0; font-size: 13px; color: #dc2626; text-align: center; }
+.login-rodape { margin: 22px 0 0; font-size: 12px; color: rgba(15, 23, 42, .55); text-align: center; }
+.login-rodape a { color: #1a3d8f; }
+/* O card de login é sempre claro — trava as cores do banner de erro/aviso
+   pra não seguir o dark mode do resto do site (que só existe após logar). */
+.login-card .banner { background: #eef2f9; border-color: #e2e8f0; color: #0f172a; }
+.login-card .banner.error { background: #fdeceb; border-color: #f3b7b0; color: #7a1f16; }
+.login-card .banner code { background: #e6ecf6; }
 
 /* Usuário logado */
 .sair {
@@ -145,7 +195,9 @@ html[data-theme="dark"] .btn-microsoft:hover { background: #fff; }
 .avatar {
   width: 32px; height: 32px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border);
   display: grid; place-items: center; font-size: 12px; font-weight: 500; color: var(--muted);
+  cursor: pointer; transition: border-color .12s, color .12s;
 }
+a.avatar:hover { border-color: var(--accent); color: var(--accent); }
 .launcher-body { flex: 1; overflow: auto; padding: 40px 48px; }
 .launcher-inner { max-width: 980px; margin: 0 auto; }
 .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
@@ -162,11 +214,11 @@ html[data-theme="dark"] .btn-microsoft:hover { background: #fff; }
 }
 .module-card:hover { transform: translateY(-3px); border-color: var(--accent); text-decoration: none; }
 .module-card .row { display: flex; align-items: center; justify-content: space-between; }
-.module-ic { width: 44px; height: 44px; border-radius: 12px; color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 15px; }
+.module-ic { width: 44px; height: 44px; border-radius: 12px; color: #fff; display: grid; place-items: center; flex: none; }
 .module-card .count { font-size: 11px; color: var(--muted); }
-.module-card .name { font-size: 17px; font-weight: 500; margin-bottom: 4px; }
+.module-card .name { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
 .module-card .desc { font-size: 13px; color: var(--muted); line-height: 1.45; }
-.module-card .cta { font-size: 12px; color: var(--accent); font-weight: 500; }
+.module-card .cta { font-size: 12px; color: #5b8def; font-weight: 800; margin-top: auto; }
 
 /* ===== Workspace shell ===== */
 .workspace { display: flex; min-height: 100vh; }
@@ -316,11 +368,12 @@ html[data-theme="dark"] table.grid td.col-empresa .obs.obs-mov { color: #fdba74;
   transition: transform .15s, border-color .15s;
 }
 .destaque:hover { transform: translateY(-2px); border-color: var(--accent); text-decoration: none; }
-.destaque-ic { width: 42px; height: 42px; flex: none; border-radius: 11px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+/* Accent fixo (handoff do Hub) — mesmo tom nos dois temas, pra garantir contraste no escuro. */
+.destaque-ic { width: 42px; height: 42px; flex: none; border-radius: 11px; background: #5b8def; color: #fff; display: grid; place-items: center; }
 .destaque-txt { flex: 1; min-width: 0; }
 .destaque-nome { display: block; font-size: 15px; font-weight: 600; }
 .destaque-desc { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-.destaque-go { font-size: 11px; color: var(--accent); font-weight: 600; flex: none; }
+.destaque-go { font-size: 11px; color: #5b8def; font-weight: 600; flex: none; }
 
 /* ===== Ponto Digital embutido =====
    Altura útil = viewport - topbar (64px) - padding vertical do corpo (56px). */

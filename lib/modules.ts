@@ -18,7 +18,7 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   {
-    id: "fiscal", name: "Fiscal", initials: "FI", color: "oklch(0.62 0.13 255)",
+    id: "fiscal", name: "Fiscal", initials: "FI", color: "#2f5fc4",
     desc: "Apuração de tributos, notas fiscais e obrigações acessórias.",
     apps: [
       { name: "Simples Nacional", desc: "Análise de limite, faturamento, projeção e estouro do Simples.", href: "/m/fiscal/simples" },
@@ -30,7 +30,7 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "pessoas", name: "Pessoas", initials: "PE", color: "oklch(0.62 0.13 150)",
+    id: "pessoas", name: "Pessoas", initials: "PE", color: "#3f9142",
     desc: "Nossa gente: cultura, comunicação, saúde, normas e desenvolvimento.",
     apps: [
       { name: "Meu perfil", desc: "Preencha seus dados: foto, histórico, formação e cursos.", href: "/m/pessoas/meu-perfil" },
@@ -48,7 +48,7 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "trabalhista", name: "Trabalhista", initials: "TR", color: "oklch(0.62 0.13 170)",
+    id: "trabalhista", name: "Trabalhista", initials: "TR", color: "#1f8f76",
     desc: "Folha de pagamento, eSocial e rotinas de departamento pessoal.",
     apps: [
       { name: "Folha de Pagamento", desc: "Cálculo de salários, encargos e benefícios." },
@@ -60,7 +60,7 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "financeiro", name: "Financeiro", initials: "FN", color: "oklch(0.62 0.13 200)",
+    id: "financeiro", name: "Financeiro", initials: "FN", color: "#1f9c9c",
     desc: "Conciliação de honorários, contas e fluxo de caixa.",
     apps: [
       { name: "Conciliação de Honorários", desc: "Honorários contratados x movimento real de cada setor.", href: "/m/financeiro/conciliacao" },
@@ -72,7 +72,7 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "paralegal", name: "Paralegal", initials: "PL", color: "oklch(0.62 0.13 305)",
+    id: "paralegal", name: "Paralegal", initials: "PL", color: "#7a5fc0",
     desc: "Certidões, processos, prazos e gestão documental.",
     apps: [
       { name: "Certidões", desc: "Emissão e monitoramento de regularidade." },
@@ -84,7 +84,7 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "contabil", name: "Contábil", initials: "CT", color: "oklch(0.62 0.13 60)",
+    id: "contabil", name: "Contábil", initials: "CT", color: "#c47a2f",
     desc: "Lançamentos, balancetes, demonstrações e SPED Contábil.",
     apps: [
       { name: "Consolidação Departamental", desc: "O que cada empresa movimentou x o que foi contabilizado, mês a mês.", href: "/m/contabil/consolidacao" },
@@ -97,17 +97,17 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    id: "tecnologia", name: "Tecnologia e Inovação", initials: "TI", color: "oklch(0.62 0.13 280)",
+    id: "tecnologia", name: "Tecnologia e Inovação", initials: "TI", color: "#5a5fc4",
     desc: "Chamados, inventário, acessos e as ferramentas que sustentam o escritório.",
     apps: [
       { name: "Tickets", desc: "Chamados de cada setor, do backlog à finalização.", href: "/m/tecnologia/tickets" },
       { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados." },
-      { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis, quem tem acesso e controle da API Questor.", href: "/m/tecnologia/catalogo" },
+      { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis e quem tem acesso." },
       { name: "Base de Conhecimento", desc: "Tutoriais e procedimentos de TI para o time." },
     ],
   },
   {
-    id: "societario", name: "Societário", initials: "SO", color: "oklch(0.62 0.13 20)",
+    id: "societario", name: "Societário", initials: "SO", color: "#c4483f",
     desc: "Processos societários, empresas e atos societários — migrado do Societário PHD.",
     apps: [
       { name: "Dashboard", desc: "Visão geral, indicadores e atividade recente dos processos.", href: "/m/societario" },

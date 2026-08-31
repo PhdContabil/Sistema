@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export async function POST(req: NextRequest) {
-  const response = NextResponse.redirect(new URL("/m/societario/login", req.url), {
+  // Volta pro login único do Núcleo Contábil, não pro login antigo do Societário isolado.
+  const response = NextResponse.redirect(new URL("/login", req.url), {
     status: 302,
   });
 

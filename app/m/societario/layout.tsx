@@ -3,6 +3,7 @@ import "./globals.css";
 import { APP_VERSION, isAdmin, isDev } from "@/lib/societario/options";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { AutoSync } from "@/components/societario/AutoSync";
+import ThemeToggleSoc from "@/components/societario/ThemeToggleSoc";
 
 export const metadata = {
   title: "Societário | PhD Contábil",
@@ -59,6 +60,7 @@ export default async function SocietarioLayout({
         </nav>
 
         <div className="px-4 py-3 border-t border-white/10">
+          <ThemeToggleSoc />
           <div className="text-[10px] text-white/50 truncate">{user.email}</div>
           <div className="text-[9px] text-white/40 mb-1">{roleLabel}</div>
           <form action="/m/societario/auth/signout" method="post">
