@@ -38,7 +38,10 @@ export default async function Page({
   } else {
     try {
       const [perfil, r, m2] = await Promise.all([
-        getPerfilEmpresas({ anos: anosComparados, detalhado: true }),
+        // Sem `detalhado`: a lista dos serviços de cada empresa só é buscada
+        // quando a linha é aberta (/api/dissidio/empresa/[cod]). Traziam ~2,7 mil
+        // listas de uma vez e deixavam a página pesada.
+        getPerfilEmpresas({ anos: anosComparados }),
         obterRodada(ano, meuEmail),
         listarAjustes(ano),
       ]);
