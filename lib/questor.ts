@@ -3,6 +3,7 @@
 import type { ConciliacaoResponse } from "./conciliacao";
 import type { AnaliseLimiteResponse, DctfwebResponse } from "./fiscal";
 import type { ConsolidacaoResponse, SocioItem } from "./contabil";
+import type { PerfilResponse } from "./dissidio-tipos";
 
 const BASE = process.env.QUESTOR_API_URL ?? "https://phdfibra.dyndns.org";
 const KEY = process.env.QUESTOR_API_KEY;
@@ -76,6 +77,21 @@ export function getConsolidacaoDepartamental(
 export function getSocios(incluirDesligados = false): Promise<{ total: number; dados: SocioItem[] }> {
   const qs = incluirDesligados ? "?incluir_desligados=true" : "";
   return get<{ total: number; dados: SocioItem[] }>(`/rh/socios${qs}`);
+}
+
+/**
+ * Perfil da carteira por ANO-CALENDÁRIO: médias mensais de cada ano e o
+ * honorário vigente no fim de cada um. É a base da Análise de Dissídio.
+ */
+export function getPerfilEmpresas(
+  params: { anos: number[]; detalhado?: boolean; regime?: string; codigoempresa?: number }
+): Promise<PerfilResponse> {
+  const q = new URLSearchParams();
+  q.set("anos", params.anos.join(","));
+  if (params.detalhado) q.set("detalhado", "true");
+  if (params.regime) q.set("regime", params.regime);
+  if (params.codigoempresa) q.set("codigoempresa", String(params.codigoempresa));
+  return get<PerfilResponse>(`/empresas/perfil?${q.toString()}`);
 }
 
 export function getAnaliseLimite(params: { ano?: number; cnpj?: string } = {}): Promise<AnaliseLimiteResponse> {
