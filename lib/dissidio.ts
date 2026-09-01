@@ -16,7 +16,17 @@ export function db(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false } });
+
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    global: {
+      // O Next intercepta o fetch e guarda a resposta no Data Cache. Como o
+      // supabase-js não passa `cache`, uma rodada excluída continuava
+      // aparecendo no Histórico mesmo com a tabela vazia. Aqui a leitura é
+      // sempre ao vivo — é dado transacional, não conteúdo estático.
+      fetch: (entrada, init) => fetch(entrada, { ...init, cache: "no-store" }),
+    },
+  });
 }
 
 /**

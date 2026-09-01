@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_noStore as semCache } from "next/cache";
 import Workspace from "@/components/Workspace";
 import { getModule } from "@/lib/modules";
 import { resumoRodadas, historicoDoAno, formatBRL, formatPct } from "@/lib/dissidio";
@@ -6,12 +7,16 @@ import { formatDataHora } from "@/lib/datas";
 import ExcluirRodada from "@/components/apps/ExcluirRodada";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function Page({
   searchParams,
 }: {
   searchParams: { ano?: string };
 }) {
+  // Dado transacional: nunca servir de cache.
+  semCache();
+
   const m = getModule("financeiro")!;
   const rodadas = await resumoRodadas().catch(() => []);
 
@@ -36,7 +41,7 @@ export default async function Page({
 
       {rodadas.length === 0 ? (
         <div className="banner">
-          Nenhuma rodada registrada ainda. Ao abrir a Análise de Dissídio de um ano, a rodada é criada.
+          Nenhuma rodada registrada. A rodada de um ano passa a existir quando alguém salva uma versão na Análise de Dissídio.
         </div>
       ) : (
         <div className="table-wrap">

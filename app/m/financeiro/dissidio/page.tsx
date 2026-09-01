@@ -1,3 +1,4 @@
+import { unstable_noStore as semCache } from "next/cache";
 import Workspace from "@/components/Workspace";
 import AnaliseDissidio from "@/components/apps/AnaliseDissidio";
 import { getModule } from "@/lib/modules";
@@ -7,12 +8,16 @@ import { obterRodada, listarAjustes, listarMarcadores,
   type PerfilEmpresa, type Rodada, type Ajuste, type MarcadorEmpresa } from "@/lib/dissidio";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function Page({
   searchParams,
 }: {
   searchParams: { ano?: string };
 }) {
+  // Dado transacional: nunca servir de cache.
+  semCache();
+
   const m = getModule("financeiro")!;
 
   const anoAtual = new Date().getFullYear();
