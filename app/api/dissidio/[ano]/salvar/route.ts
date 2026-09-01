@@ -55,25 +55,34 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
   const agora = new Date().toISOString();
 
   // ---- cabeçalho da rodada
-  const campos: Record<string, unknown> = { atualizada_em: agora, atualizada_por: email };
-  let percentualGeral = 0;
+  //
+  // É AQUI que a rodada nasce — não ao abrir a tela. Só existe rodada de um ano
+  // se alguém tiver salvado uma versão dele; caso contrário, excluir no
+  // Histórico não teria efeito, porque a próxima visita recriaria o registro.
+  const { data: existente } = await sb
+    .from("dissidio_rodadas").select("percentual_geral,criada_por").eq("ano", ano).maybeSingle();
+
+  let percentualGeral = Number(existente?.percentual_geral ?? 0);
   if (body.percentual_geral !== undefined) {
     const p = num(body.percentual_geral);
     if (p === null || p < -100 || p > 1000) {
       return NextResponse.json({ error: "Percentual geral inválido." }, { status: 400 });
     }
-    campos.percentual_geral = p;
     percentualGeral = p;
   }
-  if (body.observacao !== undefined) campos.observacao = body.observacao || null;
 
-  const { error: eRodada } = await sb.from("dissidio_rodadas").update(campos).eq("ano", ano);
+  const { error: eRodada } = await sb.from("dissidio_rodadas").upsert(
+    {
+      ano,
+      percentual_geral: percentualGeral,
+      observacao: body.observacao !== undefined ? (body.observacao || null) : undefined,
+      criada_por: existente?.criada_por ?? email,
+      atualizada_em: agora,
+      atualizada_por: email,
+    },
+    { onConflict: "ano" }
+  );
   if (eRodada) return NextResponse.json({ error: eRodada.message }, { status: 500 });
-
-  if (campos.percentual_geral === undefined) {
-    const { data } = await sb.from("dissidio_rodadas").select("percentual_geral").eq("ano", ano).maybeSingle();
-    percentualGeral = Number(data?.percentual_geral ?? 0);
-  }
 
   const linhas = Array.isArray(body.empresas) ? body.empresas : [];
 

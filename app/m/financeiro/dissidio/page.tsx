@@ -44,7 +44,7 @@ export default async function Page({
         // quando a linha é aberta (/api/dissidio/empresa/[cod]). Traziam ~2,7 mil
         // listas de uma vez e deixavam a página pesada.
         getPerfilEmpresas({ anos: anosComparados }),
-        obterRodada(ano, meuEmail),
+        obterRodada(ano),
         listarAjustes(ano),
         listarMarcadores(),
       ]);

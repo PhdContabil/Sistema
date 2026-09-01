@@ -19,20 +19,19 @@ export function db(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-/** Garante que a rodada do ano existe e devolve o estado atual. */
-export async function obterRodada(ano: number, email?: string | null): Promise<Rodada | null> {
+/**
+ * Rodada do ano, se existir. SOMENTE LEITURA — de propósito.
+ *
+ * Antes esta função criava a rodada ao abrir a tela, e isso tinha um efeito
+ * colateral ruim: excluir uma rodada no Histórico não adiantava, porque a
+ * primeira pessoa que abrisse a Análise daquele ano a recriava vazia. A rodada
+ * passa a nascer só quando alguém salva uma versão.
+ */
+export async function obterRodada(ano: number): Promise<Rodada | null> {
   const sb = db();
   if (!sb) return null;
-
   const { data } = await sb.from("dissidio_rodadas").select("*").eq("ano", ano).maybeSingle();
-  if (data) return data as Rodada;
-
-  const { data: nova } = await sb
-    .from("dissidio_rodadas")
-    .insert({ ano, criada_por: email ?? null, atualizada_por: email ?? null })
-    .select("*")
-    .maybeSingle();
-  return (nova as Rodada) ?? null;
+  return (data as Rodada) ?? null;
 }
 
 export async function listarAjustes(ano: number): Promise<Map<number, Ajuste>> {
