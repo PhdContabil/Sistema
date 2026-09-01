@@ -5,7 +5,7 @@ import { useState } from "react";
 import { MODULES } from "@/lib/modules";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AvatarUsuario, useUsuario } from "@/components/UsuarioAtual";
-import ModuloIcon, { IconePonto } from "@/components/ModuloIcon";
+import ModuloIcon, { IconePonto, IconeEmpresas } from "@/components/ModuloIcon";
 
 export default function Launcher() {
   const usuario = useUsuario();
@@ -41,16 +41,29 @@ export default function Launcher() {
           <h1>Escolha um módulo</h1>
           <p className="lead">Selecione uma área para acessar suas aplicações.</p>
 
-          <Link className="destaque" href="/m/pessoas/ponto">
-            <span className="destaque-ic">
-              <IconePonto />
-            </span>
-            <span className="destaque-txt">
-              <span className="destaque-nome">Ponto Digital</span>
-              <span className="destaque-desc">Registre seu ponto pelo computador, sem sair do sistema.</span>
-            </span>
-            <span className="destaque-go mono">ABRIR ›</span>
-          </Link>
+          <div className="destaques">
+            <Link className="destaque" href="/m/pessoas/ponto">
+              <span className="destaque-ic">
+                <IconePonto />
+              </span>
+              <span className="destaque-txt">
+                <span className="destaque-nome">Ponto Digital</span>
+                <span className="destaque-desc">Registre seu ponto pelo computador, sem sair do sistema.</span>
+              </span>
+              <span className="destaque-go mono">ABRIR ›</span>
+            </Link>
+
+            <Link className="destaque" href="/m/empresas">
+              <span className="destaque-ic">
+                <IconeEmpresas />
+              </span>
+              <span className="destaque-txt">
+                <span className="destaque-nome">Empresas</span>
+                <span className="destaque-desc">Ache a pasta de qualquer empresa no SharePoint.</span>
+              </span>
+              <span className="destaque-go mono">ABRIR ›</span>
+            </Link>
+          </div>
 
           <div className="module-grid">
             {mods.map((m) => {

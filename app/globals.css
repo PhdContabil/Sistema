@@ -1249,3 +1249,69 @@ html[data-theme="dark"] tr.nao-salvo td { background: #2a2016; }
 .check-linha { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 
 .acoes-linha { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+
+/* ---------- Atalhos da home ---------- */
+.destaques {
+  display: grid; gap: 14px; margin-bottom: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.destaques .destaque { margin-bottom: 0; }
+
+/* ---------- Busca de empresas (SharePoint) ---------- */
+.busca-grande {
+  width: 100%; font-family: inherit; font-size: 16px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 14px 16px; box-shadow: var(--shadow);
+}
+.busca-grande:focus { outline: none; border-color: var(--marca); }
+
+.grade-empresas {
+  display: grid; gap: 12px; margin-top: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.cartao-empresa {
+  position: relative; cursor: pointer; display: flex; align-items: flex-start; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 16px 14px 14px; box-shadow: var(--shadow);
+  transition: transform .15s, border-color .15s;
+}
+.cartao-empresa:hover { transform: translateY(-2px); border-color: var(--marca); }
+.nome-empresa { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.tag-grupo {
+  display: block; margin-top: 3px; font-size: 10.5px; font-weight: 500;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .03em;
+}
+.ic-sp { font-size: 18px; flex: none; line-height: 1; }
+
+.link-sp {
+  font-size: 11px; color: var(--muted); text-decoration: none;
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; white-space: nowrap;
+}
+.link-sp:hover { color: var(--marca); border-color: var(--marca); text-decoration: none; }
+.link-sp.canto { position: absolute; top: 8px; right: 8px; }
+
+.lista-sp {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface); overflow: hidden;
+}
+.linha-sp {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.linha-sp:last-child { border-bottom: 0; }
+.linha-sp-main {
+  flex: 1; display: flex; align-items: center; gap: 11px; min-width: 0;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: inherit; color: var(--text); text-align: left;
+}
+.linha-sp-main.estatica { cursor: default; }
+.linha-sp-main:hover:not(.estatica) .nm { color: var(--marca); }
+.meta-sp { flex: 1; min-width: 0; }
+.meta-sp .nm {
+  display: block; font-size: 13px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.meta-sp .sub { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.trilha-item { display: inline-flex; align-items: center; gap: 6px; }
+.trilha-item .sep { color: var(--muted); }

@@ -78,6 +78,18 @@ export function IconePonto() {
   );
 }
 
+/** Lupa sobre pasta — atalho "Empresas" (busca no SharePoint). */
+export function IconeEmpresas() {
+  return (
+    <Svg>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v3" />
+      <path d="M3 7v10a2 2 0 0 0 2 2h6" />
+      <circle cx="16.5" cy="16.5" r="3.5" />
+      <path d="M21 21l-2-2" />
+    </Svg>
+  );
+}
+
 export default function ModuloIcon({ id }: { id: string }) {
   return <>{ICONS[id] ?? null}</>;
 }
