@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 /**
  * Exclusão de uma rodada de dissídio.
@@ -16,7 +15,6 @@ export default function ExcluirRodada({
   ano: number;
   ajustes: number;
 }) {
-  const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [texto, setTexto] = useState("");
   const [excluindo, setExcluindo] = useState(false);
@@ -33,9 +31,12 @@ export default function ExcluirRodada({
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(j.error ?? "Não foi possível excluir."); return; }
-      setAberto(false);
-      setTexto("");
-      router.refresh();
+
+      // Navegação real, não router.refresh(): a rodada some do banco mas o
+      // cache de rota do App Router continuava servindo a lista antiga, e a
+      // linha excluída seguia na tela. Também derruba o ?ano= do detalhe, que
+      // apontaria para uma rodada que não existe mais.
+      window.location.href = "/m/financeiro/dissidio/historico";
     } catch {
       setErro("Falha de rede ao excluir.");
     } finally {
