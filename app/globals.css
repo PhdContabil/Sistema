@@ -1184,3 +1184,6 @@ html[data-theme="dark"] .tag-inativa { background: #7f1d1d; color: #fecaca; }
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
 }
 .servico-item em { font-style: normal; color: var(--muted); }
+
+table.grid.mini-perfil th, table.grid.mini-perfil td { padding: 6px 10px; font-size: 12px; }
+.modal .medicao { margin-bottom: 16px; }

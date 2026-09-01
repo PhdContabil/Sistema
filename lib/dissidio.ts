@@ -79,6 +79,92 @@ export async function salvarAjuste(
   return { error: error?.message ?? null };
 }
 
+export interface ResumoRodada {
+  ano: number;
+  percentual_geral: number;
+  fechada: boolean;
+  observacao: string | null;
+  atualizada_em: string | null;
+  atualizada_por: string | null;
+  empresas: number;
+  com_ajuste: number;
+  soma_base: number;
+  soma_nova: number;
+}
+
+/**
+ * Resumo de cada rodada, para comparar anos.
+ *
+ * Calculado a partir do que ficou CONGELADO em `dissidio_ajustes`
+ * (`valor_base` na data da decisão), não do honorário vigente hoje — senão o
+ * histórico mudaria sozinho toda vez que um contrato fosse renegociado.
+ */
+export async function resumoRodadas(): Promise<ResumoRodada[]> {
+  const sb = db();
+  if (!sb) return [];
+
+  const [{ data: rodadas }, { data: ajustes }] = await Promise.all([
+    sb.from("dissidio_rodadas").select("*").order("ano", { ascending: false }),
+    sb.from("dissidio_ajustes").select("ano,percentual,valor_novo,valor_base,origem"),
+  ]);
+
+  const porAno = new Map<number, { n: number; base: number; nova: number }>();
+  for (const a of (ajustes ?? []) as Ajuste[]) {
+    const acc = porAno.get(a.ano) ?? { n: 0, base: 0, nova: 0 };
+    const base = Number(a.valor_base ?? 0);
+    const nova =
+      a.origem === "valor" && a.valor_novo !== null
+        ? Number(a.valor_novo)
+        : a.percentual !== null
+          ? base * (1 + Number(a.percentual) / 100)
+          : base;
+    acc.n += 1;
+    acc.base += base;
+    acc.nova += nova;
+    porAno.set(a.ano, acc);
+  }
+
+  return ((rodadas ?? []) as Rodada[]).map((r) => {
+    const acc = porAno.get(r.ano) ?? { n: 0, base: 0, nova: 0 };
+    return {
+      ano: r.ano,
+      percentual_geral: Number(r.percentual_geral),
+      fechada: r.fechada,
+      observacao: r.observacao,
+      atualizada_em: r.atualizada_em ?? null,
+      atualizada_por: r.atualizada_por ?? null,
+      empresas: acc.n,
+      com_ajuste: acc.n,
+      soma_base: acc.base,
+      soma_nova: acc.nova,
+    };
+  });
+}
+
+/** Ajustes de um ano, com o nome de quem analisou já resolvido. */
+export async function historicoDoAno(ano: number) {
+  const sb = db();
+  if (!sb) return [];
+
+  const { data } = await sb
+    .from("dissidio_ajustes").select("*").eq("ano", ano).order("analisado_em", { ascending: false });
+  const lista = (data ?? []) as Ajuste[];
+  if (lista.length === 0) return [];
+
+  const emails = [...new Set(lista.map((a) => a.analisado_por).filter(Boolean) as string[])];
+  const nomes = new Map<string, string>();
+  if (emails.length > 0) {
+    const { data: p } = await sb.from("pessoas_perfil").select("email,nome").in("email", emails);
+    for (const x of (p ?? []) as { email: string; nome: string }[]) {
+      nomes.set(x.email.toLowerCase(), x.nome);
+    }
+  }
+  return lista.map((a) => ({
+    ...a,
+    analista_nome: a.analisado_por ? (nomes.get(a.analisado_por.toLowerCase()) ?? a.analisado_por) : null,
+  }));
+}
+
 /** Remove o ajuste individual — a empresa volta a seguir o percentual geral. */
 export async function removerAjuste(ano: number, codigoempresa: number) {
   const sb = db();
