@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatDataHora, agoraFormatado } from "@/lib/datas";
 import {
   montarLinhas, contarPendencias, formatBRLCurto, formatCNPJ,
   MESES_ABR, FLAG_LABEL,
@@ -97,7 +98,7 @@ export default function ConsolidacaoDepartamental({
       `Contas folha;${grupos.folha.join(" ")}`,
       `Contas receita;${grupos.receita.join(" ")}`,
       `Contas imposto;${grupos.imposto.join(" ")}`,
-      `Extraído em;${new Date().toLocaleString("pt-BR")}`,
+      `Extraído em;${agoraFormatado()}`,
       "",
     ].join("\r\n");
 
@@ -237,7 +238,7 @@ export default function ConsolidacaoDepartamental({
         Passe o mouse na letra para ver o grupo. Os cartões acima somam o escritório
         inteiro, inclusive as empresas sem pendência que não aparecem na lista.
         Use <strong>Sobre</strong> para ver as contas e a regra completa.
-        {geradoEm && <> Dados apurados em {new Date(geradoEm).toLocaleString("pt-BR")}.</>}
+        {geradoEm && <> Dados apurados em {formatDataHora(geradoEm)}.</>}
       </p>
 
       {sobre && <Sobre grupos={grupos} ano={ano} onFechar={() => setSobre(false)} />}

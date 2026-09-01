@@ -2,6 +2,8 @@ import Link from "next/link";
 import Workspace from "@/components/Workspace";
 import { getModule } from "@/lib/modules";
 import { resumoRodadas, historicoDoAno, formatBRL, formatPct } from "@/lib/dissidio";
+import { formatDataHora } from "@/lib/datas";
+import ExcluirRodada from "@/components/apps/ExcluirRodada";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +45,8 @@ export default async function Page({
               <tr>
                 <th>Ano</th>
                 <th className="num">% geral</th>
-                <th className="num">Empresas ajustadas</th>
+                <th className="num">Empresas</th>
+                <th className="num">Individuais</th>
                 <th className="num">Base congelada</th>
                 <th className="num">Valor decidido</th>
                 <th className="num">Diferença</th>
@@ -61,6 +64,7 @@ export default async function Page({
                   <tr key={r.ano}>
                     <td><strong>{r.ano}</strong>{r.fechada && <span className="tag-inativa">fechada</span>}</td>
                     <td className="num">{formatPct(r.percentual_geral)}</td>
+                    <td className="num">{r.empresas}</td>
                     <td className="num">{r.com_ajuste}</td>
                     <td className="num">{r.soma_base > 0 ? formatBRL(r.soma_base) : "—"}</td>
                     <td className="num">{r.soma_nova > 0 ? formatBRL(r.soma_nova) : "—"}</td>
@@ -68,13 +72,16 @@ export default async function Page({
                     <td className="num">{formatPct(efetivo)}</td>
                     <td className="cnpj">
                       {r.atualizada_por ?? "—"}
-                      {r.atualizada_em && <><br />{new Date(r.atualizada_em).toLocaleString("pt-BR")}</>}
+                      {r.atualizada_em && <><br />{formatDataHora(r.atualizada_em)}</>}
                     </td>
                     <td className="atividade" title={r.observacao ?? ""}>{r.observacao ?? "—"}</td>
                     <td>
-                      <Link className="btn" href={`/m/financeiro/dissidio/historico?ano=${r.ano}`}>
-                        Ver decisões
-                      </Link>
+                      <div className="acoes-linha">
+                        <Link className="btn" href={`/m/financeiro/dissidio/historico?ano=${r.ano}`}>
+                          Ver decisões
+                        </Link>
+                        <ExcluirRodada ano={r.ano} ajustes={r.empresas} />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -88,7 +95,9 @@ export default async function Page({
         <>
           <h3 style={{ marginTop: 26 }}>Decisões registradas em {anoDetalhe}</h3>
           {detalhe.length === 0 ? (
-            <div className="banner">Nenhum ajuste individual nesta rodada.</div>
+            <div className="banner">
+              Nenhuma empresa gravada nesta rodada ainda — salve uma versão na Análise de Dissídio.
+            </div>
           ) : (
             <div className="table-wrap">
               <table className="grid">
@@ -98,7 +107,7 @@ export default async function Page({
                     <th className="num">Base na decisão</th>
                     <th className="num">%</th>
                     <th className="num">Valor decidido</th>
-                    <th>Informado como</th>
+                    <th>Tipo</th>
                     <th>Observação</th>
                     <th>Analisado por</th>
                     <th>Quando</th>
@@ -125,11 +134,15 @@ export default async function Page({
                         <td className="num">{base > 0 ? formatBRL(base) : "—"}</td>
                         <td className="num">{formatPct(pct)}</td>
                         <td className="num">{formatBRL(novo)}</td>
-                        <td className="regime">{a.origem === "valor" ? "Valor em reais" : "Percentual"}</td>
+                        <td className="regime">
+                          {a.individual
+                            ? (a.origem === "valor" ? "Individual (valor)" : "Individual (%)")
+                            : "Regra geral"}
+                        </td>
                         <td className="atividade" title={a.observacao ?? ""}>{a.observacao ?? "—"}</td>
                         <td className="regime">{a.analista_nome ?? "—"}</td>
                         <td className="cnpj">
-                          {a.analisado_em ? new Date(a.analisado_em).toLocaleString("pt-BR") : "—"}
+                          {formatDataHora(a.analisado_em)}
                         </td>
                       </tr>
                     );
@@ -143,9 +156,10 @@ export default async function Page({
 
       <p className="footnote">
         Os valores desta tela vêm do que ficou <strong>congelado na hora da decisão</strong> — a base
-        registrada em cada ajuste — e não do honorário vigente hoje. Por isso o histórico não muda
-        quando um contrato é renegociado depois. Empresas que apenas seguiram o percentual geral, sem
-        ajuste individual, não têm base congelada e por isso não entram nas somas acima.
+        registrada em cada empresa — e não do honorário vigente hoje. Por isso o histórico não muda
+        quando um contrato é renegociado depois. Ao salvar uma versão, <strong>todas</strong> as
+        empresas são gravadas: as com decisão própria aparecem como <em>Individual</em>, as demais
+        como <em>Regra geral</em>. Horários no fuso de São Paulo.
       </p>
     </Workspace>
   );

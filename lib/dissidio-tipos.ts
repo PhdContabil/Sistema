@@ -106,6 +106,8 @@ export interface Ajuste {
   valor_novo: number | null;
   valor_base: number | null;
   origem: "percentual" | "valor";
+  /** true = valor definido para esta empresa; false = derivado do percentual geral. */
+  individual?: boolean;
   observacao: string | null;
   analisado_por: string | null;
   analisado_em: string;

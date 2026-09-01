@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { calcular, formatBRL, formatNum, formatPct, formatCNPJ } from "@/lib/dissidio-calculo";
+import { formatDataHora, agoraFormatado } from "@/lib/datas";
 import {
   RESPONSAVEIS, RESPONSAVEL_NOME,
   type PerfilEmpresa, type PerfilServico, type PerfilAno,
@@ -184,7 +185,11 @@ export default function AnaliseDissidio({
       setConfirmar(false);
       setRascunhos(new Map());
       if (Array.isArray(j.conflitos) && j.conflitos.length > 0) setConflitos(j.conflitos);
-      setAviso(`Versão salva — ${j.gravadas ?? 0} empresa(s) gravada(s).`);
+      if (j.aviso) setErro(j.aviso);
+      setAviso(
+        `Versão salva — ${j.gravadas ?? 0} decisão(ões) individual(is)` +
+        (j.derivadas ? ` e ${j.derivadas} empresa(s) pela regra geral.` : ".")
+      );
       router.refresh();
     } catch {
       setErro("Falha de rede ao salvar.");
@@ -313,7 +318,7 @@ export default function AnaliseDissidio({
       base ?? "", calc.percentual ?? "", calc.valorNovo ?? "", calc.diferenca ?? "",
       calc.individual ? "Sim" : "Não", gravado?.valor_base ?? "", st.observacao,
       gravado?.analisado_por ?? "",
-      gravado?.analisado_em ? new Date(gravado.analisado_em).toLocaleString("pt-BR") : "",
+      gravado?.analisado_em ? formatDataHora(gravado.analisado_em) : "",
     ]);
 
     const esc = (v: string | number) => {
@@ -330,7 +335,7 @@ export default function AnaliseDissidio({
       `Mensalidade nova (soma);${totais.novo.toFixed(2)}`,
       `Diferença;${totais.diferenca.toFixed(2)}`,
       `Observação do ano;${(obsAno || "-").replace(/[\r\n;]+/g, " ")}`,
-      `Extraído em;${new Date().toLocaleString("pt-BR")}`,
+      `Extraído em;${agoraFormatado()}`,
       "",
     ].join("\r\n");
 
@@ -571,14 +576,19 @@ export default function AnaliseDissidio({
             </div>
             <div className="modal-body">
               <p>
-                Serão gravadas <strong>{pendentes} empresa(s)</strong> que você alterou
+                Serão gravadas as <strong>{pendentes} empresa(s)</strong> que você alterou como
+                decisão individual
                 {cabecalhoMudou && <>, mais o <strong>percentual geral</strong> e a observação do ano</>}.
               </p>
+              <p>
+                Em seguida o sistema completa o retrato: <strong>todas as demais empresas</strong>{" "}
+                recebem uma linha com o percentual geral aplicado, para o histórico ficar auditável
+                empresa a empresa.
+              </p>
               <p className="nota">
-                Empresas que você não tocou ficam como estão — se outra pessoa estiver ajustando
-                outras empresas agora, o trabalho dela não é sobrescrito. Se alguém tiver alterado
-                alguma das suas empresas depois de você abrir a tela, o seu valor prevalece e eu aviso
-                quais foram.
+                Decisões individuais registradas por outra pessoa <strong>não são sobrescritas</strong>.
+                Se alguém tiver alterado alguma das empresas que você mexeu depois de você abrir a
+                tela, o seu valor prevalece e eu aviso quais foram.
               </p>
             </div>
             <div className="modal-foot">
@@ -952,7 +962,7 @@ function ModalEmpresa({
             {gravado && (
               <p className="nota" style={{ marginTop: 10 }}>
                 Última gravação por <strong>{gravado.analisado_por ?? "—"}</strong>
-                {gravado.analisado_em && ` em ${new Date(gravado.analisado_em).toLocaleString("pt-BR")}`}.
+                {gravado.analisado_em && ` em ${formatDataHora(gravado.analisado_em)}`}.
                 {gravado.valor_base !== null && <> Base congelada: R$ {formatBRL(gravado.valor_base)}.</>}
               </p>
             )}

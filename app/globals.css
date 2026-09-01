@@ -1247,3 +1247,5 @@ html[data-theme="dark"] tr.nao-salvo td { background: #2a2016; }
   border-radius: 6px; padding: 3px 5px; max-width: 96px;
 }
 .check-linha { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+
+.acoes-linha { display: flex; gap: 6px; align-items: center; white-space: nowrap; }

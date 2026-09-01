@@ -115,12 +115,12 @@ export async function resumoRodadas(): Promise<ResumoRodada[]> {
 
   const [{ data: rodadas }, { data: ajustes }] = await Promise.all([
     sb.from("dissidio_rodadas").select("*").order("ano", { ascending: false }),
-    sb.from("dissidio_ajustes").select("ano,percentual,valor_novo,valor_base,origem"),
+    sb.from("dissidio_ajustes").select("ano,percentual,valor_novo,valor_base,origem,individual"),
   ]);
 
-  const porAno = new Map<number, { n: number; base: number; nova: number }>();
-  for (const a of (ajustes ?? []) as Ajuste[]) {
-    const acc = porAno.get(a.ano) ?? { n: 0, base: 0, nova: 0 };
+  const porAno = new Map<number, { n: number; ind: number; base: number; nova: number }>();
+  for (const a of (ajustes ?? []) as (Ajuste & { individual?: boolean })[]) {
+    const acc = porAno.get(a.ano) ?? { n: 0, ind: 0, base: 0, nova: 0 };
     const base = Number(a.valor_base ?? 0);
     const nova =
       a.origem === "valor" && a.valor_novo !== null
@@ -129,13 +129,14 @@ export async function resumoRodadas(): Promise<ResumoRodada[]> {
           ? base * (1 + Number(a.percentual) / 100)
           : base;
     acc.n += 1;
+    if (a.individual) acc.ind += 1;
     acc.base += base;
     acc.nova += nova;
     porAno.set(a.ano, acc);
   }
 
   return ((rodadas ?? []) as Rodada[]).map((r) => {
-    const acc = porAno.get(r.ano) ?? { n: 0, base: 0, nova: 0 };
+    const acc = porAno.get(r.ano) ?? { n: 0, ind: 0, base: 0, nova: 0 };
     return {
       ano: r.ano,
       percentual_geral: Number(r.percentual_geral),
@@ -144,7 +145,7 @@ export async function resumoRodadas(): Promise<ResumoRodada[]> {
       atualizada_em: r.atualizada_em ?? null,
       atualizada_por: r.atualizada_por ?? null,
       empresas: acc.n,
-      com_ajuste: acc.n,
+      com_ajuste: acc.ind,
       soma_base: acc.base,
       soma_nova: acc.nova,
     };
