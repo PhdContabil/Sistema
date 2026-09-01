@@ -296,6 +296,37 @@ export async function ehDaTI(email: string | null | undefined): Promise<boolean>
   return usr.data?.sector === "ti" || !!adm.data;
 }
 
+/**
+ * Só essas pessoas acessam as telas de administração de Tickets (Dashboard,
+ * Usuários, Gerenciar admins) — mais restrito que podeEditarMedicao, que
+ * também libera sub-admins de setor (ex.: o contato do Contábil), que não
+ * devem enxergar essas telas. Lista fixa, pedida pelo Pedro em 01/09/2026
+ * depois de a Maisa (sub-admin do Contábil) aparecer com esse acesso.
+ */
+const ADMIN_NAV_EMAILS = [
+  "tecnologia@phdcontabil.com.br",
+  "gabriel.santos@phdcontabil.com.br",
+  "eduardo@phdcontabil.com.br",
+  "julia@phdcontabil.com.br",
+];
+export function ehAdminNav(email: string | null | undefined): boolean {
+  const e = email?.toLowerCase();
+  return !!e && ADMIN_NAV_EMAILS.includes(e);
+}
+
+/**
+ * Quem vê horas/ganho no detalhe do ticket — T.I. de verdade (ehDaTI) mais
+ * Junior e EdCarlos (Diretoria), mesmo que não sejam do setor de TI. Pedido
+ * do Pedro em 01/09/2026: sub-admins de setor (ex.: Maisa) não devem ver.
+ */
+const MEDICAO_EXTRA_EMAILS = ["junior@phdcontabil.com.br", "edcarlos@phdcontabil.com.br"];
+export async function podeVerMedicao(email: string | null | undefined): Promise<boolean> {
+  const e = email?.toLowerCase();
+  if (!e) return false;
+  if (MEDICAO_EXTRA_EMAILS.includes(e)) return true;
+  return ehDaTI(e);
+}
+
 // ---------------------------------------------------------------- admins
 
 /** Lista de e-mails com acesso de administrador aos Tickets. */

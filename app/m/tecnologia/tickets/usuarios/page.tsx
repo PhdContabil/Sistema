@@ -3,15 +3,15 @@ import Workspace from "@/components/Workspace";
 import TicketsUsuarios from "@/components/apps/TicketsUsuarios";
 import TicketsShell from "@/components/apps/TicketsShell";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { podeEditarMedicao, ehAdminGeral, obterSetorUsuario, resumoPorSetor } from "@/lib/tickets";
+import { ehAdminNav, ehAdminGeral, obterSetorUsuario, resumoPorSetor } from "@/lib/tickets";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const user = await getCurrentUser().catch(() => null);
   const meuEmail = user?.email?.toLowerCase() ?? null;
-  const [souAdmin, souAdminGeral, meuSetor, resumo] = await Promise.all([
-    podeEditarMedicao(meuEmail).catch(() => false),
+  const souAdmin = ehAdminNav(meuEmail);
+  const [souAdminGeral, meuSetor, resumo] = await Promise.all([
     ehAdminGeral(meuEmail).catch(() => false),
     obterSetorUsuario(meuEmail).catch(() => null),
     resumoPorSetor().catch(() => ({}) as Record<string, number>),

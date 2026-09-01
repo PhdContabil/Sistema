@@ -67,7 +67,7 @@ export function ResponsaveisRanking({ data }: { data: Resp[] }) {
                 <div className="flex items-center gap-2 mt-1">
                   <div className="bar-track flex-1">
                     <div
-                      className="bar-fill"
+                      className="bar-fill-blue"
                       style={{ width: `${(r.count / max) * 100}%` }}
                     />
                   </div>

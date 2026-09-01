@@ -4,7 +4,7 @@ import TicketsShell from "@/components/apps/TicketsShell";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import {
   listarTickets, ehSetor, ticketsDb,
-  listarPessoas, podeEditarMedicao, ehAdminGeral, obterSetorUsuario, resumoPorSetor,
+  listarPessoas, podeEditarMedicao, ehAdminNav, podeVerMedicao, ehAdminGeral, obterSetorUsuario, resumoPorSetor,
   type Ticket, type SetorId, type PessoaTickets,
 } from "@/lib/tickets";
 
@@ -17,11 +17,13 @@ export default async function Page({
 }) {
   const user = await getCurrentUser().catch(() => null);
   const meuEmail = user?.email?.toLowerCase() ?? null;
-  const [souAdmin, souAdminGeral, meuSetor, resumo] = await Promise.all([
+  const souAdminNav = ehAdminNav(meuEmail);
+  const [souAdmin, souAdminGeral, meuSetor, resumo, souVejoMedicao] = await Promise.all([
     podeEditarMedicao(meuEmail).catch(() => false),
     ehAdminGeral(meuEmail).catch(() => false),
     obterSetorUsuario(meuEmail).catch(() => null),
     resumoPorSetor().catch(() => ({}) as Record<string, number>),
+    podeVerMedicao(meuEmail).catch(() => false),
   ]);
 
   const setorPedido: SetorId = ehSetor(searchParams?.setor) ? searchParams.setor : "contabil";
@@ -51,7 +53,7 @@ export default async function Page({
 
   return (
     <Workspace moduleId="tecnologia" appName="Tickets">
-      <TicketsShell resumo={resumo} souAdmin={souAdmin} souAdminGeral={souAdminGeral} meuSetor={meuSetor}>
+      <TicketsShell resumo={resumo} souAdmin={souAdminNav} souAdminGeral={souAdminGeral} meuSetor={meuSetor}>
         <TicketsBoard
           setor={setor ?? "contabil"}
           tickets={tickets}
@@ -59,6 +61,7 @@ export default async function Page({
           pessoas={pessoas}
           souAdmin={souAdmin}
           souAdminGeral={souAdminGeral}
+          souVejoMedicao={souVejoMedicao}
           erroServidor={erro}
         />
       </TicketsShell>

@@ -75,9 +75,13 @@ export function StatusDonut({ data }: { data: Slice[] }) {
                 ]}
                 contentStyle={{
                   fontSize: 12,
-                  border: "1px solid #e5e7eb",
+                  background: "var(--soc-card)",
+                  color: "var(--soc-text)",
+                  border: "1px solid var(--soc-border)",
                   borderRadius: 6,
                 }}
+                labelStyle={{ color: "var(--soc-text)" }}
+                itemStyle={{ color: "var(--soc-text)" }}
               />
             </PieChart>
           </ResponsiveContainer>

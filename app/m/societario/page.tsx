@@ -171,7 +171,7 @@ function Card({
   return (
     <Link
       href={href}
-      className="bg-white border border-gray-200 rounded-lg p-4 block hover:border-brand-500 hover:shadow-md transition group"
+      className="soc-stat bg-white border border-gray-200 rounded-lg p-4 block hover:border-brand-500 hover:shadow-md transition group"
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xl" aria-hidden>

@@ -20,6 +20,11 @@
   --soc-border: #e5e7eb;
   --soc-text: #111827;
   --soc-muted: #6b7280;
+  --soc-neutral-200: #eef0f4;
+  --soc-neutral-400: #c7cbd3;
+  --soc-accent-100: #e6f4fb;
+  --soc-accent-800: #1f6fa0;
+  --soc-heading: #1e293b;
   /* Trava o color-scheme nativo (inputs, date picker, scrollbar) no que o
      módulo realmente sabe desenhar. Sem isso, quando o resto do Núcleo
      estava no dark mode mas o Societário continuava com CSS fixo claro,
@@ -35,14 +40,20 @@
     Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
 
-/* Dark mode do Societário — segue o mesmo data-theme do resto do Núcleo
-   (alternado pelo botão na barra lateral). */
-html[data-theme="dark"] .societario-scope {
-  --soc-bg: #0f1420;
-  --soc-card: #171d2b;
-  --soc-border: #2a2f40;
-  --soc-text: #eceef4;
-  --soc-muted: #94a3b8;
+/* Dark mode do Societário — próprio do módulo (botão na tela, não segue
+   mais o tema geral do Núcleo): alterna o data-theme aqui no wrapper
+   .societario-scope, guardado à parte em localStorage ("soc-tema"). */
+.societario-scope[data-theme="dark"] {
+  --soc-bg: #17161a;
+  --soc-card: #211f24;
+  --soc-border: #37343b;
+  --soc-text: #efeeee;
+  --soc-muted: #a8a5ad;
+  --soc-neutral-200: #2c2a30;
+  --soc-neutral-400: #4a4750;
+  --soc-accent-100: #0d2f3b;
+  --soc-accent-800: #7ad0e8;
+  --soc-heading: var(--soc-text);
   color-scheme: dark;
 }
 
@@ -62,13 +73,106 @@ html[data-theme="dark"] .societario-scope {
   color: var(--soc-muted);
 }
 
+/* Sidebar recolhível + botão de tema, próprios do Societário (não segue o
+   menu/tema geral do Núcleo). Baseado no padrão passado pelo Pedro
+   (.side/.side-toggle/.main), traduzido para as variáveis --soc-*. */
+.soc-side {
+  position: relative;
+  flex: none;
+  width: 208px;
+  transition: width .2s, padding .2s;
+  overflow: hidden;
+}
+.soc-side.collapsed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right: none;
+}
+.soc-side.collapsed > * {
+  opacity: 0;
+}
+/* Sidebar clara, no mesmo cinza dos cards do print (não mais a barra
+   azul-marinho antiga) — texto escuro, com destaque azul-claro no item
+   ativo. */
+.soc-sidebar {
+  background: var(--soc-neutral-200);
+  border-right: 1px solid var(--soc-border);
+  color: var(--soc-text);
+}
+.soc-sidebar-foot {
+  border-top: 1px solid var(--soc-border);
+}
+.soc-muted {
+  color: var(--soc-muted);
+}
+.soc-nav-link {
+  color: var(--soc-text);
+}
+.soc-nav-link:hover {
+  background: var(--soc-neutral-400);
+}
+.soc-nav-link-active,
+.soc-nav-link-active:hover {
+  background: var(--soc-accent-100);
+  color: var(--soc-accent-800);
+}
+.soc-side-toggle {
+  position: absolute;
+  top: 16px;
+  left: 184px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: var(--soc-muted);
+  opacity: .6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  transition: left .2s, opacity .15s, background .15s;
+}
+.soc-side-toggle:hover {
+  opacity: 1;
+  background: var(--soc-neutral-400);
+}
+.societario-scope:has(.soc-side.collapsed) .soc-side-toggle {
+  left: 6px;
+}
+.soc-main {
+  flex: 1;
+  min-width: 0;
+}
+.soc-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--soc-border);
+  background: var(--soc-card);
+  color: var(--soc-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.soc-theme-btn:hover {
+  background: var(--soc-neutral-400);
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
+  padding: 3px 11px;
   border-radius: 9999px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -76,15 +180,138 @@ html[data-theme="dark"] .societario-scope {
 .status-andamento { background: #dbeafe; color: #1e3a8a; }
 .status-concluido { background: #d1fae5; color: #065f46; }
 .status-cancelado { background: #f3f4f6; color: #6b7280; }
-.status-pendente  { background: #fef3c7; color: #92400e; }
-.status-alta      { background: #fde2e8; color: #9d174d; }
-.status-media     { background: #fef3c7; color: #92400e; }
-.status-baixa     { background: #e0f2fe; color: #075985; }
+.status-pendente  { background: #fdf1cf; color: #92621a; }
+.status-alta      { background: #fbdfe9; color: #b3316b; }
+.status-media     { background: #fdf1cf; color: #92621a; }
+.status-baixa     { background: #dceefb; color: #1c6ea8; }
 .status-default   { background: #e5e7eb; color: #374151; }
 
-/* Mini barras horizontais para os rankings */
-.bar-track { background: #f3f4f6; border-radius: 4px; height: 6px; overflow: hidden; }
-.bar-fill  { background: linear-gradient(90deg, #7c3aed, #ec4899); height: 100%; }
+/* Mini barras horizontais dos rankings — cores conforme o print
+   (rosa/magenta nos "Top 5 processos", azul nos "Top responsáveis"). */
+.bar-track { background: #e9ebee; border-radius: 4px; height: 6px; overflow: hidden; }
+.bar-fill      { background: #cc2e6e; height: 100%; }
+.bar-fill-blue { background: #2f6fd6; height: 100%; }
+
+/* Tipografia com serifa para os títulos de destaque do módulo, igual ao
+   print encaminhado pelo Claude Design (Olá Tecnologia / Societário /
+   títulos de card) — o restante do texto (rótulos, tabelas) segue sans. */
+.societario-scope h1,
+.societario-scope h2,
+.societario-scope h3,
+.societario-scope h4,
+.societario-scope .soc-serif {
+  /* Pedro preferiu voltar pra sans (a serifa do Georgia não agradou) —
+     mesma família do resto do texto, só mais leve que o bold/semibold
+     padrão do Tailwind e num azul-marinho mais suave que preto puro,
+     no tom que ele mandou de exemplo. */
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  font-weight: 500;
+  color: var(--soc-heading);
+}
+.societario-scope h1 {
+  font-weight: 600;
+}
+
+/* Cards do dashboard (indicadores, atividade recente etc.) no cinza claro
+   do print, sem borda — troca o antigo bg-white + border por um bloco
+   neutro que também acompanha o dark mode do módulo. */
+.soc-card {
+  background: var(--soc-neutral-200);
+  border-radius: 14px;
+}
+.soc-stat {
+  background: var(--soc-neutral-200);
+  border-radius: 12px;
+  transition: box-shadow .15s, background .15s;
+}
+.soc-stat:hover {
+  background: var(--soc-neutral-400);
+}
+
+/* Os números dos cards de indicador (Total processos, Em aberto etc.) usam
+   cores fixas do Tailwind (pensadas pro fundo claro) — no dark mode do
+   Societário isso ficava escuro demais em cima do card escuro. Clareia
+   só dentro do .soc-stat, sem mexer nessas mesmas classes usadas em outro
+   lugar do módulo. */
+.societario-scope[data-theme="dark"] .soc-stat .text-gray-900 { color: var(--soc-text); }
+.societario-scope[data-theme="dark"] .soc-stat .text-gray-500 { color: var(--soc-muted); }
+.societario-scope[data-theme="dark"] .soc-stat .text-amber-600 { color: #f3c15f; }
+.societario-scope[data-theme="dark"] .soc-stat .text-emerald-600 { color: #52d68a; }
+.societario-scope[data-theme="dark"] .soc-stat .text-blue-600 { color: #7fb4f2; }
+
+/* Varredura geral do dark mode: quase todo o módulo (tabelas, filtros,
+   formulários, listas de Processos/Empresas/Admin, os próprios gráficos)
+   foi escrito só pensando no tema claro, com cinzas fixos do Tailwind
+   (text-gray-900/700/500 etc.), que ficam escuros demais em cima do fundo
+   escuro do Societário. Em vez de editar cada arquivo, remapeia essas
+   classes para as variáveis --soc-* só dentro do dark mode do módulo. */
+.societario-scope[data-theme="dark"] .text-gray-900,
+.societario-scope[data-theme="dark"] .text-gray-800,
+.societario-scope[data-theme="dark"] .text-gray-700,
+.societario-scope[data-theme="dark"] .text-black {
+  color: var(--soc-text) !important;
+}
+.societario-scope[data-theme="dark"] .text-gray-600,
+.societario-scope[data-theme="dark"] .text-gray-500,
+.societario-scope[data-theme="dark"] .text-gray-400,
+.societario-scope[data-theme="dark"] .text-gray-300 {
+  color: var(--soc-muted) !important;
+}
+.societario-scope[data-theme="dark"] .hover\:text-gray-900:hover,
+.societario-scope[data-theme="dark"] .hover\:text-gray-700:hover {
+  color: var(--soc-text) !important;
+}
+.societario-scope[data-theme="dark"] .bg-gray-50,
+.societario-scope[data-theme="dark"] .bg-gray-100 {
+  background-color: var(--soc-neutral-200) !important;
+}
+.societario-scope[data-theme="dark"] .bg-gray-400 {
+  background-color: var(--soc-neutral-400) !important;
+}
+.societario-scope[data-theme="dark"] .hover\:bg-gray-50:hover {
+  background-color: var(--soc-neutral-400) !important;
+}
+.societario-scope[data-theme="dark"] .border-gray-100,
+.societario-scope[data-theme="dark"] .border-gray-200,
+.societario-scope[data-theme="dark"] .border-gray-300 {
+  border-color: var(--soc-border) !important;
+}
+/* Cores fixas de estado (verde/âmbar/azul/vermelho-600) clareiam um pouco
+   pra manter contraste em cima do fundo escuro, iguais em todo o módulo
+   (não só nos cards, como no primeiro ajuste). */
+.societario-scope[data-theme="dark"] .text-amber-600 { color: #f3c15f !important; }
+.societario-scope[data-theme="dark"] .text-emerald-600 { color: #52d68a !important; }
+.societario-scope[data-theme="dark"] .text-blue-600 { color: #7fb4f2 !important; }
+.societario-scope[data-theme="dark"] .text-red-600 { color: #f28b8b !important; }
+.societario-scope[data-theme="dark"] .text-brand-700,
+.societario-scope[data-theme="dark"] .text-brand-900 {
+  color: #8fb8ef !important;
+}
+/* group-hover:text-brand-700 (nome no hover do ranking de responsáveis
+   etc.) é uma classe Tailwind separada da acima — cai no roxo fixo da
+   marca, ilegível no card escuro, se não for pega à parte. */
+.societario-scope[data-theme="dark"] .group:hover .group-hover\:text-brand-700 {
+  color: #8fb8ef !important;
+}
+/* Painéis de filtro (Usuários, Tipos de processo) e outros "bg-white"
+   soltos (sem o combo acima) — mesma ideia, cor de fundo do módulo. */
+.societario-scope[data-theme="dark"] .bg-white {
+  background-color: var(--soc-card) !important;
+}
+.societario-scope[data-theme="dark"] .border-brand-100 {
+  border-color: var(--soc-border) !important;
+}
+
+/* Reskin geral: os cards "bg-white + borda cinza" espalhados pelas telas do
+   módulo (dashboard, listas, formulários) passam a usar o cinza claro e o
+   raio maior do print, sem precisar editar cada arquivo um a um. */
+.societario-scope .bg-white.border.border-gray-200.rounded-lg {
+  background: var(--soc-neutral-200);
+  border-color: var(--soc-neutral-200);
+  border-radius: 14px;
+}
 
 /* Logo PNG colorida -> totalmente branca (para usar no fundo escuro da sidebar) */
 .logo-white { filter: brightness(0) invert(1); }

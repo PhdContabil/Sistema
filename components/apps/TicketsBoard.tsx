@@ -41,8 +41,30 @@ const STATUS_COR: Record<string, string> = {
   finalizado: "bg-emerald-500",
 };
 
+// Pra quem além de TI pode ser atribuído em cada setor — pedido do Pedro
+// pra não listar mais "todo mundo de todos os setores" no seletor, só o(s)
+// ponto(s) de contato de cada área. Casa por nome (contém), sem acento nem
+// caixa, então funciona com o nome como está cadastrado em ticket_users.
+const LIGACAO_POR_SETOR: Record<string, string[]> = {
+  fiscal: ["giovanna"],
+  trabalhista: ["gean"],
+  contabil: ["maisa"],
+};
+
+function pessoasAtribuiveis(pessoas: PessoaTickets[], setorTicket: string, jaAtribuidos: string[] = []) {
+  const livres = pessoas.filter(
+    (p) => !jaAtribuidos.some((e) => e.toLowerCase() === p.email.toLowerCase())
+  );
+  const ti = livres.filter((p) => p.sector === "ti");
+  const nomesLigacao = LIGACAO_POR_SETOR[setorTicket] ?? [];
+  const ligacao = livres.filter(
+    (p) => p.sector === setorTicket && nomesLigacao.some((n) => p.name.toLowerCase().includes(n))
+  );
+  return { ti, ligacao };
+}
+
 export default function TicketsBoard({
-  setor, tickets, meuEmail, pessoas, souAdmin, souAdminGeral, erroServidor,
+  setor, tickets, meuEmail, pessoas, souAdmin, souAdminGeral, souVejoMedicao, erroServidor,
 }: {
   setor: string;
   tickets: Ticket[];
@@ -51,6 +73,8 @@ export default function TicketsBoard({
   souAdmin: boolean;
   /** Admin pleno — só ele vê o filtro de prioridade e edita a prioridade do ticket. */
   souAdminGeral: boolean;
+  /** T.I. + Junior + EdCarlos — só eles veem/editam horas e ganho no detalhe. */
+  souVejoMedicao: boolean;
   erroServidor: string | null;
 }) {
   const router = useRouter();
@@ -140,7 +164,7 @@ export default function TicketsBoard({
         </span>
       </div>
 
-      {(totalGanho > 0 || totalRealizadas > 0) && (
+      {souVejoMedicao && (totalGanho > 0 || totalRealizadas > 0) && (
         <div className="flex flex-wrap gap-3 mb-4">
           <div className={`${CARD} px-4 py-2.5`}>
             <div className="text-[11px] uppercase tracking-wide text-slate-500">Horas realizadas</div>
@@ -234,6 +258,7 @@ export default function TicketsBoard({
           pessoas={pessoas}
           souAdmin={souAdmin}
           souAdminGeral={souAdminGeral}
+          souVejoMedicao={souVejoMedicao}
           onFechar={() => setAberto(null)}
           onMudou={() => { setAberto(null); router.refresh(); }}
         />
@@ -242,6 +267,7 @@ export default function TicketsBoard({
       {novo && (
         <NovoTicket
           setor={setor}
+          pessoas={pessoas}
           onFechar={() => setNovo(false)}
           onCriado={() => { setNovo(false); router.refresh(); }}
         />
@@ -253,13 +279,14 @@ export default function TicketsBoard({
 // ------------------------------------------------------------ detalhe
 
 function DetalheTicket({
-  d, meuEmail, pessoas, souAdmin, souAdminGeral, onFechar, onMudou,
+  d, meuEmail, pessoas, souAdmin, souAdminGeral, souVejoMedicao, onFechar, onMudou,
 }: {
   d: Detalhe;
   meuEmail: string | null;
   pessoas: PessoaTickets[];
   souAdmin: boolean;
   souAdminGeral: boolean;
+  souVejoMedicao: boolean;
   onFechar: () => void;
   onMudou: () => void;
 }) {
@@ -336,6 +363,20 @@ function DetalheTicket({
     }
   }
 
+  async function excluir() {
+    if (!confirm(`Excluir o ticket "${t.title}"? Essa ação não pode ser desfeita.`)) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/tickets/${t.id}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não foi possível excluir."); return; }
+      onMudou();
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function comentar() {
     const corpo = texto.trim();
     if (!corpo) return;
@@ -369,13 +410,28 @@ function DetalheTicket({
             </div>
             <h2 className="text-xl font-bold">{t.title}</h2>
           </div>
-          <button
-            onClick={onFechar}
-            aria-label="Fechar"
-            className="w-8 h-8 shrink-0 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {souAdmin && (
+              <button
+                onClick={excluir}
+                disabled={salvando}
+                aria-label="Excluir ticket"
+                title="Excluir ticket"
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center justify-center disabled:opacity-40"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={onFechar}
+              aria-label="Fechar"
+              className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="px-6 py-5 space-y-6 max-h-[75vh] overflow-y-auto">
@@ -453,11 +509,9 @@ function DetalheTicket({
               >
                 <option value="">+ Atribuir alguém…</option>
                 {(() => {
-                  const livres = pessoas.filter(
-                    (p) => !responsaveis.some((r) => r.user_email.toLowerCase() === p.email.toLowerCase())
+                  const { ti, ligacao } = pessoasAtribuiveis(
+                    pessoas, t.sector, responsaveis.map((r) => r.user_email)
                   );
-                  const ti = livres.filter((p) => p.sector === "ti");
-                  const outros = livres.filter((p) => p.sector !== "ti");
                   return (
                     <>
                       {ti.length > 0 && (
@@ -465,13 +519,9 @@ function DetalheTicket({
                           {ti.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
                         </optgroup>
                       )}
-                      {outros.length > 0 && (
-                        <optgroup label="Outros setores">
-                          {outros.map((p) => (
-                            <option key={p.email} value={p.email}>
-                              {p.name} · {SETOR_NOME[p.sector] ?? p.sector}
-                            </option>
-                          ))}
+                      {ligacao.length > 0 && (
+                        <optgroup label={SETOR_NOME[t.sector] ?? t.sector}>
+                          {ligacao.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
                         </optgroup>
                       )}
                     </>
@@ -481,7 +531,7 @@ function DetalheTicket({
             </div>
           </div>
 
-          {souAdmin && (
+          {souVejoMedicao && (
             <>
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Esforço do time de TI</h3>
@@ -489,12 +539,12 @@ function DetalheTicket({
                   <CampoMedicao
                     rotulo="Horas estimadas" valor={t.horas_estimadas} sufixo="h"
                     ajuda="Quanto tempo prevemos gastar para atender a demanda"
-                    editavel={souAdmin} salvando={salvando}
+                    editavel={souVejoMedicao} salvando={salvando}
                     onSalvar={(v) => salvarMedicao("horas_estimadas", v)} />
                   <CampoMedicao
                     rotulo="Horas realizadas" valor={t.horas_realizadas} sufixo="h"
                     ajuda="Quanto tempo gastamos de fato"
-                    editavel={souAdmin} salvando={salvando}
+                    editavel={souVejoMedicao} salvando={salvando}
                     onSalvar={(v) => salvarMedicao("horas_realizadas", v)}
                     dica={desvio !== null
                       ? `${desvio > 0 ? "+" : ""}${desvio.toFixed(0)}% em relação ao estimado`
@@ -508,12 +558,12 @@ function DetalheTicket({
                   <CampoMedicao
                     rotulo="Ganho de tempo" valor={t.ganho_horas_mes} sufixo="h/mês"
                     ajuda="Tempo que a entrega devolve por mês na rotina do solicitante"
-                    editavel={souAdmin} salvando={salvando}
+                    editavel={souVejoMedicao} salvando={salvando}
                     onSalvar={(v) => salvarMedicao("ganho_horas_mes", v)} />
                   <CampoMedicao
                     rotulo="Valor da hora" valor={t.valor_hora} prefixo="R$"
                     ajuda="Custo da hora da atividade que deixou de ser feita"
-                    editavel={souAdmin} salvando={salvando}
+                    editavel={souVejoMedicao} salvando={salvando}
                     onSalvar={(v) => salvarMedicao("valor_hora", v)} />
                   <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-900 rounded-lg px-3 py-2.5">
                     <div className="text-xs text-emerald-600 dark:text-emerald-500">Ganho mensal</div>
@@ -655,17 +705,21 @@ function CampoMedicao({
 // ------------------------------------------------------------ novo
 
 function NovoTicket({
-  setor, onFechar, onCriado,
+  setor, pessoas, onFechar, onCriado,
 }: {
   setor: string;
+  pessoas: PessoaTickets[];
   onFechar: () => void;
   onCriado: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("media");
+  const [atribuirA, setAtribuirA] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  const { ti, ligacao } = pessoasAtribuiveis(pessoas, setor);
 
   async function criar() {
     setSalvando(true);
@@ -678,6 +732,17 @@ function NovoTicket({
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(j.error ?? "Não foi possível criar."); return; }
+
+      // Já atribui de cara, se a pessoa escolheu alguém — reaproveita o
+      // mesmo PATCH usado no detalhe, que já dispara a notificação no Teams.
+      if (atribuirA && j.id) {
+        await fetch(`/api/tickets/${j.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ atribuir: atribuirA }),
+        }).catch(() => {});
+      }
+
       onCriado();
     } finally {
       setSalvando(false);
@@ -724,6 +789,24 @@ function NovoTicket({
               {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </select>
           </label>
+          {(ti.length > 0 || ligacao.length > 0) && (
+            <label className="block">
+              <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Atribuir para (opcional)</span>
+              <select className={`${INPUT} w-full`} value={atribuirA} onChange={(e) => setAtribuirA(e.target.value)}>
+                <option value="">Não atribuir agora</option>
+                {ti.length > 0 && (
+                  <optgroup label="Tecnologia">
+                    {ti.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
+                  </optgroup>
+                )}
+                {ligacao.length > 0 && (
+                  <optgroup label={SETOR_NOME[setor] ?? setor}>
+                    {ligacao.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+          )}
           <p className="text-xs text-slate-500">O ticket entra no Backlog de {SETOR_NOME[setor] ?? setor}.</p>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">

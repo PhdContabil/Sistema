@@ -125,13 +125,16 @@ export const STATUS_PROCESSO = [
 export function statusClass(status: string | null | undefined): string {
   if (!status) return "status-default";
   const s = status.toUpperCase();
-  if (s.includes("CONCL")) return "status-concluido";
   if (s.includes("CANCEL")) return "status-cancelado";
+  // "AGUARDANDO CONCLUSÃO" precisa ser checado antes do CONCL genérico
+  // abaixo, senão cai em status-concluido (verde) por engano.
+  if (s.includes("AGUARDANDO CONCLUS")) return "status-alta";
   if (s.includes("ALTA")) return "status-alta";
   if (s.includes("MÉDIA") || s.includes("MEDIA")) return "status-media";
   if (s.includes("BAIXA")) return "status-baixa";
   if (s.includes("AGUARD") || s.includes("PEND") || s.includes("PARAD"))
     return "status-pendente";
+  if (s.includes("CONCL")) return "status-concluido";
   return "status-andamento";
 }
 

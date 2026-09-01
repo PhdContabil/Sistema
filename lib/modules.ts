@@ -64,7 +64,6 @@ export const MODULES: ModuleDef[] = [
     desc: "Conciliação de honorários, contas e fluxo de caixa.",
     apps: [
       { name: "Conciliação de Honorários", desc: "Honorários contratados x movimento real de cada setor.", href: "/m/financeiro/conciliacao" },
-      { name: "Análise de Dissídio", desc: "Perfil das empresas por ano e simulação do reajuste anual.", href: "/m/financeiro/dissidio" },
       { name: "Contas a Pagar", desc: "Gestão de fornecedores e agenda de pagamentos." },
       { name: "Contas a Receber", desc: "Controle de recebimentos e inadimplência." },
       { name: "Fluxo de Caixa", desc: "Projeção de entradas e saídas por período." },
@@ -102,6 +101,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Chamados, inventário, acessos e as ferramentas que sustentam o escritório.",
     apps: [
       { name: "Tickets", desc: "Chamados de cada setor, do backlog à finalização.", href: "/m/tecnologia/tickets" },
+      { name: "Usuários por setor", desc: "Setor de cada pessoa — define o acesso aos módulos do Núcleo.", href: "/m/tecnologia/usuarios" },
       { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados." },
       { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis e quem tem acesso." },
       { name: "Base de Conhecimento", desc: "Tutoriais e procedimentos de TI para o time." },

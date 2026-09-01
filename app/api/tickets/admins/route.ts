@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { listarAdmins, adicionarAdmin, removerAdmin, podeEditarMedicao } from "@/lib/tickets";
+import { listarAdmins, adicionarAdmin, removerAdmin, ehAdminNav } from "@/lib/tickets";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ async function contexto() {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase() ?? null;
   if (!email) return { email: null, ok: false };
-  return { email, ok: await podeEditarMedicao(email) };
+  return { email, ok: ehAdminNav(email) };
 }
 
 export async function GET() {

@@ -242,17 +242,17 @@ export function TimelineChart({
                 <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="#f3f4f6" vertical={false} />
+            <CartesianGrid stroke="var(--soc-border)" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: "#6b7280" }}
+              tick={{ fontSize: 11, fill: "var(--soc-muted)" }}
               tickLine={false}
-              axisLine={{ stroke: "#e5e7eb" }}
+              axisLine={{ stroke: "var(--soc-border)" }}
               interval="preserveStartEnd"
               minTickGap={20}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: "#6b7280" }}
+              tick={{ fontSize: 11, fill: "var(--soc-muted)" }}
               tickLine={false}
               axisLine={false}
               width={40}
@@ -260,10 +260,13 @@ export function TimelineChart({
             <Tooltip
               contentStyle={{
                 fontSize: 12,
-                border: "1px solid #e5e7eb",
+                background: "var(--soc-card)",
+                color: "var(--soc-text)",
+                border: "1px solid var(--soc-border)",
                 borderRadius: 6,
               }}
-              labelStyle={{ fontWeight: 600 }}
+              labelStyle={{ fontWeight: 600, color: "var(--soc-text)" }}
+              itemStyle={{ color: "var(--soc-text)" }}
             />
             <Legend
               wrapperStyle={{ fontSize: 12, paddingTop: 8 }}

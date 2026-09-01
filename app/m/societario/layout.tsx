@@ -1,9 +1,11 @@
-import Link from "next/link";
 import "./globals.css";
+import Link from "next/link";
 import { APP_VERSION, isAdmin, isDev } from "@/lib/societario/options";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { AutoSync } from "@/components/societario/AutoSync";
-import ThemeToggleSoc from "@/components/societario/ThemeToggleSoc";
+import SocietarioShell from "@/components/societario/SocietarioShell";
+import AcessoNegado from "@/components/AcessoNegado";
+import { obterNivelAcesso, podeAcessarModulo } from "@/lib/acesso";
 
 export const metadata = {
   title: "Societário | PhD Contábil",
@@ -25,70 +27,26 @@ export default async function SocietarioLayout({
     return <>{children}</>;
   }
 
-  return (
-    <div className="min-h-screen societario-scope">
-      <aside className="fixed top-0 left-0 h-screen w-52 bg-brand-900 text-white flex flex-col z-10">
-        <div className="px-4 py-5 border-b border-white/10 text-center">
-          <div className="text-lg font-bold tracking-tight">Societário</div>
-          <div className="text-[10px] text-white/60">PhD Contábil</div>
-          <div className="text-[9px] text-white/40 mt-1">v{APP_VERSION}</div>
+  // Controle de acesso por setor do Núcleo (Paralegal, T.I. e Diretoria),
+  // além da própria autorização do Societário (usuarios_autorizados) já
+  // checada no middleware. Quem passa no login mas não é do setor liberado
+  // vê o aviso em vez do sistema.
+  const nivel = await obterNivelAcesso(user.email);
+  if (!podeAcessarModulo(nivel, "societario")) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f6f7fb", padding: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start" }}>
+          <AcessoNegado moduloNome="Societário" />
+          <Link href="/" style={{ fontSize: 13, color: "#1f6fa0" }}>← Voltar ao painel</Link>
         </div>
+      </div>
+    );
+  }
 
-        <nav className="flex-1 px-2 py-3 space-y-0.5 text-sm overflow-y-auto">
-          <NavLink href="/m/societario">Dashboard</NavLink>
-          <NavLink href="/m/societario/processos">Processos</NavLink>
-          {admin && (
-            <NavLink href="/m/societario/processos/novo">+ Novo processo</NavLink>
-          )}
-          <NavLink href="/m/societario/empresas">Empresas</NavLink>
-          {admin && (
-            <>
-              <div className="px-2 pt-3 pb-1 text-[9px] text-white/40 uppercase tracking-wider">
-                Cadastros
-              </div>
-              <NavLink href="/m/societario/tipos-processo">Tipos de processo</NavLink>
-              <div className="px-2 pt-3 pb-1 text-[9px] text-white/40 uppercase tracking-wider">
-                Administração
-              </div>
-              <NavLink href="/m/societario/admin/usuarios">Usuários</NavLink>
-            </>
-          )}
-          <div className="px-2 pt-3 pb-1 text-[9px] text-white/40 uppercase tracking-wider">
-            Núcleo Contábil
-          </div>
-          <NavLink href="/">← Voltar ao painel</NavLink>
-        </nav>
-
-        <div className="px-4 py-3 border-t border-white/10">
-          <ThemeToggleSoc />
-          <div className="text-[10px] text-white/50 truncate">{user.email}</div>
-          <div className="text-[9px] text-white/40 mb-1">{roleLabel}</div>
-          <form action="/m/societario/auth/signout" method="post">
-            <button
-              type="submit"
-              className="text-[11px] text-white/70 hover:text-white underline-offset-2 hover:underline"
-            >
-              Sair
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <main className="ml-52 px-8 py-6 overflow-x-auto min-h-screen">
-        {children}
-      </main>
-      <AutoSync />
-    </div>
-  );
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      className="block px-2.5 py-1.5 rounded text-[13px] hover:bg-white/10 transition"
-    >
+    <SocietarioShell admin={admin} userEmail={user.email ?? ""} roleLabel={roleLabel} versao={APP_VERSION}>
       {children}
-    </Link>
+      <AutoSync />
+    </SocietarioShell>
   );
 }

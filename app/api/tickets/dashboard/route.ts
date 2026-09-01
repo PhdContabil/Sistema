@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { listarTicketsDashboard, podeEditarMedicao } from "@/lib/tickets";
+import { listarTicketsDashboard, ehAdminNav } from "@/lib/tickets";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase();
-  if (!email || !(await podeEditarMedicao(email))) {
+  if (!email || !ehAdminNav(email)) {
     return NextResponse.json({ error: "Apenas administradores." }, { status: 403 });
   }
 

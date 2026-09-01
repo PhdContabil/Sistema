@@ -51,25 +51,29 @@ export function TipoBarsChart({ data }: { data: Bucket[] }) {
           >
             <XAxis
               type="number"
-              tick={{ fontSize: 11, fill: "#6b7280" }}
+              tick={{ fontSize: 11, fill: "var(--soc-muted)" }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
               type="category"
               dataKey="short"
-              tick={{ fontSize: 11, fill: "#374151" }}
+              tick={{ fontSize: 11, fill: "var(--soc-text)" }}
               axisLine={false}
               tickLine={false}
               width={140}
             />
             <Tooltip
-              cursor={{ fill: "rgba(124, 58, 237, 0.05)" }}
+              cursor={{ fill: "rgba(124, 58, 237, 0.08)" }}
               contentStyle={{
                 fontSize: 12,
-                border: "1px solid #e5e7eb",
+                background: "var(--soc-card)",
+                color: "var(--soc-text)",
+                border: "1px solid var(--soc-border)",
                 borderRadius: 6,
               }}
+              labelStyle={{ color: "var(--soc-text)" }}
+              itemStyle={{ color: "var(--soc-text)" }}
               formatter={(v: number, _n, p: any) => [v, p.payload.name]}
             />
             <Bar
