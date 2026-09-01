@@ -21,14 +21,13 @@ function anoDe(e: PerfilEmpresa, ano: number): PerfilAno | undefined {
 
 
 /**
- * Mensalidade a exibir no bloco de um ano.
+ * Mensalidade do bloco de um ano — vem direto da API.
  *
- * Para anos fechados vale o honorário vigente em 31/12 daquele ano, como a API
- * entrega. Para o ANO CORRENTE a referência certa é o contrato de hoje — é ele
- * que serve de base para o reajuste, e é o mesmo número da coluna "Atual".
+ * Ano fechado = honorário vigente em 31/12; ano corrente = vigente hoje. Não
+ * corrigimos isso no cliente de propósito: a regra é da API, e duplicá-la aqui
+ * criaria duas verdades que podem divergir sem ninguém perceber.
  */
 function mensalidadeDoAno(e: PerfilEmpresa, ano: number): number | null {
-  if (ano === new Date().getFullYear()) return e.mensalidade?.total ?? null;
   return anoDe(e, ano)?.mensalidade_total ?? null;
 }
 
