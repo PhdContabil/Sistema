@@ -7,12 +7,12 @@
 //    nossa e mora no Supabase, por ano.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Ajuste, Rodada } from "./dissidio-tipos";
+import type { Ajuste, Rodada, MarcadorEmpresa } from "./dissidio-tipos";
 
 export * from "./dissidio-tipos";
 export * from "./dissidio-calculo";
 
-function db(): SupabaseClient | null {
+export function db(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
@@ -77,6 +77,16 @@ export async function salvarAjuste(
     { onConflict: "ano,codigoempresa" }
   );
   return { error: error?.message ?? null };
+}
+
+/** Marcadores permanentes (blacklist / responsável) de todas as empresas. */
+export async function listarMarcadores(): Promise<Map<number, MarcadorEmpresa>> {
+  const sb = db();
+  if (!sb) return new Map();
+  const { data } = await sb.from("dissidio_empresas").select("*");
+  const m = new Map<number, MarcadorEmpresa>();
+  for (const x of (data ?? []) as MarcadorEmpresa[]) m.set(x.codigoempresa, x);
+  return m;
 }
 
 export interface ResumoRodada {

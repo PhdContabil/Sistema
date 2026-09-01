@@ -79,6 +79,26 @@ export interface Rodada {
   atualizada_por?: string | null;
 }
 
+/** Responsáveis pela validação do dissídio. Lista curta e estável. */
+export const RESPONSAVEIS = [
+  { id: "eduardo", nome: "Eduardo" },
+  { id: "edcarlos", nome: "Ed Carlos" },
+  { id: "junior", nome: "Júnior" },
+] as const;
+
+export const RESPONSAVEL_NOME: Record<string, string> =
+  Object.fromEntries(RESPONSAVEIS.map((r) => [r.id, r.nome]));
+
+/** Marcadores permanentes da empresa (não pertencem a uma rodada). */
+export interface MarcadorEmpresa {
+  codigoempresa: number;
+  blacklist: boolean;
+  blacklist_motivo: string | null;
+  responsavel: string | null;
+  atualizado_por: string | null;
+  atualizado_em?: string;
+}
+
 export interface Ajuste {
   ano: number;
   codigoempresa: number;
