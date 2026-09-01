@@ -19,6 +19,19 @@ function anoDe(e: PerfilEmpresa, ano: number): PerfilAno | undefined {
   return e.anos?.find((x: PerfilAno) => x.ano === ano);
 }
 
+
+/**
+ * Mensalidade a exibir no bloco de um ano.
+ *
+ * Para anos fechados vale o honorário vigente em 31/12 daquele ano, como a API
+ * entrega. Para o ANO CORRENTE a referência certa é o contrato de hoje — é ele
+ * que serve de base para o reajuste, e é o mesmo número da coluna "Atual".
+ */
+function mensalidadeDoAno(e: PerfilEmpresa, ano: number): number | null {
+  if (ano === new Date().getFullYear()) return e.mensalidade?.total ?? null;
+  return anoDe(e, ano)?.mensalidade_total ?? null;
+}
+
 /** Estado editável de uma empresa na tela (rascunho, ainda não gravado). */
 interface Rascunho {
   percentual: string;
@@ -295,7 +308,7 @@ export default function AnaliseDissidio({
         const y = anoDe(e, a);
         return [
           y?.faturamento_media_mes ?? "", y?.empregados_media_mes ?? "",
-          y?.horas_media_mes ?? "", y?.mensalidade_total ?? "",
+          y?.horas_media_mes ?? "", mensalidadeDoAno(e, a) ?? "",
         ];
       }),
       base ?? "", calc.percentual ?? "", calc.valorNovo ?? "", calc.diferenca ?? "",
@@ -776,7 +789,10 @@ function LinhaEmpresa({
             </td>,
             <td key={`${a}e`} className="ano num">{formatNum(y?.empregados_media_mes ?? null)}</td>,
             <td key={`${a}h`} className="ano num">{formatNum(y?.horas_media_mes ?? null)}</td>,
-            <td key={`${a}m`} className="ano num">{y?.mensalidade_total ? formatBRL(y.mensalidade_total) : "—"}</td>,
+            <td key={`${a}m`} className="ano num"
+                title={a === new Date().getFullYear() ? "Honorário vigente hoje" : `Vigente em 31/12/${a}`}>
+              {mensalidadeDoAno(e, a) !== null ? formatBRL(mensalidadeDoAno(e, a)) : "—"}
+            </td>,
           ];
         })}
 
@@ -967,7 +983,10 @@ function ModalEmpresa({
                         <td className="num">{y?.faturamento_media_mes ? formatBRL(y.faturamento_media_mes) : "—"}</td>
                         <td className="num">{formatNum(y?.empregados_media_mes ?? null)}</td>
                         <td className="num">{formatNum(y?.horas_media_mes ?? null)}</td>
-                        <td className="num">{y?.mensalidade_total ? formatBRL(y.mensalidade_total) : "—"}</td>
+                        <td className="num"
+                            title={a === new Date().getFullYear() ? "Honorário vigente hoje" : `Vigente em 31/12/${a}`}>
+                          {mensalidadeDoAno(e, a) !== null ? formatBRL(mensalidadeDoAno(e, a)) : "—"}
+                        </td>
                       </tr>
                     );
                   })}
