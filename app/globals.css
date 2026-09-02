@@ -1315,3 +1315,52 @@ html[data-theme="dark"] tr.nao-salvo td { background: #2a2016; }
 .meta-sp .sub { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
 .trilha-item { display: inline-flex; align-items: center; gap: 6px; }
 .trilha-item .sep { color: var(--muted); }
+
+/* ---------- Dissídio: barra compacta e tabela indicador × ano ---------- */
+
+.barra-rodada {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 12px;
+}
+.barra-rodada .com-sufixo input { width: 70px; }
+.btn.on-obs { border-color: var(--marca); color: var(--marca); }
+
+/* Totais em linha, no lugar dos cartões grandes que ocupavam meia tela. */
+.mini-totais {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+  margin-left: auto; font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.mini-totais span { white-space: nowrap; }
+.mini-totais em {
+  font-style: normal; color: var(--muted); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .05em; margin-right: 4px;
+}
+.mini-totais .positivo { color: var(--ok); }
+
+/* Tabela mais densa: sobra largura para o nome da empresa. */
+table.grid.compacta th, table.grid.compacta td {
+  padding: 5px 7px; font-size: 12px;
+}
+table.grid.compacta td.col-empresa { min-width: 260px; max-width: 320px; }
+table.grid.compacta .emp-nome, table.grid.compacta .link-empresa { font-size: 12.5px; }
+table.grid.compacta .cnpj { font-size: 10.5px; }
+table.grid.compacta th.sub-ano { font-size: 10.5px; font-weight: 500; }
+table.grid.compacta .mini-col { width: 62px; text-align: center; }
+table.grid.compacta input.mini { width: 60px; padding: 2px 4px; font-size: 11.5px; }
+table.grid.compacta .mini-sel { max-width: 74px; font-size: 11px; padding: 2px 3px; }
+table.grid.compacta td.ano { min-width: 74px; }
+table.grid.compacta td.reaj { color: var(--marca); font-weight: 500; }
+html[data-theme="dark"] table.grid.compacta td.reaj { color: var(--marca-clara); }
+
+/* Bloco de indicador: separa visualmente um grupo de anos do seguinte. */
+table.grid.dissidio thead tr:first-child th.ano { border-left: 2px solid var(--border); }
+table.grid.dissidio tbody td.ano:nth-child(3n+1) { border-left: 1px solid var(--border); }
+
+tr.definida td.col-empresa { border-left: 3px solid var(--ok); }
+.tag-grupo-linha {
+  margin-left: 6px; font-size: 9.5px; font-weight: 600; letter-spacing: .03em;
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--accent-soft); color: var(--marca);
+}
+html[data-theme="dark"] .tag-grupo-linha { color: var(--text); }

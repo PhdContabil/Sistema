@@ -98,6 +98,40 @@ export async function listarMarcadores(): Promise<Map<number, MarcadorEmpresa>> 
   return m;
 }
 
+/**
+ * Reajuste aplicado em cada ano, por empresa — alimenta o indicador de
+ * variação ano a ano na tabela. Vem do nosso histórico de rodadas, não da API.
+ */
+export async function percentuaisPorAno(
+  anos: number[]
+): Promise<Map<number, Record<number, number>>> {
+  const sb = db();
+  if (!sb || anos.length === 0) return new Map();
+
+  const { data } = await sb
+    .from("dissidio_ajustes")
+    .select("ano,codigoempresa,percentual,valor_novo,valor_base,origem")
+    .in("ano", anos);
+
+  const m = new Map<number, Record<number, number>>();
+  for (const a of (data ?? []) as Ajuste[]) {
+    const base = Number(a.valor_base ?? 0);
+    // Quem informou valor tem o percentual derivado da base congelada.
+    const pct =
+      a.percentual !== null
+        ? Number(a.percentual)
+        : a.valor_novo !== null && base > 0
+          ? ((Number(a.valor_novo) - base) / base) * 100
+          : null;
+    if (pct === null) continue;
+
+    const atual = m.get(a.codigoempresa) ?? {};
+    atual[a.ano] = Math.round(pct * 100) / 100;
+    m.set(a.codigoempresa, atual);
+  }
+  return m;
+}
+
 export interface ResumoRodada {
   ano: number;
   percentual_geral: number;

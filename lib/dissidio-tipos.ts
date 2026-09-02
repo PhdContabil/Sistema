@@ -93,6 +93,8 @@ export const RESPONSAVEL_NOME: Record<string, string> =
 export interface MarcadorEmpresa {
   codigoempresa: number;
   blacklist: boolean;
+  /** Grupo econômico, derivado das pastas do SharePoint. */
+  grupo?: string | null;
   blacklist_motivo: string | null;
   responsavel: string | null;
   atualizado_por: string | null;
@@ -108,6 +110,8 @@ export interface Ajuste {
   origem: "percentual" | "valor";
   /** true = valor definido para esta empresa; false = derivado do percentual geral. */
   individual?: boolean;
+  /** Análise concluída para esta empresa nesta rodada (marcado como OK). */
+  definido?: boolean;
   observacao: string | null;
   analisado_por: string | null;
   analisado_em: string;

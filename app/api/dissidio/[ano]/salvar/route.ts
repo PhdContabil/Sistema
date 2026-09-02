@@ -15,6 +15,7 @@ interface LinhaEnviada {
   blacklist?: boolean;
   blacklist_motivo?: string | null;
   responsavel?: string | null;
+  definido?: boolean;
   visto_em?: string | null;
 }
 
@@ -135,7 +136,7 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
 
         // Limpou os dois campos e não escreveu observação: volta a seguir o
         // percentual geral — a linha é recriada no passo 2.
-        if (!temPct && !temVal && !l.observacao) {
+        if (!temPct && !temVal && !l.observacao && !l.definido) {
           paraApagar.push(cod);
         } else {
           const base = l.valor_base ?? null;
@@ -150,6 +151,7 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
             valor_base: base,
             origem: v !== null ? "valor" : "percentual",
             individual: temPct || temVal,
+            definido: l.definido ?? false,
             observacao: l.observacao ?? null,
             analisado_por: email,
             analisado_em: agora,
@@ -187,9 +189,15 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
   try {
     const perfil = await getPerfilEmpresas({ anos: [Math.min(ano, new Date().getFullYear())] });
 
+    // Preserva tanto decisão individual quanto empresa já marcada como OK —
+    // regravar pela regra geral apagaria o "definido" de quem já foi analisado.
     const { data: individuais } = await sb
-      .from("dissidio_ajustes").select("codigoempresa").eq("ano", ano).eq("individual", true);
-    const temDecisao = new Set((individuais ?? []).map((x: { codigoempresa: number }) => x.codigoempresa));
+      .from("dissidio_ajustes").select("codigoempresa,individual,definido").eq("ano", ano);
+    const temDecisao = new Set(
+      (individuais ?? [])
+        .filter((x: { individual: boolean; definido: boolean }) => x.individual || x.definido)
+        .map((x: { codigoempresa: number }) => x.codigoempresa)
+    );
 
     const lote = (perfil.dados ?? [])
       .filter((e) => !temDecisao.has(e.codigoempresa))
