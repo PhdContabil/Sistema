@@ -64,6 +64,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Conciliação de honorários, contas e fluxo de caixa.",
     apps: [
       { name: "Conciliação de Honorários", desc: "Honorários contratados x movimento real de cada setor.", href: "/m/financeiro/conciliacao" },
+      { name: "Análise de Dissídio", desc: "Perfil das empresas por ano e simulação do reajuste anual.", href: "/m/financeiro/dissidio" },
       { name: "Contas a Pagar", desc: "Gestão de fornecedores e agenda de pagamentos." },
       { name: "Contas a Receber", desc: "Controle de recebimentos e inadimplência." },
       { name: "Fluxo de Caixa", desc: "Projeção de entradas e saídas por período." },
