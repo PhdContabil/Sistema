@@ -6,7 +6,7 @@ import AppIcon from "@/components/AppIcon";
 import ModuloIcon from "@/components/ModuloIcon";
 import AcessoNegado from "@/components/AcessoNegado";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { obterNivelAcesso, podeAcessarModulo, podeAcessarAppTecnologia } from "@/lib/acesso";
+import { obterNivelAcesso, podeAcessarModulo, podeAcessarAppTecnologia, podeAcessarApp } from "@/lib/acesso";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,11 @@ export default async function ModuloPage({ params }: { params: { modulo: string 
             {m.apps.map((a) => {
               // Dentro de Tecnologia e Inovação, quem não é T.I./Diretoria só
               // acessa o sistema de Tickets — o resto aparece, mas bloqueado.
-              const appLiberado = m.id !== "tecnologia" || podeAcessarAppTecnologia(nivel, a.href);
+              // Nos demais módulos, só é restrito se houver um override
+              // individual bloqueando esse app específico.
+              const appLiberado = m.id === "tecnologia"
+                ? podeAcessarAppTecnologia(nivel, a.href)
+                : podeAcessarApp(nivel, m.id, a.name);
               const inner = (
                 <>
                   <div className="app-ic-sm" style={{ color: m.color }}><AppIcon nome={a.name} /></div>

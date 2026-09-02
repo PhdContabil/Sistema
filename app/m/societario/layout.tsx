@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { AutoSync } from "@/components/societario/AutoSync";
 import SocietarioShell from "@/components/societario/SocietarioShell";
 import AcessoNegado from "@/components/AcessoNegado";
-import { obterNivelAcesso, podeAcessarModulo } from "@/lib/acesso";
+import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 
 export const metadata = {
   title: "Societário | PhD Contábil",
@@ -30,9 +30,11 @@ export default async function SocietarioLayout({
   // Controle de acesso por setor do Núcleo (Paralegal, T.I. e Diretoria),
   // além da própria autorização do Societário (usuarios_autorizados) já
   // checada no middleware. Quem passa no login mas não é do setor liberado
-  // vê o aviso em vez do sistema.
+  // vê o aviso em vez do sistema. Societário é o submódulo "Societário"
+  // dentro de Paralegal (ver lib/modules.ts) — respeita também overrides
+  // individuais definidos em /m/tecnologia/usuarios.
   const nivel = await obterNivelAcesso(user.email);
-  if (!podeAcessarModulo(nivel, "societario")) {
+  if (!podeAcessarApp(nivel, "paralegal", "Societário")) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f6f7fb", padding: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start" }}>

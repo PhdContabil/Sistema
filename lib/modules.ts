@@ -75,6 +75,7 @@ export const MODULES: ModuleDef[] = [
     id: "paralegal", name: "Paralegal", initials: "PL", color: "#7a5fc0",
     desc: "Certidões, processos, prazos e gestão documental.",
     apps: [
+      { name: "Societário", desc: "Processos societários, empresas e atos societários — migrado do Societário PHD.", href: "/m/societario" },
       { name: "Certidões", desc: "Emissão e monitoramento de regularidade." },
       { name: "Processos", desc: "Acompanhamento de andamentos e diligências." },
       { name: "Prazos", desc: "Agenda de vencimentos e alertas." },
@@ -105,18 +106,6 @@ export const MODULES: ModuleDef[] = [
       { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados." },
       { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis e quem tem acesso." },
       { name: "Base de Conhecimento", desc: "Tutoriais e procedimentos de TI para o time." },
-    ],
-  },
-  {
-    id: "societario", name: "Societário", initials: "SO", color: "#c4483f",
-    desc: "Processos societários, empresas e atos societários — migrado do Societário PHD.",
-    apps: [
-      { name: "Dashboard", desc: "Visão geral, indicadores e atividade recente dos processos.", href: "/m/societario" },
-      { name: "Processos", desc: "Listagem com filtros, detalhe e atividades de cada processo.", href: "/m/societario/processos" },
-      { name: "Novo processo", desc: "Abertura de novo processo societário com atividades.", href: "/m/societario/processos/novo" },
-      { name: "Empresas", desc: "Empresas com processos abertos e concluídos.", href: "/m/societario/empresas" },
-      { name: "Tipos de processo", desc: "Cadastro dos tipos de processo (admin).", href: "/m/societario/tipos-processo" },
-      { name: "Usuários", desc: "Gestão de usuários autorizados no módulo (admin).", href: "/m/societario/admin/usuarios" },
     ],
   },
 ];

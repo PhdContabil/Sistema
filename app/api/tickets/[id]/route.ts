@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { ticketsDb, detalheTicket, ehStatus, ehPrioridade, podeEditarMedicao, podeVerMedicao, SETOR_NOME } from "@/lib/tickets";
+import { ticketsDb, detalheTicket, ehStatus, ehPrioridade, podeVerMedicao, SETOR_NOME } from "@/lib/tickets";
 import { sendTeamsNotification, sendFinalizedNotification } from "@/lib/teams";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
@@ -176,14 +176,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return NextResponse.json({ ok: true });
 }
 
-/** Exclui o ticket e tudo que depende dele. Só admin ou sub-admin. */
+/** Exclui o ticket e tudo que depende dele. Qualquer pessoa com acesso a Tickets. */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase();
   if (!email) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  if (!(await podeEditarMedicao(email))) {
-    return NextResponse.json({ error: "Só administradores podem excluir tickets." }, { status: 403 });
-  }
 
   const db = ticketsDb();
   if (!db) return NextResponse.json({ error: "Banco de tickets não configurado." }, { status: 500 });

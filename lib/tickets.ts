@@ -385,6 +385,78 @@ export async function removerUsuario(email: string): Promise<string | null> {
   return null;
 }
 
+// ---------------------------------------------------------------- permissões por módulo/app (T.I./Diretoria)
+
+/** "liberado"/"bloqueado" — não existe linha para "herdado" (é o padrão do setor). */
+export type NivelPermissao = "liberado" | "bloqueado";
+
+export interface OverridePermissao {
+  modulo_id: string;
+  /** null = override do módulo inteiro; preenchido = override de um app/submódulo específico. */
+  app_nome: string | null;
+  nivel: NivelPermissao;
+}
+
+/** Todos os overrides de uma pessoa, já no formato usado pela tela (módulos + apps). */
+export async function listarPermissoesPessoa(email: string): Promise<{
+  modulos: Record<string, NivelPermissao>;
+  apps: Record<string, Record<string, NivelPermissao>>;
+}> {
+  const vazio = { modulos: {}, apps: {} };
+  const db = ticketsDb();
+  if (!db) return vazio;
+  const { data, error } = await db
+    .from("ticket_user_permissoes")
+    .select("modulo_id,app_nome,nivel")
+    .ilike("email", email.trim());
+  if (error || !data) return vazio;
+
+  const modulos: Record<string, NivelPermissao> = {};
+  const apps: Record<string, Record<string, NivelPermissao>> = {};
+  for (const row of data as { modulo_id: string; app_nome: string | null; nivel: NivelPermissao }[]) {
+    if (row.app_nome) {
+      apps[row.modulo_id] = { ...(apps[row.modulo_id] ?? {}), [row.app_nome]: row.nivel };
+    } else {
+      modulos[row.modulo_id] = row.nivel;
+    }
+  }
+  return { modulos, apps };
+}
+
+/** Substitui, de uma vez, todos os overrides da pessoa pelo conjunto atual da tela. */
+export async function salvarPermissoesPessoa(
+  email: string,
+  overrides: { modulos: Record<string, NivelPermissao>; apps: Record<string, Record<string, NivelPermissao>> }
+): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco não configurado.";
+  const e = email.trim().toLowerCase();
+  if (!e || !e.includes("@")) return "E-mail inválido.";
+
+  // "herdado" nunca vira linha no banco (é o padrão, ausência de override) —
+  // só liberado/bloqueado são persistidos; qualquer outro valor é ignorado.
+  const ehValido = (n: string): n is NivelPermissao => n === "liberado" || n === "bloqueado";
+
+  const linhas: { email: string; modulo_id: string; app_nome: string | null; nivel: NivelPermissao }[] = [];
+  for (const [moduloId, nivel] of Object.entries(overrides.modulos)) {
+    if (ehValido(nivel)) linhas.push({ email: e, modulo_id: moduloId, app_nome: null, nivel });
+  }
+  for (const [moduloId, apps] of Object.entries(overrides.apps)) {
+    for (const [appNome, nivel] of Object.entries(apps)) {
+      if (ehValido(nivel)) linhas.push({ email: e, modulo_id: moduloId, app_nome: appNome, nivel });
+    }
+  }
+
+  const { error: erroDelete } = await db.from("ticket_user_permissoes").delete().ilike("email", e);
+  if (erroDelete) return erroDelete.message;
+
+  if (linhas.length > 0) {
+    const { error: erroInsert } = await db.from("ticket_user_permissoes").insert(linhas);
+    if (erroInsert) return erroInsert.message;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------- dashboard (log + filtros)
 
 export interface FiltroDashboard {

@@ -411,19 +411,17 @@ function DetalheTicket({
             <h2 className="text-xl font-bold">{t.title}</h2>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {souAdmin && (
-              <button
-                onClick={excluir}
-                disabled={salvando}
-                aria-label="Excluir ticket"
-                title="Excluir ticket"
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center justify-center disabled:opacity-40"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
-                </svg>
-              </button>
-            )}
+            <button
+              onClick={excluir}
+              disabled={salvando}
+              aria-label="Excluir ticket"
+              title="Excluir ticket"
+              className="w-8 h-8 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center justify-center disabled:opacity-40"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
+              </svg>
+            </button>
             <button
               onClick={onFechar}
               aria-label="Fechar"
