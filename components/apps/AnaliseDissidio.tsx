@@ -2,13 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { calcular, formatBRL, formatNum, formatPct, formatCNPJ } from "@/lib/dissidio-calculo";
+import { calcular, variacaoMensalidade, formatBRL, formatNum, formatPct, formatCNPJ } from "@/lib/dissidio-calculo";
 import { formatDataHora, agoraFormatado } from "@/lib/datas";
 import {
   RESPONSAVEIS, RESPONSAVEL_NOME,
   type PerfilEmpresa, type PerfilServico, type PerfilAno,
   type Rodada, type Ajuste, type MarcadorEmpresa,
 } from "@/lib/dissidio-tipos";
+
+interface PreviaGrupos {
+  casados: { codigoempresa: number; nome: string | null; grupo: string; pasta: string;
+             confianca: "codigo" | "exata" | "provavel" }[];
+  ambiguas: { pasta: string; grupo: string; candidatos: number[] }[];
+  pastasSemEmpresa: { pasta: string; grupo: string }[];
+  totalPastas?: number;
+}
 
 type Situacao = "todas" | "ajustadas" | "pendentes" | "sem_mensalidade" | "ok" | "falta_definir";
 type Ordenar =
@@ -29,6 +37,15 @@ function mensalidadeDoAno(e: PerfilEmpresa, ano: number): number | null {
   return anoDe(e, ano)?.mensalidade_total ?? null;
 }
 
+/**
+ * Reajuste que a empresa levou em um ano: variação da própria mensalidade
+ * contra a do ano anterior. Lê do contrato, não das rodadas salvas aqui — por
+ * isso enxerga também os anos anteriores ao sistema existir.
+ */
+function reajusteDoAno(e: PerfilEmpresa, a: number): number | null {
+  return variacaoMensalidade(mensalidadeDoAno(e, a), mensalidadeDoAno(e, a - 1));
+}
+
 /** Estado editável de uma empresa na tela (rascunho, ainda não gravado). */
 interface Rascunho {
   percentual: string;
@@ -37,6 +54,7 @@ interface Rascunho {
   blacklist: boolean;
   blacklist_motivo: string;
   responsavel: string;
+  grupo: string;
   definido: boolean;
   /** `analisado_em` que veio do servidor — detecta edição simultânea. */
   visto_em: string | null;
@@ -50,6 +68,7 @@ function rascunhoDe(aj: Ajuste | undefined, mk: MarcadorEmpresa | undefined): Ra
     blacklist: mk?.blacklist ?? false,
     blacklist_motivo: mk?.blacklist_motivo ?? "",
     responsavel: mk?.responsavel ?? "",
+    grupo: mk?.grupo ?? "",
     definido: aj?.definido ?? false,
     visto_em: aj?.analisado_em ?? null,
   };
@@ -65,15 +84,13 @@ const INDICADORES = [
 ] as const;
 
 export default function AnaliseDissidio({
-  ano, anosDisponiveis, anosComparados, anosDetalhe, reajustes, empresas, rodada,
+  ano, anosDisponiveis, anosComparados, anosDetalhe, empresas, rodada,
   ajustesIniciais, marcadoresIniciais, meuEmail, erroServidor,
 }: {
   ano: number;
   anosDisponiveis: number[];
   anosComparados: number[];
   anosDetalhe: number[];
-  /** codigoempresa -> { ano: percentual aplicado } */
-  reajustes: Record<number, Record<number, number>>;
   empresas: PerfilEmpresa[];
   rodada: Rodada | null;
   ajustesIniciais: Ajuste[];
@@ -117,6 +134,8 @@ export default function AnaliseDissidio({
   const [aberta, setAberta] = useState<number | null>(null);
   const [confirmar, setConfirmar] = useState(false);
   const [obsAberta, setObsAberta] = useState(false);
+  const [previa, setPrevia] = useState<PreviaGrupos | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
   const [conflitos, setConflitos] = useState<{ codigoempresa: number; por: string | null; em: string }[]>([]);
 
   const percentualGeral = Number(String(percGeral).replace(",", ".")) || 0;
@@ -164,10 +183,15 @@ export default function AnaliseDissidio({
       .sort((a, b) => a.localeCompare(b, "pt-BR")),
     [empresas]
   );
+  // Inclui o que ainda está em rascunho: quem acabou de digitar um grupo novo
+  // precisa conseguir filtrar por ele antes de salvar.
   const listaGrupos = useMemo(
-    () => [...new Set(marcadoresIniciais.map((m) => m.grupo).filter(Boolean) as string[])]
+    () => [...new Set([
+      ...marcadoresIniciais.map((m) => m.grupo),
+      ...[...rascunhos.values()].map((r) => r.grupo),
+    ].map((g) => (g ?? "").trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [marcadoresIniciais]
+    [marcadoresIniciais, rascunhos]
   );
 
   /** Faixas de percentual — filtrar por valor exato seria inútil com decimais. */
@@ -179,6 +203,47 @@ export default function AnaliseDissidio({
     { id: "acima8", nome: "Acima de 8%", testa: (p: number | null) => p !== null && p > 8 },
     { id: "negativo", nome: "Redução (negativo)", testa: (p: number | null) => p !== null && p < 0 },
   ], []);
+
+  /**
+   * Traz as pastas do SharePoint e mostra o que casaria — sem gravar nada.
+   * Gravar direto seria arriscado: o casamento por nome pode errar, e é justo
+   * esse subconjunto que a pessoa precisa olhar antes de aceitar.
+   */
+  async function verGrupos() {
+    setSincronizando(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/dissidio/grupos", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "Falha ao ler as pastas do SharePoint.");
+      setPrevia(j as PreviaGrupos);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao ler as pastas.");
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
+  async function aplicarGrupos(incluirProvaveis: boolean) {
+    setSincronizando(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/dissidio/grupos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ incluirProvaveis }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "Falha ao gravar os grupos.");
+      setPrevia(null);
+      setAviso(`${j.gravados} empresa(s) com grupo definido.`);
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao gravar os grupos.");
+    } finally {
+      setSincronizando(false);
+    }
+  }
 
   async function patch(corpo: Record<string, unknown>) {
     setSalvando(true);
@@ -214,6 +279,7 @@ export default function AnaliseDissidio({
         blacklist: r.blacklist,
         blacklist_motivo: r.blacklist_motivo || null,
         responsavel: r.responsavel || null,
+        grupo: r.grupo.trim() || null,
         definido: r.definido,
         visto_em: r.visto_em,
       }));
@@ -267,7 +333,7 @@ export default function AnaliseDissidio({
             : undefined;
         return {
           e, st, base, aj: virtual, gravado: aj,
-          grupo: mk?.grupo ?? null,
+          grupo: st.grupo.trim() || null,
           sujo: rascunhos.has(e.codigoempresa),
           calc: calcular(base, percentualGeral, virtual),
         };
@@ -367,7 +433,7 @@ export default function AnaliseDissidio({
       ...anosComparados.map((a) => anoDe(e, a)?.empregados_media_mes ?? ""),
       ...anosComparados.map((a) => anoDe(e, a)?.horas_media_mes ?? ""),
       ...anosComparados.map((a) => mensalidadeDoAno(e, a) ?? ""),
-      ...anosComparados.map((a) => reajustes[e.codigoempresa]?.[a] ?? ""),
+      ...anosComparados.map((a) => reajusteDoAno(e, a) ?? ""),
       base ?? "", calc.percentual ?? "", calc.valorNovo ?? "", calc.diferenca ?? "",
       calc.individual ? "Sim" : "Não", st.observacao,
       gravado?.analisado_por ?? "",
@@ -462,6 +528,10 @@ export default function AnaliseDissidio({
           {salvando ? "Salvando…" : temPendencia ? `Salvar versão (${pendentes})` : "Tudo salvo"}
         </button>
         <a className="btn" href="/m/financeiro/dissidio/historico">Histórico</a>
+        <button className="btn" onClick={verGrupos} disabled={sincronizando}
+                title="Lê as pastas do SharePoint e casa pelo código da empresa">
+          {sincronizando ? "Lendo…" : "⟳ Grupos"}
+        </button>
         <button className="btn" onClick={exportar}>↓ Excel</button>
       </div>
 
@@ -537,7 +607,6 @@ export default function AnaliseDissidio({
                 key={e.codigoempresa}
                 e={e} st={st} base={base} calc={calc} sujo={sujo} grupo={grupo}
                 anos={anosComparados}
-                reajustesEmpresa={reajustes[e.codigoempresa] ?? {}}
                 salvando={salvando}
                 onAbrir={() => setAberta(e.codigoempresa)}
                 onEditar={(campos) => editar(e.codigoempresa, campos)}
@@ -556,8 +625,7 @@ export default function AnaliseDissidio({
         return (
           <ModalEmpresa
             e={alvo.e} st={alvo.st} base={alvo.base} calc={alvo.calc} gravado={alvo.gravado}
-            grupo={alvo.grupo} anos={anosDetalhe}
-            reajustesEmpresa={reajustes[alvo.e.codigoempresa] ?? {}}
+            grupo={alvo.grupo} anos={anosDetalhe} grupos={listaGrupos}
             salvando={salvando}
             onFechar={() => setAberta(null)}
             onEditar={(campos) => editar(alvo.e.codigoempresa, campos)}
@@ -575,6 +643,87 @@ export default function AnaliseDissidio({
           </span>
           <button className="btn" onClick={() => setPagina(paginaAtual + 1)} disabled={paginaAtual === totalPaginas}>Próxima ›</button>
           <button className="btn" onClick={() => setPagina(totalPaginas)} disabled={paginaAtual === totalPaginas}>Última »</button>
+        </div>
+      )}
+
+      {previa && (
+        <div className="modal-bg" onClick={() => setPrevia(null)}>
+          <div className="modal estreito" onClick={(ev) => ev.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <div className="tk-crumbs">SharePoint · /sites/Empresas</div>
+                <h2>Sincronizar grupos econômicos</h2>
+              </div>
+              <button className="btn icon" onClick={() => setPrevia(null)} aria-label="Fechar">✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="nota">
+                O grupo não existe no Questor — está na estrutura de pastas do SharePoint. Cada pasta
+                dentro de um <strong>GRUPO X</strong> vira o grupo da empresa correspondente.
+              </p>
+              <div className="medicao">
+                <div className="med destaque">
+                  <div className="k">Pelo código</div>
+                  <div className="v">{previa.casados.filter((c) => c.confianca === "codigo").length}</div>
+                  <div className="ajuda">a pasta começa com o código da empresa</div>
+                </div>
+                <div className="med">
+                  <div className="k">Nome idêntico</div>
+                  <div className="v">{previa.casados.filter((c) => c.confianca === "exata").length}</div>
+                </div>
+                <div className="med">
+                  <div className="k">Prováveis</div>
+                  <div className="v">{previa.casados.filter((c) => c.confianca === "provavel").length}</div>
+                  <div className="ajuda">só pelo começo do nome</div>
+                </div>
+                <div className="med">
+                  <div className="k">Sem casar</div>
+                  <div className="v">{previa.ambiguas.length + previa.pastasSemEmpresa.length}</div>
+                  <div className="ajuda">de {previa.totalPastas ?? 0} pastas</div>
+                </div>
+              </div>
+
+              {previa.casados.length > 0 && (
+                <>
+                  <h3>O que será gravado</h3>
+                  <div className="table-wrap" style={{ maxHeight: 260 }}>
+                    <table className="grid mini-perfil">
+                      <thead>
+                        <tr><th>Pasta</th><th>Empresa</th><th>Grupo</th><th>Casou por</th></tr>
+                      </thead>
+                      <tbody>
+                        {previa.casados.slice(0, 300).map((c) => (
+                          <tr key={`${c.codigoempresa}-${c.pasta}`}>
+                            <td>{c.pasta}</td>
+                            <td>{c.nome ?? `#${c.codigoempresa}`}</td>
+                            <td>{c.grupo}</td>
+                            <td>{c.confianca}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {previa.ambiguas.length > 0 && (
+                <p className="nota">
+                  {previa.ambiguas.length} pasta(s) batem com mais de uma empresa e ficam de fora —
+                  casar errado colocaria a empresa no grupo do vizinho. Dá para definir o grupo dessas
+                  na mão, no detalhe da empresa.
+                </p>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setPrevia(null)}>Cancelar</button>
+              <button className="btn" disabled={sincronizando} onClick={() => aplicarGrupos(true)}>
+                Gravar incluindo os prováveis
+              </button>
+              <button className="btn primary" disabled={sincronizando} onClick={() => aplicarGrupos(false)}>
+                {sincronizando ? "Gravando…" : "Gravar só os seguros"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -763,7 +912,7 @@ function TabelaComRolagemNoTopo({ children }: { children: React.ReactNode }) {
 /* ---------------------------------------------------------------- linha */
 
 function LinhaEmpresa({
-  e, st, base, calc, sujo, grupo, anos, reajustesEmpresa, salvando, onAbrir, onEditar,
+  e, st, base, calc, sujo, grupo, anos, salvando, onAbrir, onEditar,
 }: {
   e: PerfilEmpresa;
   st: Rascunho;
@@ -772,7 +921,6 @@ function LinhaEmpresa({
   sujo: boolean;
   grupo: string | null;
   anos: number[];
-  reajustesEmpresa: Record<number, number>;
   salvando: boolean;
   onAbrir: () => void;
   onEditar: (campos: Partial<Rascunho>) => void;
@@ -790,8 +938,8 @@ function LinhaEmpresa({
       const v = mensalidadeDoAno(e, a);
       conteudo = v !== null ? formatBRL(v) : "—";
     } else if (ind === "reajuste") {
-      const p = reajustesEmpresa[a];
-      conteudo = p === undefined ? "—" : formatPct(p);
+      const p = reajusteDoAno(e, a);
+      conteudo = p === null ? "—" : formatPct(p);
     }
 
     return (
@@ -855,7 +1003,7 @@ function LinhaEmpresa({
 /* ------------------------------------------------------- modal da empresa */
 
 function ModalEmpresa({
-  e, st, base, calc, gravado, grupo, anos, reajustesEmpresa, salvando, onFechar, onEditar,
+  e, st, base, calc, gravado, grupo, anos, grupos, salvando, onFechar, onEditar,
 }: {
   e: PerfilEmpresa;
   st: Rascunho;
@@ -864,7 +1012,7 @@ function ModalEmpresa({
   gravado: Ajuste | undefined;
   grupo: string | null;
   anos: number[];
-  reajustesEmpresa: Record<number, number>;
+  grupos: string[];
   salvando: boolean;
   onFechar: () => void;
   onEditar: (campos: Partial<Rascunho>) => void;
@@ -901,6 +1049,9 @@ function ModalEmpresa({
               <h2>{e.nome ?? `Empresa #${e.codigoempresa}`}</h2>
             </div>
             <button className="btn icon" onClick={onFechar} aria-label="Fechar">✕</button>
+            <datalist id="lista-grupos">
+              {grupos.map((g) => <option key={g} value={g} />)}
+            </datalist>
           </div>
 
           <div className="modal-body">
@@ -957,6 +1108,21 @@ function ModalEmpresa({
               o percentual geral da rodada.
             </p>
 
+            <h3>Grupo econômico</h3>
+            <label className="campo-inline larga">
+              <span>Grupo</span>
+              <input
+                list="lista-grupos" value={st.grupo} disabled={salvando}
+                onChange={(ev) => onEditar({ grupo: ev.target.value })}
+                placeholder="Ex.: GRUPO LBF — em branco, a empresa fica sem grupo."
+              />
+            </label>
+            <p className="nota">
+              Pertence à <strong>empresa</strong>, não à rodada. A sincronização com as pastas do
+              SharePoint preenche este campo automaticamente; aqui dá para corrigir ou criar um grupo
+              que ainda não existe lá.
+            </p>
+
             <h3>Cliente complexo (blacklist)</h3>
             <label className="check-linha">
               <input
@@ -1004,6 +1170,7 @@ function ModalEmpresa({
                     <th className="num">Empregados</th>
                     <th className="num">Horas/mês</th>
                     <th className="num">Mensalidade</th>
+                    <th className="num">Reajuste</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1022,6 +1189,9 @@ function ModalEmpresa({
                         <td className="num"
                             title={a === new Date().getFullYear() ? "Honorário vigente hoje" : `Vigente em 31/12/${a}`}>
                           {mensalidadeDoAno(e, a) !== null ? formatBRL(mensalidadeDoAno(e, a)) : "—"}
+                        </td>
+                        <td className="num reaj" title="Variação sobre a mensalidade do ano anterior">
+                          {reajusteDoAno(e, a) === null ? "—" : formatPct(reajusteDoAno(e, a))}
                         </td>
                       </tr>
                     );

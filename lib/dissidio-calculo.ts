@@ -84,3 +84,23 @@ export function formatCNPJ(c: string | null | undefined): string {
   if (d.length !== 14) return c;
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
+
+/**
+ * Variação da mensalidade de um ano para o anterior, em %.
+ *
+ * É o reajuste que a empresa efetivamente levou, medido pelo próprio contrato:
+ * compara o honorário vigente no fim de cada ano. Antes eu lia isso das rodadas
+ * salvas aqui, o que só funcionaria para anos já analisados no sistema — e
+ * deixava a coluna vazia. O contrato conta a história toda, inclusive dos anos
+ * anteriores ao Núcleo existir.
+ */
+export function variacaoMensalidade(
+  atual: number | null | undefined,
+  anterior: number | null | undefined
+): number | null {
+  if (atual === null || atual === undefined) return null;
+  if (anterior === null || anterior === undefined) return null;
+  // Sem base não há percentual: sair de 0 para qualquer valor é infinito.
+  if (anterior <= 0) return null;
+  return arredondar(((atual - anterior) / anterior) * 100, 2);
+}

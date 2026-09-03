@@ -1364,3 +1364,8 @@ tr.definida td.col-empresa { border-left: 3px solid var(--ok); }
   background: var(--accent-soft); color: var(--marca);
 }
 html[data-theme="dark"] .tag-grupo-linha { color: var(--text); }
+
+/* Prévia da sincronização de grupos: diálogo mais estreito que o da empresa. */
+.modal.estreito { max-width: 720px; }
+.modal.estreito .table-wrap { overflow: auto; }
+.modal.estreito .grid td:last-child { color: var(--muted); font-size: 12px; }

@@ -82,3 +82,37 @@ test("ajuste marcado como valor mas sem valor cai no percentual dele", () => {
   assert.equal(r.percentual, 4);
   assert.equal(r.valorNovo, 1040);
 });
+
+// ------------------------------------------- variação da mensalidade
+
+import { variacaoMensalidade } from "./dissidio-calculo.ts";
+
+test("variação positiva entre anos", () => {
+  assert.equal(variacaoMensalidade(1050, 1000), 5);
+});
+
+test("variação negativa", () => {
+  assert.equal(variacaoMensalidade(900, 1000), -10);
+});
+
+test("sem mudança dá zero, não vazio", () => {
+  assert.equal(variacaoMensalidade(1000, 1000), 0);
+});
+
+test("sem ano anterior não inventa percentual", () => {
+  assert.equal(variacaoMensalidade(1000, null), null);
+  assert.equal(variacaoMensalidade(1000, undefined), null);
+});
+
+test("base zero não vira infinito", () => {
+  assert.equal(variacaoMensalidade(500, 0), null);
+});
+
+test("ano atual sem mensalidade fica vazio", () => {
+  assert.equal(variacaoMensalidade(null, 1000), null);
+});
+
+test("arredonda para duas casas", () => {
+  assert.equal(variacaoMensalidade(1077, 1000), 7.7);
+  assert.equal(variacaoMensalidade(1033.33, 1000), 3.33);
+});

@@ -15,6 +15,7 @@ interface LinhaEnviada {
   blacklist?: boolean;
   blacklist_motivo?: string | null;
   responsavel?: string | null;
+  grupo?: string | null;
   definido?: boolean;
   visto_em?: string | null;
 }
@@ -159,12 +160,14 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
         }
       }
 
-      if (l.blacklist !== undefined || l.responsavel !== undefined || l.blacklist_motivo !== undefined) {
+      if (l.blacklist !== undefined || l.responsavel !== undefined
+          || l.blacklist_motivo !== undefined || l.grupo !== undefined) {
         paraMarcador.push({
           codigoempresa: cod,
           blacklist: l.blacklist ?? false,
           blacklist_motivo: l.blacklist_motivo ?? null,
           responsavel: l.responsavel || null,
+          grupo: l.grupo ? String(l.grupo).trim().toUpperCase() : null,
           atualizado_por: email,
           atualizado_em: agora,
         });

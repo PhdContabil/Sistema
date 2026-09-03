@@ -4,7 +4,7 @@ import AnaliseDissidio from "@/components/apps/AnaliseDissidio";
 import { getModule } from "@/lib/modules";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { getPerfilEmpresas, hasApiKey } from "@/lib/questor";
-import { obterRodada, listarAjustes, listarMarcadores, percentuaisPorAno,
+import { obterRodada, listarAjustes, listarMarcadores,
   type PerfilEmpresa, type Rodada, type Ajuste, type MarcadorEmpresa } from "@/lib/dissidio";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,6 @@ export default async function Page({
   let rodada: Rodada | null = null;
   let ajustes: Ajuste[] = [];
   let marcadores: MarcadorEmpresa[] = [];
-  let reajustes: Record<number, Record<number, number>> = {};
   let erro: string | null = null;
 
   const user = await getCurrentUser().catch(() => null);
@@ -47,7 +46,7 @@ export default async function Page({
     erro = "QUESTOR_API_KEY não configurada no servidor.";
   } else {
     try {
-      const [perfil, r, m2, mk, pct] = await Promise.all([
+      const [perfil, r, m2, mk] = await Promise.all([
         // Sem `detalhado`: a lista dos serviços de cada empresa só é buscada
         // quando a linha é aberta (/api/dissidio/empresa/[cod]). Traziam ~2,7 mil
         // listas de uma vez e deixavam a página pesada.
@@ -55,7 +54,6 @@ export default async function Page({
         obterRodada(ano),
         listarAjustes(ano),
         listarMarcadores(),
-        percentuaisPorAno(anosComparados),
       ]);
       empresas = (perfil.dados ?? []).sort((a, b) =>
         (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR")
@@ -63,7 +61,6 @@ export default async function Page({
       rodada = r;
       ajustes = [...m2.values()];
       marcadores = [...mk.values()];
-      reajustes = Object.fromEntries(pct);
     } catch (e) {
       erro = e instanceof Error ? e.message : "Falha ao consultar a API Questor.";
     }
@@ -85,7 +82,6 @@ export default async function Page({
         anosDisponiveis={anosDisponiveis}
         anosComparados={anosComparados}
         anosDetalhe={anosDetalhe}
-        reajustes={reajustes}
         empresas={empresas}
         rodada={rodada}
         ajustesIniciais={ajustes}
