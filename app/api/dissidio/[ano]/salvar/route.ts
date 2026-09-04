@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { db, num, arredondar } from "@/lib/dissidio";
+import { db, num, arredondar, lerTudo } from "@/lib/dissidio";
 import { getPerfilEmpresas } from "@/lib/questor";
 
 export const dynamic = "force-dynamic";
@@ -122,7 +122,16 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
 
       const temPct = l.percentual !== undefined && l.percentual !== null && l.percentual !== "";
       const temVal = l.valor_novo !== undefined && l.valor_novo !== null && l.valor_novo !== "";
-      const mexeuNoAjuste = l.percentual !== undefined || l.valor_novo !== undefined || l.observacao !== undefined;
+      const mexeuNoAjuste =
+        l.percentual !== undefined || l.valor_novo !== undefined
+        || l.observacao !== undefined || l.definido !== undefined;
+
+      // Marcar OK sem digitar nada CONGELA o percentual que estava na tela —
+      // o da regra geral. A partir daí a empresa tem valor próprio: mudar o
+      // percentual geral depois não mexe mais nela. Antes o OK gravava
+      // percentual nulo e a linha continuava presa à regra geral, que é o
+      // oposto do que "conferido" significa.
+      const congelaPorOk = !!l.definido && !temPct && !temVal;
 
       if (mexeuNoAjuste) {
         const p = temPct ? num(l.percentual) : null;
@@ -141,17 +150,18 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
           paraApagar.push(cod);
         } else {
           const base = l.valor_base ?? null;
+          const pFinal = congelaPorOk ? percentualGeral : p;
           const valorFinal = v !== null
             ? v
-            : p !== null && base !== null ? arredondar(base * (1 + p / 100)) : null;
+            : pFinal !== null && base !== null ? arredondar(base * (1 + pFinal / 100)) : null;
 
           paraAjuste.push({
             ano, codigoempresa: cod,
-            percentual: v !== null ? null : p,
+            percentual: v !== null ? null : pFinal,
             valor_novo: valorFinal,
             valor_base: base,
             origem: v !== null ? "valor" : "percentual",
-            individual: temPct || temVal,
+            individual: temPct || temVal || congelaPorOk,
             definido: l.definido ?? false,
             observacao: l.observacao ?? null,
             analisado_por: email,
@@ -194,12 +204,14 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
 
     // Preserva tanto decisão individual quanto empresa já marcada como OK —
     // regravar pela regra geral apagaria o "definido" de quem já foi analisado.
-    const { data: individuais } = await sb
-      .from("dissidio_ajustes").select("codigoempresa,individual,definido").eq("ano", ano);
+    // Paginado: acima de 1.000 linhas o PostgREST corta em silêncio, e as
+    // decisões cortadas seriam sobrescritas pela regra geral logo abaixo.
+    const individuais = await lerTudo<{ codigoempresa: number; individual: boolean; definido: boolean }>(
+      () => sb.from("dissidio_ajustes")
+        .select("codigoempresa,individual,definido").eq("ano", ano).order("codigoempresa")
+    );
     const temDecisao = new Set(
-      (individuais ?? [])
-        .filter((x: { individual: boolean; definido: boolean }) => x.individual || x.definido)
-        .map((x: { codigoempresa: number }) => x.codigoempresa)
+      individuais.filter((x) => x.individual || x.definido).map((x) => x.codigoempresa)
     );
 
     const lote = (perfil.dados ?? [])

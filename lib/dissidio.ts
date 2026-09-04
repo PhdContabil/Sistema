@@ -30,6 +30,30 @@ export function db(): SupabaseClient | null {
 }
 
 /**
+ * Lê uma consulta inteira, em páginas.
+ *
+ * O PostgREST corta a resposta em 1.000 linhas por padrão, SEM erro e SEM
+ * aviso. Com ~2,7 mil empresas, isso fazia as decisões a partir da milésima
+ * linha simplesmente sumirem da tela: o "OK" ficava gravado no banco e voltava
+ * desmarcado. Toda leitura que possa passar de mil linhas precisa vir por aqui.
+ */
+const PAGINA = 1000;
+
+export async function lerTudo<T>(
+  monta: () => { range: (de: number, ate: number) => PromiseLike<{ data: unknown; error: unknown }> }
+): Promise<T[]> {
+  const tudo: T[] = [];
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await monta().range(de, de + PAGINA - 1);
+    if (error) break;
+    const lote = (data ?? []) as T[];
+    tudo.push(...lote);
+    if (lote.length < PAGINA) break;
+  }
+  return tudo;
+}
+
+/**
  * Rodada do ano, se existir. SOMENTE LEITURA — de propósito.
  *
  * Antes esta função criava a rodada ao abrir a tela, e isso tinha um efeito
@@ -47,9 +71,11 @@ export async function obterRodada(ano: number): Promise<Rodada | null> {
 export async function listarAjustes(ano: number): Promise<Map<number, Ajuste>> {
   const sb = db();
   if (!sb) return new Map();
-  const { data } = await sb.from("dissidio_ajustes").select("*").eq("ano", ano);
+  const lista = await lerTudo<Ajuste>(() =>
+    sb.from("dissidio_ajustes").select("*").eq("ano", ano).order("codigoempresa")
+  );
   const m = new Map<number, Ajuste>();
-  for (const a of (data ?? []) as Ajuste[]) m.set(a.codigoempresa, a);
+  for (const a of lista) m.set(a.codigoempresa, a);
   return m;
 }
 
@@ -92,43 +118,11 @@ export async function salvarAjuste(
 export async function listarMarcadores(): Promise<Map<number, MarcadorEmpresa>> {
   const sb = db();
   if (!sb) return new Map();
-  const { data } = await sb.from("dissidio_empresas").select("*");
+  const lista = await lerTudo<MarcadorEmpresa>(() =>
+    sb.from("dissidio_empresas").select("*").order("codigoempresa")
+  );
   const m = new Map<number, MarcadorEmpresa>();
-  for (const x of (data ?? []) as MarcadorEmpresa[]) m.set(x.codigoempresa, x);
-  return m;
-}
-
-/**
- * Reajuste aplicado em cada ano, por empresa — alimenta o indicador de
- * variação ano a ano na tabela. Vem do nosso histórico de rodadas, não da API.
- */
-export async function percentuaisPorAno(
-  anos: number[]
-): Promise<Map<number, Record<number, number>>> {
-  const sb = db();
-  if (!sb || anos.length === 0) return new Map();
-
-  const { data } = await sb
-    .from("dissidio_ajustes")
-    .select("ano,codigoempresa,percentual,valor_novo,valor_base,origem")
-    .in("ano", anos);
-
-  const m = new Map<number, Record<number, number>>();
-  for (const a of (data ?? []) as Ajuste[]) {
-    const base = Number(a.valor_base ?? 0);
-    // Quem informou valor tem o percentual derivado da base congelada.
-    const pct =
-      a.percentual !== null
-        ? Number(a.percentual)
-        : a.valor_novo !== null && base > 0
-          ? ((Number(a.valor_novo) - base) / base) * 100
-          : null;
-    if (pct === null) continue;
-
-    const atual = m.get(a.codigoempresa) ?? {};
-    atual[a.ano] = Math.round(pct * 100) / 100;
-    m.set(a.codigoempresa, atual);
-  }
+  for (const x of lista) m.set(x.codigoempresa, x);
   return m;
 }
 
@@ -156,13 +150,17 @@ export async function resumoRodadas(): Promise<ResumoRodada[]> {
   const sb = db();
   if (!sb) return [];
 
-  const [{ data: rodadas }, { data: ajustes }] = await Promise.all([
+  const [{ data: rodadas }, ajustes] = await Promise.all([
     sb.from("dissidio_rodadas").select("*").order("ano", { ascending: false }),
-    sb.from("dissidio_ajustes").select("ano,percentual,valor_novo,valor_base,origem,individual"),
+    lerTudo<Ajuste & { individual?: boolean }>(() =>
+      sb.from("dissidio_ajustes")
+        .select("ano,percentual,valor_novo,valor_base,origem,individual")
+        .order("ano").order("codigoempresa")
+    ),
   ]);
 
   const porAno = new Map<number, { n: number; ind: number; base: number; nova: number }>();
-  for (const a of (ajustes ?? []) as (Ajuste & { individual?: boolean })[]) {
+  for (const a of ajustes) {
     const acc = porAno.get(a.ano) ?? { n: 0, ind: 0, base: 0, nova: 0 };
     const base = Number(a.valor_base ?? 0);
     const nova =
@@ -200,9 +198,10 @@ export async function historicoDoAno(ano: number) {
   const sb = db();
   if (!sb) return [];
 
-  const { data } = await sb
-    .from("dissidio_ajustes").select("*").eq("ano", ano).order("analisado_em", { ascending: false });
-  const lista = (data ?? []) as Ajuste[];
+  const lista = await lerTudo<Ajuste>(() =>
+    sb.from("dissidio_ajustes").select("*").eq("ano", ano)
+      .order("analisado_em", { ascending: false }).order("codigoempresa")
+  );
   if (lista.length === 0) return [];
 
   const emails = [...new Set(lista.map((a) => a.analisado_por).filter(Boolean) as string[])];
