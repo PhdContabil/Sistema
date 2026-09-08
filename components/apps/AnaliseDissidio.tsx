@@ -22,7 +22,7 @@ type Situacao = "todas" | "ajustadas" | "pendentes" | "sem_mensalidade" | "ok" |
 type Ordenar =
   | "nome" | "mensalidade" | "faturamento" | "empregados" | "horas"
   | "diferenca" | "percentual" | "responsavel" | "grupo"
-  | "serv_dp" | "serv_contabil" | "serv_fiscal";
+  | "serv_dp" | "serv_contabil" | "serv_fiscal" | "valor_novo";
 
 const POR_PAGINA = 50;
 
@@ -411,6 +411,7 @@ export default function AnaliseDissidio({
         case "horas": return y?.horas_media_mes ?? -1;
         case "diferenca": return l.calc.diferenca ?? -Infinity;
         case "percentual": return l.calc.percentual ?? -Infinity;
+        case "valor_novo": return l.calc.valorNovo ?? -Infinity;
         case "responsavel": return RESPONSAVEL_NOME[l.st.responsavel] ?? "zzz";
         case "grupo": return (l.grupo ?? "zzz").toLowerCase();
         case "serv_dp": return valorServico(l.e, "dp");
@@ -452,9 +453,18 @@ export default function AnaliseDissidio({
 
   function ordenarPor(col: Ordenar) {
     if (ordenar === col) setDesc(!desc);
+    // Colunas de texto comecam em A→Z; as numericas, do maior para o menor —
+    // que e o que se procura ao clicar em "Novo" ou "%".
     else { setOrdenar(col); setDesc(col !== "nome" && col !== "responsavel" && col !== "grupo"); }
   }
-  const seta = (col: Ordenar) => (ordenar === col ? (desc ? " ↓" : " ↑") : "");
+  /**
+   * Indicador de ordenacao. Coluna inativa mostra a seta dupla apagada — sem
+   * ela nao ha como saber que a coluna ordena antes de clicar nela.
+   */
+  const seta = (col: Ordenar) =>
+    ordenar === col
+      ? <span className="ord-on">{desc ? "↓" : "↑"}</span>
+      : <span className="ord-off">⇅</span>;
 
   function exportar() {
     const cab = [
@@ -648,7 +658,9 @@ export default function AnaliseDissidio({
               <th className="sim num">
                 <button className="th-ord" onClick={() => ordenarPor("percentual")}>%{seta("percentual")}</button>
               </th>
-              <th className="sim num">Novo</th>
+              <th className="sim num">
+                <button className="th-ord" onClick={() => ordenarPor("valor_novo")}>Novo{seta("valor_novo")}</button>
+              </th>
               <th className="sim num">
                 <button className="th-ord" onClick={() => ordenarPor("diferenca")}>Dif.{seta("diferenca")}</button>
               </th>

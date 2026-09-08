@@ -1381,3 +1381,23 @@ table.grid.dissidio thead tr:first-child th.serv {
 .table-wrap.fixa table.grid thead tr:nth-child(2) th.serv { background: var(--serv-sub, rgba(120,120,120,.06)); }
 table.grid.dissidio td.serv { font-variant-numeric: tabular-nums; }
 table.grid.dissidio .sem-serv { color: var(--muted); opacity: .5; }
+
+/* ---- Dissídio: densidade das colunas ----
+   A tabela tem ~25 colunas numéricas curtas; o padding padrão de 12px sobrava
+   como espaço em branco e empurrava o conteúdo para fora da tela. */
+table.grid.dissidio th, table.grid.dissidio td { padding: 7px 7px; }
+table.grid.dissidio th.ano, table.grid.dissidio td.ano,
+table.grid.dissidio th.serv, table.grid.dissidio td.serv,
+table.grid.dissidio th.sim, table.grid.dissidio td.sim { padding-left: 6px; padding-right: 6px; }
+table.grid.dissidio td.ano, table.grid.dissidio td.serv, table.grid.dissidio td.sim {
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+table.grid.dissidio thead th { font-size: 11.5px; }
+table.grid.dissidio th.mini-col, table.grid.dissidio td.mini-col { padding-left: 4px; padding-right: 4px; }
+table.grid.dissidio input.mini { width: 62px; padding: 3px 5px; font-size: 12px; }
+table.grid.dissidio .mini-sel { font-size: 11.5px; padding: 2px 3px; }
+
+/* Seta de ordenação: presente sempre, discreta enquanto a coluna não é a ativa. */
+.th-ord .ord-off { opacity: .28; margin-left: 3px; font-size: 10px; }
+.th-ord:hover .ord-off { opacity: .7; }
+.th-ord .ord-on { color: var(--marca); margin-left: 3px; font-weight: 700; }
