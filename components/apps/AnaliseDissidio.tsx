@@ -21,7 +21,8 @@ interface PreviaGrupos {
 type Situacao = "todas" | "ajustadas" | "pendentes" | "sem_mensalidade" | "ok" | "falta_definir";
 type Ordenar =
   | "nome" | "mensalidade" | "faturamento" | "empregados" | "horas"
-  | "diferenca" | "percentual" | "responsavel" | "grupo";
+  | "diferenca" | "percentual" | "responsavel" | "grupo"
+  | "serv_dp" | "serv_contabil" | "serv_fiscal";
 
 const POR_PAGINA = 50;
 
@@ -74,6 +75,40 @@ function rascunhoDe(aj: Ajuste | undefined, mk: MarcadorEmpresa | undefined): Ra
   };
 }
 
+/**
+ * Mensalidade atual por serviço. Vem pronta da API (bloco `mensalidade`), que
+ * ja soma os contratos vigentes de cada conta — nao ha rateio a fazer aqui.
+ *
+ * Diferente dos indicadores acima, nao tem serie por ano: e a foto de hoje.
+ * Por isso ocupa um bloco proprio, com uma coluna por servico.
+ */
+const SERVICOS = [
+  { id: "dp", nome: "DP", ordena: "serv_dp" as Ordenar },
+  { id: "contabil", nome: "Contábil", ordena: "serv_contabil" as Ordenar },
+  { id: "fiscal", nome: "Fiscal", ordena: "serv_fiscal" as Ordenar },
+] as const;
+
+/** Valor do serviço na empresa; 0 e "nao contratado". */
+function valorServico(e: PerfilEmpresa, id: string): number {
+  const m = e.mensalidade;
+  if (!m) return 0;
+  if (id === "dp") return Number(m.dp ?? 0);
+  if (id === "contabil") return Number(m.contabil ?? 0);
+  if (id === "fiscal") return Number(m.fiscal ?? 0);
+  if (id === "manutencao") return Number(m.manutencao ?? 0);
+  if (id === "demais") return Number(m.demais ?? 0);
+  return 0;
+}
+
+/** Opcoes do filtro — inclui contas que nao viram coluna, mas servem de recorte. */
+const SERVICOS_FILTRO = [
+  { id: "dp", nome: "DP" },
+  { id: "contabil", nome: "Contábil" },
+  { id: "fiscal", nome: "Fiscal" },
+  { id: "manutencao", nome: "Manutenção" },
+  { id: "demais", nome: "Demais" },
+] as const;
+
 /** Indicadores da tabela — cada um vira um bloco com os anos dentro. */
 const INDICADORES = [
   { id: "faturamento", nome: "Faturamento médio", ordena: "faturamento" as Ordenar },
@@ -122,6 +157,7 @@ export default function AnaliseDissidio({
   const [responsaveisSel, setResponsaveisSel] = useState<string[]>([]);
   const [gruposSel, setGruposSel] = useState<string[]>([]);
   const [percentuaisSel, setPercentuaisSel] = useState<string[]>([]);
+  const [servicosSel, setServicosSel] = useState<string[]>([]);
   const [soBlacklist, setSoBlacklist] = useState(false);
   const [soAtivas, setSoAtivas] = useState(true);
   const [ordenar, setOrdenar] = useState<Ordenar>("nome");
@@ -150,7 +186,7 @@ export default function AnaliseDissidio({
 
   useEffect(() => { setPagina(1); }, [
     busca, situacao, regimes, atividadesSel, responsaveisSel, gruposSel,
-    percentuaisSel, soBlacklist, soAtivas, ordenar, desc,
+    percentuaisSel, servicosSel, soBlacklist, soAtivas, ordenar, desc,
   ]);
 
   useEffect(() => {
@@ -346,6 +382,10 @@ export default function AnaliseDissidio({
         if (responsaveisSel.length > 0 && !responsaveisSel.includes(st.responsavel)) return false;
         if (gruposSel.length > 0 && !gruposSel.includes(grupo ?? "")) return false;
         if (faixasAtivas.length > 0 && !faixasAtivas.some((f) => f.testa(calc.percentual))) return false;
+        // Conjuncao, ao contrario dos outros filtros: marcar Contabil e Fiscal
+        // significa "quem tem os dois". Como quase toda empresa tem contabil,
+        // a uniao nao recortaria nada util.
+        if (servicosSel.length > 0 && !servicosSel.every((id) => valorServico(e, id) > 0)) return false;
         if (situacao === "ajustadas" && !aj) return false;
         if (situacao === "pendentes" && aj) return false;
         if (situacao === "sem_mensalidade" && base) return false;
@@ -373,6 +413,9 @@ export default function AnaliseDissidio({
         case "percentual": return l.calc.percentual ?? -Infinity;
         case "responsavel": return RESPONSAVEL_NOME[l.st.responsavel] ?? "zzz";
         case "grupo": return (l.grupo ?? "zzz").toLowerCase();
+        case "serv_dp": return valorServico(l.e, "dp");
+        case "serv_contabil": return valorServico(l.e, "contabil");
+        case "serv_fiscal": return valorServico(l.e, "fiscal");
         default: return (l.e.nome ?? "").toLowerCase();
       }
     };
@@ -387,7 +430,7 @@ export default function AnaliseDissidio({
 
     return lista;
   }, [empresas, estadoDe, rascunhos, ajustes, marcadores, percentualGeral, busca, situacao,
-      regimes, atividadesSel, responsaveisSel, gruposSel, percentuaisSel, FAIXAS,
+      regimes, atividadesSel, responsaveisSel, gruposSel, percentuaisSel, servicosSel, FAIXAS,
       soBlacklist, soAtivas, ordenar, desc, anoRecente, ano, meuEmail]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
@@ -421,6 +464,7 @@ export default function AnaliseDissidio({
         .flatMap((i) => anosComparados.map((a) => `${i.nome} ${a}`)),
       ...anosComparados.map((a) => `Reajuste aplicado ${a}`),
       "Mensalidade atual", "Percentual", "Valor novo", "Diferença", "Individual",
+      ...SERVICOS.map((sv) => `Mensalidade ${sv.nome}`),
       "Observação", "Analisado por", "Analisado em",
     ];
     const linhasCsv = filtradas.map(({ e, st, gravado, base, calc, grupo }) => [
@@ -434,6 +478,7 @@ export default function AnaliseDissidio({
       ...anosComparados.map((a) => anoDe(e, a)?.horas_media_mes ?? ""),
       ...anosComparados.map((a) => mensalidadeDoAno(e, a) ?? ""),
       ...anosComparados.map((a) => reajusteDoAno(e, a) ?? ""),
+      ...SERVICOS.map((sv) => valorServico(e, sv.id) || ""),
       base ?? "", calc.percentual ?? "", calc.valorNovo ?? "", calc.diferenca ?? "",
       calc.individual ? "Sim" : "Não", st.observacao,
       gravado?.analisado_por ?? "",
@@ -468,7 +513,7 @@ export default function AnaliseDissidio({
     URL.revokeObjectURL(url);
   }
 
-  const colunas = 5 + INDICADORES.length * anosComparados.length + 4;
+  const colunas = 5 + INDICADORES.length * anosComparados.length + SERVICOS.length + 4;
   const temPendencia = pendentes > 0 || cabecalhoMudou;
 
   return (
@@ -545,6 +590,8 @@ export default function AnaliseDissidio({
                       selecionados={responsaveisSel} onMudar={setResponsaveisSel} />
         <CaixaSelecao rotulo="Reajuste" opcoes={FAIXAS.map((f) => ({ id: f.id, nome: f.nome }))}
                       selecionados={percentuaisSel} onMudar={setPercentuaisSel} />
+        <CaixaSelecao rotulo="Tem serviço" opcoes={SERVICOS_FILTRO.map((x) => ({ id: x.id, nome: x.nome }))}
+                      selecionados={servicosSel} onMudar={setServicosSel} />
         <CaixaSelecao rotulo="Regime" opcoes={listaRegimes.map((r) => ({ id: r, nome: r }))}
                       selecionados={regimes} onMudar={setRegimes} />
         <CaixaSelecao rotulo="Atividade" opcoes={listaAtividades.map((a) => ({ id: a, nome: a }))}
@@ -581,6 +628,7 @@ export default function AnaliseDissidio({
                     : ind.nome}
                 </th>
               ))}
+              <th className="serv" colSpan={SERVICOS.length}>Mensalidade atual por serviço</th>
               <th className="sim" colSpan={4}>Simulação {ano}</th>
             </tr>
             <tr>
@@ -589,6 +637,11 @@ export default function AnaliseDissidio({
                   <th key={`${ind.id}-${a}`} className="ano num sub-ano">{a}</th>
                 ))
               )}
+              {SERVICOS.map((sv) => (
+                <th key={sv.id} className="serv num sub-ano">
+                  <button className="th-ord" onClick={() => ordenarPor(sv.ordena)}>{sv.nome}{seta(sv.ordena)}</button>
+                </th>
+              ))}
               <th className="sim num">
                 <button className="th-ord" onClick={() => ordenarPor("mensalidade")}>Atual{seta("mensalidade")}</button>
               </th>
@@ -982,6 +1035,15 @@ function LinhaEmpresa({
       </td>
 
       {INDICADORES.map((ind) => anos.map((a) => celula(ind.id, a)))}
+
+      {SERVICOS.map((sv) => {
+        const v = valorServico(e, sv.id);
+        return (
+          <td key={sv.id} className="serv num" title={v > 0 ? `${sv.nome} contratado` : `Sem ${sv.nome}`}>
+            {v > 0 ? formatBRL(v) : <span className="sem-serv">—</span>}
+          </td>
+        );
+      })}
 
       <td className="sim num">{base === null ? "—" : formatBRL(base)}</td>
       <td className="sim">

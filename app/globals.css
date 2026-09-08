@@ -1369,3 +1369,15 @@ html[data-theme="dark"] .tag-grupo-linha { color: var(--text); }
 .modal.estreito { max-width: 720px; }
 .modal.estreito .table-wrap { overflow: auto; }
 .modal.estreito .grid td:last-child { color: var(--muted); font-size: 12px; }
+
+/* Bloco "Mensalidade atual por serviço": foto de hoje, sem série por ano.
+   Tom proprio para nao se confundir nem com os indicadores (fin) nem com a
+   simulacao (set), que ficam de cada lado dele. */
+table.grid.dissidio th.serv, table.grid.dissidio td.serv { background: var(--serv-sub, rgba(120,120,120,.06)); }
+table.grid.dissidio thead tr:first-child th.serv {
+  background: var(--serv-band, rgba(120,120,120,.13)); text-align: center;
+}
+.table-wrap.fixa table.grid thead th.serv { background: var(--serv-band, rgba(120,120,120,.13)); }
+.table-wrap.fixa table.grid thead tr:nth-child(2) th.serv { background: var(--serv-sub, rgba(120,120,120,.06)); }
+table.grid.dissidio td.serv { font-variant-numeric: tabular-nums; }
+table.grid.dissidio .sem-serv { color: var(--muted); opacity: .5; }
