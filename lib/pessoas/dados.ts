@@ -61,6 +61,74 @@ export async function obterPessoa(slug: string): Promise<Perfil | null> {
   return perfil;
 }
 
+export interface PerfilAdmin {
+  id: number; slug: string; nome: string; email: string | null; setor: string; ativo: boolean;
+}
+
+/**
+ * Lista todos os perfis (ativos ou não), só com os campos usados pela tela
+ * "Usuários por setor" pra checar se cada pessoa de ticket_users já tem um
+ * perfil vinculado em Pessoas (por e-mail) — ver /api/pessoas/perfil-admin.
+ */
+export async function listarPerfisAdmin(): Promise<PerfilAdmin[]> {
+  const sb = client();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("pessoas_perfil")
+    .select("id,slug,nome,email,setor,ativo")
+    .order("nome");
+  if (error || !data) return [];
+  return data as PerfilAdmin[];
+}
+
+function slugifica(nome: string): string {
+  return nome
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // remove acentos
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Corrige o e-mail (e opcionalmente o setor) de um perfil já existente. */
+export async function atualizarPerfilAdmin(
+  id: number, email: string, setor?: string
+): Promise<string | null> {
+  const sb = client();
+  if (!sb) return "Banco não configurado.";
+  const patch: Record<string, unknown> = { email: email.trim().toLowerCase(), atualizado_em: new Date().toISOString() };
+  if (setor) patch.setor = setor;
+  const { error } = await sb.from("pessoas_perfil").update(patch).eq("id", id);
+  return error ? error.message : null;
+}
+
+/**
+ * Cria um perfil mínimo em Pessoas pra alguém que já está em ticket_users
+ * mas nunca ganhou um cadastro — o resto (foto, cargo, histórico) a própria
+ * pessoa completa depois em "Meu perfil".
+ */
+export async function criarPerfilAdmin(input: {
+  nome: string; email: string; setor: string; funcao?: string;
+}): Promise<string | null> {
+  const sb = client();
+  if (!sb) return "Banco não configurado.";
+
+  let slug = slugifica(input.nome) || "pessoa";
+  const { data: existentes } = await sb.from("pessoas_perfil").select("slug").like("slug", `${slug}%`);
+  const usados = new Set((existentes ?? []).map((e) => (e as { slug: string }).slug));
+  if (usados.has(slug)) {
+    let n = 2;
+    while (usados.has(`${slug}-${n}`)) n++;
+    slug = `${slug}-${n}`;
+  }
+
+  const { error } = await sb.from("pessoas_perfil").insert({
+    slug, nome: input.nome.trim(), email: input.email.trim().toLowerCase(),
+    setor: input.setor, funcao: input.funcao || null,
+    ativo: true, encarregado: false, modelo: false,
+  });
+  return error ? error.message : null;
+}
+
 export function iniciaisDe(nome: string): string {
   const w = nome.replace(/^(Sra?\.)\s*/i, "").trim().split(/\s+/);
   return ((w[0]?.[0] || "") + (w[1]?.[0] || "")).toUpperCase();

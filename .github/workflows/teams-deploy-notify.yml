@@ -1,0 +1,93 @@
+name: Aviso no Teams (commit + deploy)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aviso de novo commit no Teams
+        env:
+          TEAMS_WEBHOOK_TI: ${{ secrets.TEAMS_WEBHOOK_TI }}
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          MSG="${MSG%%$'\n'*}"
+          AUTOR="${{ github.event.head_commit.author.name }}"
+          SHA_CURTO="${GITHUB_SHA:0:7}"
+          URL_COMMIT="${{ github.event.head_commit.url }}"
+
+          PAYLOAD=$(jq -n \
+            --arg msg "$MSG" --arg autor "$AUTOR" --arg sha "$SHA_CURTO" --arg url "$URL_COMMIT" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  type: "AdaptiveCard",
+                  version: "1.4",
+                  body: [
+                    { type: "TextBlock", size: "Medium", weight: "Bolder", text: "📦 Novo commit no main", color: "Accent" },
+                    { type: "Container", style: "emphasis", bleed: true, items: [
+                      { type: "TextBlock", text: $msg, size: "Large", weight: "Bolder", wrap: true },
+                      { type: "TextBlock", text: ("por **" + $autor + "** · commit `" + $sha + "`"), size: "Small", isSubtle: true, wrap: true }
+                    ] }
+                  ],
+                  actions: [{ type: "Action.OpenUrl", title: "Ver commit", url: $url }]
+                }
+              }]
+            }')
+
+          curl -sf -X POST "$TEAMS_WEBHOOK_TI" -H "Content-Type: application/json" -d "$PAYLOAD"
+
+      - name: Espera o deploy na Vercel e avisa o resultado
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+          TEAMS_WEBHOOK_TI: ${{ secrets.TEAMS_WEBHOOK_TI }}
+        run: |
+          SHA="${{ github.sha }}"
+          STATUS=""
+          DEPLOY_URL=""
+
+          URL="https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=10"
+          if [ -n "${VERCEL_TEAM_ID:-}" ]; then URL="${URL}&teamId=${VERCEL_TEAM_ID}"; fi
+
+          for i in $(seq 1 20); do
+            RESP=$(curl -sf "$URL" -H "Authorization: Bearer ${VERCEL_TOKEN}") || RESP=""
+            MATCH=$(echo "$RESP" | jq -c --arg sha "$SHA" '[.deployments[]? | select(.meta.githubCommitSha == $sha)][0] // empty' 2>/dev/null)
+            if [ -n "$MATCH" ]; then
+              STATUS=$(echo "$MATCH" | jq -r '.state // .readyState // empty')
+              DEPLOY_URL=$(echo "$MATCH" | jq -r '.url // empty')
+              case "$STATUS" in
+                READY|ERROR|CANCELED) break ;;
+              esac
+            fi
+            sleep 15
+          done
+
+          case "$STATUS" in
+            READY) TITULO="🚀 Deploy concluído em produção"; COR="Good"; BOTAO="Ver site" ;;
+            ERROR) TITULO="⚠️ Deploy falhou"; COR="Attention"; BOTAO="Ver logs na Vercel" ;;
+            *) echo "Sem status final dentro do tempo de espera (última leitura: '$STATUS'), pulando aviso."; exit 0 ;;
+          esac
+
+          PAYLOAD=$(jq -n --arg titulo "$TITULO" --arg cor "$COR" --arg botao "$BOTAO" --arg url "https://${DEPLOY_URL}" \
+            '{
+              type: "message",
+              attachments: [{
+                contentType: "application/vnd.microsoft.card.adaptive",
+                content: {
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  type: "AdaptiveCard",
+                  version: "1.4",
+                  body: [{ type: "TextBlock", size: "Medium", weight: "Bolder", text: $titulo, color: $cor }],
+                  actions: [{ type: "Action.OpenUrl", title: $botao, url: $url }]
+                }
+              }]
+            }')
+
+          curl -sf -X POST "$TEAMS_WEBHOOK_TI" -H "Content-Type: application/json" -d "$PAYLOAD"

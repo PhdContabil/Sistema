@@ -184,3 +184,71 @@ export async function sendFinalizedNotification(params: FinalizedParams) {
 function escapeText(s: string): string {
   return s.replace(/\*/g, "\\*").replace(/_/g, "\\_");
 }
+
+// ---------------------------------------------------------------- deploy (Vercel)
+// Avisa o mesmo canal de T.I. quando sai um deploy novo em produção (ou
+// quando um deploy falha) — disparado por app/api/webhooks/vercel-deploy,
+// que recebe o webhook configurado no dashboard da Vercel.
+
+interface DeployNotifyParams {
+  ok: boolean;
+  projectName: string;
+  commitMessage?: string;
+  commitAuthor?: string;
+  commitSha?: string;
+  branch?: string;
+  url: string;
+}
+
+export async function sendDeployNotification(params: DeployNotifyParams) {
+  const titulo = params.ok ? "🚀 Novo deploy em produção" : "⚠️ Deploy falhou";
+  const cor = params.ok ? "Good" : "Attention";
+  const shaCurto = params.commitSha ? params.commitSha.slice(0, 7) : undefined;
+
+  const detalhes: Record<string, unknown>[] = [];
+  if (params.commitMessage) {
+    detalhes.push({
+      type: "TextBlock",
+      text: params.commitMessage,
+      size: "Large",
+      weight: "Bolder",
+      wrap: true,
+    });
+  } else {
+    detalhes.push({ type: "TextBlock", text: params.projectName, size: "Large", weight: "Bolder", wrap: true });
+  }
+  const rodape = [
+    params.commitAuthor ? `por **${escapeText(params.commitAuthor)}**` : null,
+    shaCurto ? `commit \`${shaCurto}\`` : null,
+    params.branch ? `branch \`${params.branch}\`` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (rodape) {
+    detalhes.push({ type: "TextBlock", text: rodape, size: "Small", isSubtle: true, wrap: true });
+  }
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          msteams: { width: "Full" },
+          body: [
+            { type: "TextBlock", size: "Medium", weight: "Bolder", text: titulo, color: cor },
+            { type: "Container", style: "emphasis", bleed: true, items: detalhes },
+          ],
+          actions: [
+            { type: "Action.OpenUrl", title: params.ok ? "Ver site" : "Ver logs na Vercel", url: params.url },
+          ],
+        },
+      },
+    ],
+  };
+
+  return postWebhook(card);
+}

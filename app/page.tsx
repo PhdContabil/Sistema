@@ -6,6 +6,7 @@ import { MODULES } from "@/lib/modules";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AvatarUsuario, useUsuario } from "@/components/UsuarioAtual";
 import ModuloIcon, { IconePonto, IconeEmpresas } from "@/components/ModuloIcon";
+import FerramentasUteis from "@/components/FerramentasUteis";
 
 export default function Launcher() {
   const usuario = useUsuario();
@@ -39,6 +40,7 @@ export default function Launcher() {
             <input placeholder="Buscar aplicação…" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </label>
           <ThemeToggle />
+          <FerramentasUteis />
           <AvatarUsuario />
         </div>
       </div>

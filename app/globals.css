@@ -1223,6 +1223,27 @@ table.grid.mini-perfil th, table.grid.mini-perfil td { padding: 6px 10px; font-s
 }
 .multi-limpar:hover { color: var(--div); }
 
+/* ---------- Ferramentas úteis (topbar da home) ---------- */
+.ferramentas { position: relative; }
+.ferramentas-menu {
+  position: absolute; z-index: 40; top: calc(100% + 6px); right: 0;
+  min-width: 220px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-sm); box-shadow: var(--shadow-forte); padding: 8px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ferramentas-titulo { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 4px 8px 6px; }
+.ferramenta-item {
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px;
+  color: var(--text); text-decoration: none; font-size: 13px; font-weight: 500;
+}
+.ferramenta-item:hover { background: var(--surface2); text-decoration: none; }
+.ferramenta-ic {
+  width: 26px; height: 26px; border-radius: 7px; flex: none; display: grid; place-items: center;
+  background: var(--surface2); border: 1px solid var(--border); overflow: hidden;
+}
+.ferramenta-ic img { width: 18px; height: 18px; object-fit: contain; }
+
 /* ---------- Cabeçalho fixo + rolagem no topo ---------- */
 .rolagem-topo { overflow-x: auto; overflow-y: hidden; }
 .rolagem-topo::-webkit-scrollbar { height: 10px; }

@@ -13,6 +13,54 @@ interface FormState {
 
 const VAZIO: FormState = { email: "", name: "", sector: "contabil" };
 
+// ---- Perfil em Pessoas (tabela pessoas_perfil, separada de ticket_users) ----
+// Cada pessoa aqui tem acesso ao Núcleo (ticket_users), mas "Meu perfil" só
+// funciona se ela também tiver uma linha em pessoas_perfil com o MESMO
+// e-mail — cadastro que às vezes fica pra trás (nunca criado, ou criado com
+// um e-mail antigo/errado). Esta seção detecta e corrige isso, sem precisar
+// entrar no Supabase.
+
+interface PerfilAdmin {
+  id: number;
+  slug: string;
+  nome: string;
+  email: string | null;
+  setor: string;
+  ativo: boolean;
+}
+
+/** Setor de ticket_users -> texto de setor já usado em pessoas_perfil. */
+const SETOR_PARA_PESSOAS: Partial<Record<string, string>> = {
+  contabil: "Setor Contábil",
+  fiscal: "Setor Fiscal",
+  trabalhista: "Setor Trabalhista",
+  financeiro: "Setor Financeiro",
+  paralegal: "Setor Paralegal",
+  mei: "Setor MEI",
+  ti: "Tecnologia e Inovação",
+};
+
+function normaliza(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+/** Cruza uma pessoa de ticket_users com a lista de perfis pelo e-mail (e, se
+ * não achar, pelo nome exato — só pra sugerir, nunca vincula sozinho). */
+function statusPerfil(
+  u: PessoaTickets,
+  perfis: PerfilAdmin[]
+): { estado: "ok" | "diferente" | "sem_perfil"; perfil?: PerfilAdmin } {
+  const emailNorm = u.email.toLowerCase();
+  const porEmail = perfis.find((p) => p.email?.toLowerCase() === emailNorm);
+  if (porEmail) return { estado: "ok" };
+
+  const nomeU = normaliza(u.name);
+  const porNome = perfis.find((p) => normaliza(p.nome) === nomeU);
+  if (porNome) return { estado: "diferente", perfil: porNome };
+
+  return { estado: "sem_perfil" };
+}
+
 // ---- Permissões por módulo/submódulo (apenas prévia visual, em memória) ----
 
 type NivelPermissao = "herdado" | "liberado" | "bloqueado";
@@ -181,6 +229,49 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
   const [erro, setErro] = useState<string | null>(null);
   const [overridesPorEmail, setOverridesPorEmail] = useState<Record<string, OverridesPessoa>>({});
   const [overridesModal, setOverridesModal] = useState<OverridesPessoa>(OVERRIDES_VAZIO);
+  const [perfis, setPerfis] = useState<PerfilAdmin[] | null>(null);
+  const [corrigindo, setCorrigindo] = useState<string | null>(null); // e-mail em andamento
+
+  async function carregarPerfis() {
+    const r = await fetch("/api/pessoas/perfil-admin", { cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    setPerfis(r.ok ? (j.perfis ?? []) : []);
+  }
+
+  async function corrigirEmailPerfil(perfilId: number, novoEmail: string) {
+    setCorrigindo(novoEmail);
+    setErro(null);
+    try {
+      const r = await fetch("/api/pessoas/perfil-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: perfilId, email: novoEmail }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não foi possível corrigir o e-mail do perfil."); return; }
+      await carregarPerfis();
+    } finally {
+      setCorrigindo(null);
+    }
+  }
+
+  async function criarPerfilPessoas(u: PessoaTickets) {
+    setCorrigindo(u.email);
+    setErro(null);
+    try {
+      const setor = SETOR_PARA_PESSOAS[u.sector] ?? SETOR_NOME[u.sector] ?? u.sector;
+      const r = await fetch("/api/pessoas/perfil-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: u.name, email: u.email, setor }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não foi possível criar o perfil em Pessoas."); return; }
+      await carregarPerfis();
+    } finally {
+      setCorrigindo(null);
+    }
+  }
 
   async function carregar() {
     const r = await fetch("/api/tickets/usuarios", { cache: "no-store" });
@@ -188,6 +279,7 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
     if (r.ok) {
       const lista: PessoaTickets[] = j.usuarios ?? [];
       setUsuarios(lista);
+      carregarPerfis();
       // Carrega as permissões personalizadas de todo mundo pra já mostrar o
       // selo "N personalizada(s)" na tabela, sem precisar abrir cada edição.
       const pares = await Promise.all(
@@ -344,6 +436,7 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
               <th className="px-4 py-2.5">E-mail</th>
               <th className="px-4 py-2.5 text-center">Setor</th>
               <th className="px-4 py-2.5">Permissões</th>
+              <th className="px-4 py-2.5">Perfil em Pessoas</th>
               <th className="px-4 py-2.5 text-right">Ações</th>
             </tr>
           </thead>
@@ -373,6 +466,54 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
                       <span className="text-xs text-slate-400 dark:text-slate-500">Padrão do setor</span>
                     )}
                   </td>
+                  <td className="px-4 py-2.5">
+                    {perfis === null ? (
+                      <span className="text-xs text-slate-400">…</span>
+                    ) : (() => {
+                      const st = statusPerfil(u, perfis);
+                      const emAndamento = corrigindo === u.email;
+                      if (st.estado === "ok") {
+                        return (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                            Vinculado
+                          </span>
+                        );
+                      }
+                      if (st.estado === "diferente" && st.perfil) {
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                              title={`Perfil "${st.perfil.nome}" está cadastrado com o e-mail ${st.perfil.email}`}
+                            >
+                              E-mail diferente
+                            </span>
+                            <button
+                              type="button"
+                              className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+                              disabled={emAndamento}
+                              onClick={() => corrigirEmailPerfil(st.perfil!.id, u.email)}
+                            >
+                              {emAndamento ? "Corrigindo…" : "Corrigir"}
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">Sem perfil</span>
+                          <button
+                            type="button"
+                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+                            disabled={emAndamento}
+                            onClick={() => criarPerfilPessoas(u)}
+                          >
+                            {emAndamento ? "Criando…" : "Criar perfil"}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => abrirEdicao(u)}
@@ -394,10 +535,10 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
               );
             })}
             {usuarios !== null && filtrados.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500 text-sm">Nenhum usuário encontrado.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500 text-sm">Nenhum usuário encontrado.</td></tr>
             )}
             {usuarios === null && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500 text-sm">Carregando…</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500 text-sm">Carregando…</td></tr>
             )}
           </tbody>
         </table>
