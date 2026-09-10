@@ -51,12 +51,26 @@ export default async function Page({
     }
   }
 
+  // Horas/valor/ganho só vão pro navegador de quem pode ver (T.I./Diretoria,
+  // ver podeVerMedicao em lib/tickets.ts) — não é só esconder na tela, tira o
+  // dado da resposta mesmo, pra não vazar por inspecionar a página.
+  const ticketsParaCliente = souVejoMedicao
+    ? tickets
+    : tickets.map((t) => ({
+        ...t,
+        horas_estimadas: null,
+        horas_realizadas: null,
+        ganho_horas_mes: null,
+        valor_hora: null,
+        ganho_mensal: null,
+      }));
+
   return (
     <Workspace moduleId="tecnologia" appName="Tickets">
       <TicketsShell resumo={resumo} souAdmin={souAdminNav} souAdminGeral={souAdminGeral} meuSetor={meuSetor}>
         <TicketsBoard
           setor={setor ?? "contabil"}
-          tickets={tickets}
+          tickets={ticketsParaCliente}
           meuEmail={meuEmail}
           pessoas={pessoas}
           souAdmin={souAdmin}

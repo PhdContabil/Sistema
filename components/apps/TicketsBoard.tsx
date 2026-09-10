@@ -276,7 +276,7 @@ export default function TicketsBoard({
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] text-white ${PRIORIDADE_COR[t.priority] ?? "bg-slate-500"}`}>
                       {PRIORIDADE_NOME[t.priority]}
                     </span>
-                    {t.ganho_mensal ? (
+                    {souVejoMedicao && t.ganho_mensal ? (
                       <span className="text-[11px] text-emerald-600 dark:text-emerald-400" title="Ganho mensal estimado">
                         {formatReais(t.ganho_mensal)}/mês
                       </span>
