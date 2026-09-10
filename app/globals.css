@@ -386,6 +386,12 @@ html[data-theme="dark"] table.grid td.col-empresa .obs.obs-mov { color: #fdba74;
   padding: 10px 12px; gap: 8px; height: 100vh; min-height: 0;
 }
 .ponto-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; flex: none; }
+.ponto-aviso { flex: none; font-size: 12px; color: var(--text-muted, #6b7280); margin: 2px 0 0; }
+.ponto-aviso-forte {
+  font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 8px; padding: 8px 10px; margin: 2px 0 0;
+}
+.ponto-aviso-forte a { color: #92400e; font-weight: 600; text-decoration: underline; }
 .ponto-id { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .ponto-ic {
   width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--accent);
@@ -1257,64 +1263,83 @@ html[data-theme="dark"] tr.nao-salvo td { background: #2a2016; }
 }
 .destaques .destaque { margin-bottom: 0; }
 
-/* ---------- Busca de empresas (SharePoint) ---------- */
+/* ---------- Empresas (busca de pastas no SharePoint) ---------- */
+
 .busca-grande {
-  width: 100%; font-family: inherit; font-size: 16px; color: var(--text);
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-md); padding: 14px 16px; box-shadow: var(--shadow);
+  width: 100%; box-sizing: border-box; padding: 14px 18px; font-size: 15px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  color: var(--text); box-shadow: var(--shadow);
 }
-.busca-grande:focus { outline: none; border-color: var(--marca); }
+.busca-grande:focus { outline: none; border-color: var(--accent); }
+.busca-grande::placeholder { color: var(--muted); }
 
 .grade-empresas {
-  display: grid; gap: 12px; margin-top: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px; margin-top: 18px;
 }
+
 .cartao-empresa {
-  position: relative; cursor: pointer; display: flex; align-items: flex-start; gap: 10px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-md); padding: 16px 14px 14px; box-shadow: var(--shadow);
-  transition: transform .15s, border-color .15s;
+  position: relative; display: flex; align-items: center; gap: 12px;
+  padding: 16px 44px 16px 16px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s;
 }
-.cartao-empresa:hover { transform: translateY(-2px); border-color: var(--marca); }
-.nome-empresa { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.cartao-empresa:hover { border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-1px); }
+.cartao-empresa .ic-sp { font-size: 26px; flex: none; line-height: 1; }
+
+.nome-empresa {
+  display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; font-weight: 500;
+  color: var(--text); line-height: 1.35; word-break: break-word;
+}
+
 .tag-grupo {
-  display: block; margin-top: 3px; font-size: 10.5px; font-weight: 500;
-  color: var(--muted); text-transform: uppercase; letter-spacing: .03em;
+  /* Nome do grupo pode ser longo e quebrar em 2 linhas — pílula arredondada
+     (border-radius alto) fica torta quando isso acontece, então aqui é só
+     um rótulo discreto, sem fundo forte nem cantos 100% redondos. */
+  align-self: flex-start; font-size: 10.5px; font-weight: 500; color: var(--muted);
+  background: var(--surface2); border-radius: 5px; padding: 2px 7px; line-height: 1.35;
 }
-.ic-sp { font-size: 18px; flex: none; line-height: 1; }
 
+/* Badge "SharePoint ↗" no canto do cartão — só um link discreto até passar o mouse. */
 .link-sp {
-  font-size: 11px; color: var(--muted); text-decoration: none;
-  border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; white-space: nowrap;
+  font-size: 11px; color: var(--muted); text-decoration: none; white-space: nowrap;
 }
-.link-sp:hover { color: var(--marca); border-color: var(--marca); text-decoration: none; }
-.link-sp.canto { position: absolute; top: 8px; right: 8px; }
+.link-sp:hover { color: var(--accent); text-decoration: underline; }
+.link-sp.canto {
+  position: absolute; top: 10px; right: 12px; padding: 3px 8px; border-radius: 999px;
+  background: var(--surface2); border: 1px solid var(--border); opacity: 0; transition: opacity .12s;
+}
+.cartao-empresa:hover .link-sp.canto { opacity: 1; }
 
-.lista-sp {
-  display: flex; flex-direction: column;
-  border: 1px solid var(--border); border-radius: var(--r-md);
-  background: var(--surface); overflow: hidden;
-}
-.linha-sp {
-  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.linha-sp:last-child { border-bottom: 0; }
-.linha-sp-main {
-  flex: 1; display: flex; align-items: center; gap: 11px; min-width: 0;
-  background: none; border: 0; padding: 0; cursor: pointer;
-  font-family: inherit; color: var(--text); text-align: left;
-}
-.linha-sp-main.estatica { cursor: default; }
-.linha-sp-main:hover:not(.estatica) .nm { color: var(--marca); }
-.meta-sp { flex: 1; min-width: 0; }
-.meta-sp .nm {
-  display: block; font-size: 13px; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.meta-sp .sub { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+/* Navegação dentro de uma pasta (breadcrumb + lista de itens) */
 .trilha-item { display: inline-flex; align-items: center; gap: 6px; }
 .trilha-item .sep { color: var(--muted); }
+
+.lista-sp {
+  display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow);
+}
+.linha-sp {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.linha-sp:last-child { border-bottom: none; }
+.linha-sp:hover { background: var(--surface2); }
+
+.linha-sp-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left;
+  background: none; border: none; padding: 0; cursor: pointer; color: inherit; font: inherit;
+}
+.linha-sp-main.estatica { cursor: default; }
+.linha-sp .ic-sp { font-size: 20px; flex: none; line-height: 1; }
+
+.meta-sp { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.meta-sp .nm { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta-sp .sub { font-size: 11.5px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .grade-empresas { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .cartao-empresa { padding: 14px 36px 14px 14px; }
+}
 
 /* ---------- Dissídio: barra compacta e tabela indicador × ano ---------- */
 

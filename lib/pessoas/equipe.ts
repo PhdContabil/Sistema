@@ -41,7 +41,6 @@ export const SETORES: Setor[] = [
     pessoas: [
       { nome: "Giovanna", formacao: "Ciências Contábeis (estudante)", funcao: "Analista" },
       { nome: "Gustavo", formacao: "Ciências Contábeis (estudante)", funcao: "Analista" },
-      { nome: "Gregory", formacao: "Ciências Contábeis (estudante)", funcao: "Assistente" },
       { nome: "Milena", formacao: "Design de Interiores", funcao: "Auxiliar" },
     ],
   },
@@ -70,7 +69,6 @@ export const SETORES: Setor[] = [
     pessoas: [
       { nome: "Flávia", formacao: "Psicologia (estudante)", funcao: "Encarregada" },
       { nome: "Rafael", formacao: "Técnico em Radiologia", funcao: "Analista" },
-      { nome: "Júlia Helena", formacao: "Ciências da Computação (estudante)", funcao: "Analista" },
       { nome: "Sara", formacao: "Ciências Contábeis (estudante)", funcao: "Auxiliar" },
     ],
   },
@@ -87,6 +85,7 @@ export const SETORES: Setor[] = [
     pessoas: [
       { nome: "Gabriel", formacao: "Contador. MBA em Data Science and Analytics", funcao: "Encarregado" },
       { nome: "Pedro", formacao: "Tecnólogo em Análise e Desenvolvimento de Sistemas", funcao: "Auxiliar" },
+      { nome: "Júlia Helena", formacao: "Ciências da Computação (estudante)", funcao: "Auxiliar" },
     ],
   },
   {

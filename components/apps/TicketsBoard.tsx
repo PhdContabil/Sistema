@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   STATUS, PRIORIDADES, PRIORIDADE_NOME, SETOR_NOME,
-  iniciais, primeiroNome, tempoRelativo,
+  iniciais, primeiroNome, tempoRelativo, formatarDataHora,
   formatHoras, formatReais, desvioHoras, mesesRetorno,
   type Ticket, type Comentario, type Anexo, type Responsavel, type PessoaTickets,
 } from "@/lib/tickets";
@@ -85,9 +85,18 @@ export default function TicketsBoard({
   const [novo, setNovo] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
+  // Cópia local dos tickets — permite mover de coluna (arrastar) e excluir/
+  // finalizar direto do card sem esperar o servidor responder de novo.
+  // Sincroniza quando os dados vêm de novo do servidor (ex.: router.refresh()).
+  const [ticketsState, setTicketsState] = useState(tickets);
+  useEffect(() => setTicketsState(tickets), [tickets]);
+
+  const [arrastando, setArrastando] = useState<string | null>(null);
+  const [colunaSobre, setColunaSobre] = useState<string | null>(null);
+
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return tickets.filter((t) => {
+    return ticketsState.filter((t) => {
       if (prioridade && t.priority !== prioridade) return false;
       if (soMeus && meuEmail) {
         const meu = t.responsaveis.some((r) => r.user_email.toLowerCase() === meuEmail)
@@ -101,7 +110,7 @@ export default function TicketsBoard({
         (t.created_by_name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [tickets, busca, prioridade, soMeus, meuEmail]);
+  }, [ticketsState, busca, prioridade, soMeus, meuEmail]);
 
   // Todas as colunas aparecem sempre, Finalizado incluso — igual ao sistema antigo.
   const colunas = useMemo(
@@ -119,7 +128,49 @@ export default function TicketsBoard({
     }
   }
 
-  const abertosNoSetor = tickets.filter((t) => t.status !== "finalizado").length;
+  /** Move um ticket pra outra coluna (arrastar, ou o botão "Finalizar" rápido). */
+  async function moverStatus(id: string, status: string) {
+    const atual = ticketsState.find((t) => t.id === id);
+    if (!atual || atual.status === status) return;
+    const statusAnterior = atual.status;
+    setTicketsState((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
+    try {
+      const r = await fetch(`/api/tickets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) throw new Error();
+      router.refresh();
+    } catch {
+      // Servidor recusou — volta o card pra coluna de origem.
+      setTicketsState((prev) => prev.map((t) => (t.id === id ? { ...t, status: statusAnterior } : t)));
+    }
+  }
+
+  /** Exclui direto do card do quadro, sem precisar abrir o ticket. */
+  async function excluirRapido(id: string, titulo: string) {
+    if (!confirm(`Excluir o ticket "${titulo}"? Essa ação não pode ser desfeita.`)) return;
+    const antes = ticketsState;
+    setTicketsState((prev) => prev.filter((t) => t.id !== id));
+    try {
+      const r = await fetch(`/api/tickets/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      router.refresh();
+    } catch {
+      setTicketsState(antes);
+      alert("Não foi possível excluir o ticket.");
+    }
+  }
+
+  function soltarNaColuna(e: DragEvent<HTMLDivElement>, statusColuna: string) {
+    e.preventDefault();
+    setColunaSobre(null);
+    const id = e.dataTransfer.getData("text/plain");
+    if (id) moverStatus(id, statusColuna);
+  }
+
+  const abertosNoSetor = ticketsState.filter((t) => t.status !== "finalizado").length;
 
   // Soma apenas do que está na tela, para acompanhar o filtro em vigor.
   const totalGanho = filtrados.reduce((s, t) => s + (t.ganho_mensal ?? 0), 0);
@@ -160,7 +211,7 @@ export default function TicketsBoard({
         </button>
         <button className={BTN_PRIMARY} onClick={() => setNovo(true)}>+ Novo ticket</button>
         <span className="text-xs text-slate-500 dark:text-slate-500 ml-auto whitespace-nowrap">
-          {filtrados.length} de {tickets.length} · {abertosNoSetor} em aberto
+          {filtrados.length} de {ticketsState.length} · {abertosNoSetor} em aberto
         </span>
       </div>
 
@@ -188,7 +239,14 @@ export default function TicketsBoard({
         {colunas.map((c) => (
           <div
             key={c.id}
-            className="w-72 shrink-0 bg-slate-100/70 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[72vh]"
+            onDragOver={(e) => { e.preventDefault(); if (colunaSobre !== c.id) setColunaSobre(c.id); }}
+            onDragLeave={() => setColunaSobre((v) => (v === c.id ? null : v))}
+            onDrop={(e) => soltarNaColuna(e, c.id)}
+            className={`w-72 shrink-0 rounded-xl border flex flex-col max-h-[72vh] transition-colors ${
+              colunaSobre === c.id
+                ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-800"
+                : "bg-slate-100/70 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800"
+            }`}
           >
             <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${STATUS_COR[c.id] ?? "bg-slate-500"}`} />
@@ -197,12 +255,24 @@ export default function TicketsBoard({
             </div>
             <div className="p-3 space-y-2 overflow-y-auto flex-1">
               {c.itens.map((t) => (
-                <button
+                <div
                   key={t.id}
+                  role="button"
+                  tabIndex={0}
+                  draggable
+                  onDragStart={(e) => {
+                    setArrastando(t.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", t.id);
+                  }}
+                  onDragEnd={() => setArrastando(null)}
                   onClick={() => abrir(t.id)}
-                  className="w-full text-left bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-lg p-3 transition shadow-sm dark:shadow-none"
+                  onKeyDown={(e) => { if (e.key === "Enter") abrir(t.id); }}
+                  className={`w-full text-left bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-lg p-3 transition shadow-sm dark:shadow-none cursor-grab active:cursor-grabbing ${
+                    arrastando === t.id ? "opacity-40" : ""
+                  }`}
                 >
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] text-white ${PRIORIDADE_COR[t.priority] ?? "bg-slate-500"}`}>
                       {PRIORIDADE_NOME[t.priority]}
                     </span>
@@ -212,6 +282,28 @@ export default function TicketsBoard({
                       </span>
                     ) : null}
                     <span className="text-[11px] text-slate-400 dark:text-slate-500 ml-auto">{tempoRelativo(t.created_at)}</span>
+                    {t.status !== "finalizado" && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); moverStatus(t.id, "finalizado"); }}
+                        title="Finalizar ticket"
+                        aria-label="Finalizar ticket"
+                        className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 shrink-0"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); excluirRapido(t.id, t.title); }}
+                      title="Excluir ticket"
+                      aria-label="Excluir ticket"
+                      className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30 shrink-0"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
+                      </svg>
+                    </button>
                   </div>
                   <div className="text-sm font-medium leading-snug mb-1">{t.title}</div>
                   {t.description && (
@@ -237,7 +329,7 @@ export default function TicketsBoard({
                       </span>
                     </span>
                   </div>
-                </button>
+                </div>
               ))}
               {c.itens.length === 0 && <div className="text-slate-400 dark:text-slate-600 text-xs italic px-1 py-2">Nada aqui</div>}
             </div>
@@ -295,7 +387,13 @@ function DetalheTicket({
   const [responsaveis, setResponsaveis] = useState(d.responsaveis);
   const [texto, setTexto] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [enviandoImagem, setEnviandoImagem] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const arquivoRef = useRef<HTMLInputElement>(null);
+
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [textoEdicao, setTextoEdicao] = useState("");
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   const souResponsavel = !!meuEmail && responsaveis.some((r) => r.user_email.toLowerCase() === meuEmail);
   const desvio = desvioHoras(t);
@@ -397,6 +495,81 @@ function DetalheTicket({
     }
   }
 
+  /**
+   * Sobe uma imagem (colada, arrastada ou escolhida no botão de anexar) e
+   * cola o link markdown ![imagem](url) no texto — igual ao sistema antigo de
+   * tickets, só que agora salva no Storage do próprio Núcleo.
+   */
+  async function enviarImagem(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    setEnviandoImagem(true);
+    setErro(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/tickets/${t.id}/anexos`, { method: "POST", body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não foi possível enviar a imagem."); return; }
+      const url = j.anexo?.url as string | undefined;
+      if (url) setTexto((cur) => (cur ? `${cur}\n\n![imagem](${url})\n` : `![imagem](${url})`));
+    } finally {
+      setEnviandoImagem(false);
+    }
+  }
+
+  function aoColar(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const itens = e.clipboardData?.items;
+    if (!itens) return;
+    for (let i = 0; i < itens.length; i++) {
+      const item = itens[i];
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const arquivo = item.getAsFile();
+        if (arquivo) { e.preventDefault(); enviarImagem(arquivo); }
+      }
+    }
+  }
+
+  function aoSoltarArquivo(e: DragEvent<HTMLTextAreaElement>) {
+    e.preventDefault();
+    for (const f of Array.from(e.dataTransfer.files)) {
+      if (f.type.startsWith("image/")) enviarImagem(f);
+    }
+  }
+
+  function comecarEdicao(c: Comentario) {
+    setEditandoId(c.id);
+    setTextoEdicao(c.body);
+  }
+
+  async function salvarEdicao(id: string) {
+    const novoTexto = textoEdicao.trim();
+    if (!novoTexto) return;
+    setSalvandoEdicao(true);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/tickets/${t.id}/comentarios/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: novoTexto }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não foi possível editar o comentário."); return; }
+      setComentarios((cs) => cs.map((c) => (c.id === id ? { ...c, body: novoTexto } : c)));
+      setEditandoId(null);
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
+
+  async function excluirComentario(id: string) {
+    if (!confirm("Excluir esse comentário? Essa ação não pode ser desfeita.")) return;
+    setErro(null);
+    const r = await fetch(`/api/tickets/${t.id}/comentarios/${id}`, { method: "DELETE" }).catch(() => null);
+    const j = await r?.json().catch(() => ({})) ?? {};
+    if (!r || !r.ok) { setErro(j.error ?? "Não foi possível excluir o comentário."); return; }
+    setComentarios((cs) => cs.filter((c) => c.id !== id));
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 flex items-start justify-center p-4 overflow-y-auto" onClick={onMudou}>
       <div
@@ -457,6 +630,11 @@ function DetalheTicket({
             <button className={BTN} onClick={alternarResponsavel} disabled={salvando || !meuEmail}>
               {souResponsavel ? "Deixar de ser responsável" : "Assumir este ticket"}
             </button>
+            {t.status === "finalizado" && t.closed_at && (
+              <span className="text-xs text-slate-500 ml-auto pb-2.5">
+                Encerrado em {formatarDataHora(t.closed_at)}
+              </span>
+            )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
@@ -605,32 +783,113 @@ function DetalheTicket({
             <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Comentários ({comentarios.length})</h3>
             {comentarios.length === 0 && <p className="text-sm text-slate-500 italic mb-2">Nenhum comentário ainda.</p>}
             <div className="space-y-3 mb-3">
-              {comentarios.map((c) => (
-                <div key={c.id} className="flex gap-3">
-                  <span className="w-7 h-7 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-semibold">
-                    {iniciais(c.author_name, c.author_email)}
-                  </span>
-                  <div className={`${CARD} flex-1 px-3 py-2`}>
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <strong className="text-sm text-slate-900 dark:text-slate-100">{c.author_name ?? c.author_email}</strong>
-                      <span className="text-[11px] text-slate-500 shrink-0">{tempoRelativo(c.created_at)}</span>
+              {comentarios.map((c) => {
+                const souAutor = !!meuEmail && c.author_email.toLowerCase() === meuEmail;
+                const possoExcluir = souAutor || souAdmin;
+                const editando = editandoId === c.id;
+                return (
+                  <div key={c.id} className="flex gap-3">
+                    <span className="w-7 h-7 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-semibold">
+                      {iniciais(c.author_name, c.author_email)}
+                    </span>
+                    <div className={`${CARD} flex-1 px-3 py-2`}>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <strong className="text-sm text-slate-900 dark:text-slate-100">{c.author_name ?? c.author_email}</strong>
+                        <span className="flex items-center gap-1 shrink-0">
+                          <span className="text-[11px] text-slate-500">{tempoRelativo(c.created_at)}</span>
+                          {!editando && souAutor && (
+                            <button
+                              onClick={() => comecarEdicao(c)}
+                              title="Editar comentário"
+                              aria-label="Editar comentário"
+                              className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                              </svg>
+                            </button>
+                          )}
+                          {!editando && possoExcluir && (
+                            <button
+                              onClick={() => excluirComentario(c.id)}
+                              title="Excluir comentário"
+                              aria-label="Excluir comentário"
+                              className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
+                              </svg>
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                      {editando ? (
+                        <div className="space-y-2">
+                          <textarea
+                            rows={3}
+                            value={textoEdicao}
+                            onChange={(e) => setTextoEdicao(e.target.value)}
+                            className={`${INPUT} w-full resize-y`}
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button className={BTN} onClick={() => setEditandoId(null)} disabled={salvandoEdicao}>
+                              Cancelar
+                            </button>
+                            <button
+                              className={BTN_PRIMARY}
+                              onClick={() => salvarEdicao(c.id)}
+                              disabled={salvandoEdicao || !textoEdicao.trim()}
+                            >
+                              {salvandoEdicao ? "Salvando…" : "Salvar"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <ComentarioTexto texto={c.body} />
+                      )}
                     </div>
-                    <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">{c.body}</div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="space-y-2">
+              <input
+                ref={arquivoRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) enviarImagem(f);
+                  e.target.value = "";
+                }}
+              />
               <textarea
                 rows={3}
-                placeholder="Escreva um comentário…"
+                placeholder="Escreva um comentário… (dá pra colar ou arrastar uma imagem aqui)"
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
+                onPaste={aoColar}
+                onDrop={aoSoltarArquivo}
+                onDragOver={(e) => e.preventDefault()}
                 className={`${INPUT} w-full resize-y`}
               />
-              <div className="flex justify-end">
-                <button className={BTN_PRIMARY} onClick={comentar} disabled={salvando || !texto.trim()}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className={BTN}
+                    onClick={() => arquivoRef.current?.click()}
+                    disabled={enviandoImagem}
+                    title="Anexar imagem"
+                  >
+                    📎 {enviandoImagem ? "Enviando imagem…" : "Anexar imagem"}
+                  </button>
+                  <span className="text-xs text-slate-500 hidden sm:inline">ou cole com Ctrl+V</span>
+                </div>
+                <button className={BTN_PRIMARY} onClick={comentar} disabled={salvando || enviandoImagem || !texto.trim()}>
                   {salvando ? "Enviando…" : "Comentar"}
                 </button>
               </div>
@@ -642,6 +901,46 @@ function DetalheTicket({
           <button className={BTN_PRIMARY} onClick={onMudou}>Fechar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ comentário (texto + imagens coladas)
+
+/**
+ * Um comentário pode ter imagens coladas/anexadas no meio do texto, no mesmo
+ * formato markdown do sistema antigo de tickets: ![legenda](url). Aqui a
+ * gente separa o texto normal das imagens e mostra cada imagem como preview
+ * clicável, em vez do link cru.
+ */
+function ComentarioTexto({ texto }: { texto: string }) {
+  const partes: (string | { alt: string; url: string })[] = [];
+  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  let ultimoIndice = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(texto)) !== null) {
+    if (m.index > ultimoIndice) partes.push(texto.slice(ultimoIndice, m.index));
+    partes.push({ alt: m[1] || "imagem", url: m[2] });
+    ultimoIndice = m.index + m[0].length;
+  }
+  if (ultimoIndice < texto.length) partes.push(texto.slice(ultimoIndice));
+
+  return (
+    <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line break-words">
+      {partes.map((parte, i) =>
+        typeof parte === "string" ? (
+          parte && <span key={i}>{parte}</span>
+        ) : (
+          <a key={i} href={parte.url} target="_blank" rel="noreferrer" className="block my-2 w-fit">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={parte.url}
+              alt={parte.alt}
+              className="max-w-full sm:max-w-sm max-h-64 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-600"
+            />
+          </a>
+        )
+      )}
     </div>
   );
 }

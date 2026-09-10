@@ -626,6 +626,34 @@ export interface ResultadoSincronizacao {
  * usado na migração original de 24/08/2026, então rodar de novo não duplica
  * nada. Só admin pleno aciona (checado na API route).
  */
+/**
+ * Busca todas as linhas de uma tabela, paginando — o PostgREST do Supabase
+ * limita cada resposta a 1000 linhas (db-max-rows) mesmo sem `.limit()`
+ * explícito. A tabela `tickets` do Núcleo já passou disso (1.178+ linhas na
+ * migração original, e crescendo), então uma leitura sem paginação trazia só
+ * as primeiras 1000 — o resto parecia "novo" e a re-inserção esbarrava na
+ * chave primária (erro visto em produção: duplicate key value violates
+ * unique constraint "tickets_pkey").
+ */
+async function buscarTudo<T>(
+  db: SupabaseClient,
+  tabela: string,
+  colunas: string
+): Promise<{ data: T[] | null; error: { message: string } | null }> {
+  const PAGINA = 1000;
+  const linhas: T[] = [];
+  let inicio = 0;
+  for (;;) {
+    const { data, error } = await db.from(tabela).select(colunas).range(inicio, inicio + PAGINA - 1);
+    if (error) return { data: null, error };
+    const bloco = (data ?? []) as T[];
+    linhas.push(...bloco);
+    if (bloco.length < PAGINA) break;
+    inicio += PAGINA;
+  }
+  return { data: linhas, error: null };
+}
+
 export async function sincronizarTicketsOrigem(): Promise<ResultadoSincronizacao> {
   const vazio: ResultadoSincronizacao = { novosTickets: 0, comentarios: 0, anexos: 0, atribuicoes: 0 };
   const local = ticketsDb();
@@ -638,11 +666,11 @@ export async function sincronizarTicketsOrigem(): Promise<ResultadoSincronizacao
     };
   }
 
-  const { data: existentes, error: eLocal } = await local.from("tickets").select("id");
+  const { data: existentes, error: eLocal } = await buscarTudo<{ id: string }>(local, "tickets", "id");
   if (eLocal) return { ...vazio, erro: `Falha ao ler tickets do Núcleo: ${eLocal.message}` };
-  const idsLocais = new Set((existentes ?? []).map((r) => (r as { id: string }).id));
+  const idsLocais = new Set((existentes ?? []).map((r) => r.id));
 
-  const { data: todosOrigem, error: eOrigem } = await origem.from("tickets").select("*");
+  const { data: todosOrigem, error: eOrigem } = await buscarTudo<Record<string, unknown>>(origem, "tickets", "*");
   if (eOrigem) return { ...vazio, erro: `Falha ao ler o sistema antigo: ${eOrigem.message}` };
 
   const novos = (todosOrigem ?? []).filter((t) => !idsLocais.has((t as { id: string }).id));
@@ -673,6 +701,14 @@ export async function sincronizarTicketsOrigem(): Promise<ResultadoSincronizacao
   }
 
   return { novosTickets: novos.length, comentarios: nComentarios, anexos: nAnexos, atribuicoes: nAtribuicoes };
+}
+
+/** Data e hora no fuso de São Paulo, formato "dd/mm/aaaa às HH:MM". */
+export function formatarDataHora(iso: string): string {
+  const d = new Date(iso);
+  const data = d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const hora = d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+  return `${data} às ${hora}`;
 }
 
 export function tempoRelativo(iso: string): string {

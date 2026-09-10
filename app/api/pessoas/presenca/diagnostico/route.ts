@@ -24,10 +24,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, etapas, conclusao: "Falha ao obter token." });
   }
   let roles: string[] = [];
+  let appid: string | undefined;
+  let tid: string | undefined;
   try {
-    roles = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8")).roles ?? [];
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString("utf8"));
+    roles = payload.roles ?? [];
+    appid = payload.appid;
+    tid = payload.tid;
   } catch { /* ignora */ }
-  etapas["2_token"] = { ok: true, permissoes: roles };
+  // appid/tid identificam QUAL app registration do Azure está sendo usada —
+  // útil para conferir se a permissão foi concedida no app certo.
+  etapas["2_token"] = { ok: true, permissoes: roles, appid, tid };
 
   const alvo = email ?? "junior@phdcontabil.com.br";
   const r1 = await fetch(

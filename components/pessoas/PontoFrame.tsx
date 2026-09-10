@@ -10,12 +10,37 @@ export default function PontoFrame({ url }: { url: string }) {
   const [carregou, setCarregou] = useState(false);
   const [demorou, setDemorou] = useState(false);
   const [cheio, setCheio] = useState(false);
+  const [voltouPraLogin, setVoltouPraLogin] = useState(false);
   const ref = useRef<HTMLIFrameElement>(null);
+  const cargas = useRef<number[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setDemorou(true), 8000);
     return () => clearTimeout(t);
   }, []);
+
+  // O navegador não deixa a gente enxergar o que acontece dentro do iframe
+  // (é outro domínio), mas dá pra perceber o sintoma: se o quadro recarrega
+  // de novo pouco tempo depois de já ter carregado uma vez, é sinal de que o
+  // login foi feito lá dentro mas o cookie de sessão foi bloqueado (cookie de
+  // terceiro) e a página voltou sozinha pro formulário.
+  function registrarCarga() {
+    if (!carregou) {
+      setCarregou(true);
+      return;
+    }
+    const agora = Date.now();
+    cargas.current = [...cargas.current, agora].filter((t) => agora - t < 20000);
+    if (cargas.current.length >= 1) setVoltouPraLogin(true);
+  }
+
+  function recarregar() {
+    setCarregou(false);
+    setDemorou(false);
+    setVoltouPraLogin(false);
+    cargas.current = [];
+    if (ref.current) ref.current.src = url;
+  }
 
   useEffect(() => {
     if (!cheio) return;
@@ -36,7 +61,7 @@ export default function PontoFrame({ url }: { url: string }) {
           </span>
         </span>
         <span className="ponto-acoes">
-          <button className="btn" onClick={() => { setCarregou(false); setDemorou(false); if (ref.current) ref.current.src = url; }}>
+          <button className="btn" onClick={recarregar}>
             ↻ Recarregar
           </button>
           <button className="btn" onClick={() => setCheio((v) => !v)}>
@@ -45,6 +70,23 @@ export default function PontoFrame({ url }: { url: string }) {
           <a className="btn" href={url} target="_blank" rel="noopener noreferrer">Abrir em nova aba ↗</a>
         </span>
       </div>
+
+      {voltouPraLogin ? (
+        <p className="ponto-aviso ponto-aviso-forte">
+          <strong>Não conseguimos manter você conectado aqui dentro.</strong>{" "}
+          O login foi feito, mas o navegador bloqueou o cookie de sessão do
+          Ponto Digital dentro deste quadro embutido (cookie de terceiro) — não
+          é algo que dá pra resolver liberando cookies nas configurações, é uma
+          proteção do próprio navegador contra sites de terceiros dentro de
+          outro site. Use <a href={url} target="_blank" rel="noopener noreferrer">"Abrir em nova aba ↗"</a> acima, que sempre funciona.
+        </p>
+      ) : (
+        <p className="ponto-aviso">
+          Se o login não completar aqui dentro (a tela recarrega e volta pro
+          formulário), é o navegador bloqueando cookie de terceiro nesse quadro
+          embutido — use "Abrir em nova aba ↗" acima, que sempre funciona.
+        </p>
+      )}
 
       <div className="ponto-box">
         {!carregou && (
@@ -65,8 +107,8 @@ export default function PontoFrame({ url }: { url: string }) {
           src={url}
           title="Ponto Digital"
           className="ponto-iframe"
-          onLoad={() => setCarregou(true)}
-          allow="camera; geolocation; clipboard-write"
+          onLoad={registrarCarga}
+          allow="camera; geolocation; clipboard-write; storage-access"
           referrerPolicy="no-referrer-when-downgrade"
         />
       </div>
