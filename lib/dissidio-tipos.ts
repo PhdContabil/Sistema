@@ -79,11 +79,22 @@ export interface Rodada {
   atualizada_por?: string | null;
 }
 
-/** Responsáveis pela validação do dissídio. Lista curta e estável. */
+/**
+ * Responsáveis pela validação do dissídio. Lista curta e estável.
+ *
+ * O `id` é o que fica gravado em `dissidio_empresas.responsavel` — mudar um id
+ * existente órfã as linhas já salvas, então só se acrescenta ao fim.
+ *
+ * Débora entra pela negociação: quando um cliente reclama e ela fecha um
+ * percentual diferente, ela fica como responsável daquela linha. É assim que,
+ * lendo o histórico depois, dá para separar o que foi regra geral do que foi
+ * negociado.
+ */
 export const RESPONSAVEIS = [
   { id: "eduardo", nome: "Eduardo" },
   { id: "edcarlos", nome: "Ed Carlos" },
   { id: "junior", nome: "Júnior" },
+  { id: "debora", nome: "Débora" },
 ] as const;
 
 export const RESPONSAVEL_NOME: Record<string, string> =
