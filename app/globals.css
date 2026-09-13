@@ -1466,3 +1466,8 @@ table.grid.dissidio tr.faturada select:disabled { background: transparent; borde
   margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px;
   background: rgba(22,163,74,.10); border: 1px solid rgba(22,163,74,.35); color: var(--text);
 }
+
+/* Painel de BI embutido: ganha mais altura que o quadro do ponto — o relatório
+   preenche a largura e o que sobra de conteúdo desce na vertical. */
+.ponto-page.bi-page { height: calc(100vh - 92px); }
+.ponto-page.bi-page .ponto-box { background: #1f1f1f; }

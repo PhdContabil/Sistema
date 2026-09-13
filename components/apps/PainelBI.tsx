@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
+ * Faz o relatório preencher a largura do quadro.
+ *
+ * Sem isso o Power BI encaixa a página inteira no espaço disponível e sobra
+ * tarja preta dos dois lados, porque a proporção do relatório raramente bate
+ * com a da janela. Com `fitToWidth` ele usa toda a largura e, se precisar,
+ * rola na vertical — que é o sentido natural de leitura.
+ */
+function preencherLargura(url: string): string {
+  if (/[?&]pageView=/.test(url)) return url;
+  return url + (url.includes("?") ? "&" : "?") + "pageView=fitToWidth";
+}
+
+/**
  * Painel do Power BI embutido.
  *
  * Reaproveita o formato do Ponto Digital — quadro ocupando a altura útil,
@@ -19,6 +32,7 @@ export default function PainelBI({
   titulo: string;
   origem?: string;
 }) {
+  const src = preencherLargura(url);
   const [carregou, setCarregou] = useState(false);
   const [demorou, setDemorou] = useState(false);
   const [cheio, setCheio] = useState(false);
@@ -32,7 +46,7 @@ export default function PainelBI({
   function recarregar() {
     setCarregou(false);
     setDemorou(false);
-    if (ref.current) ref.current.src = url;
+    if (ref.current) ref.current.src = src;
   }
 
   useEffect(() => {
@@ -44,7 +58,7 @@ export default function PainelBI({
   }, [cheio]);
 
   return (
-    <div className={cheio ? "ponto-page cheio" : "ponto-page"}>
+    <div className={cheio ? "ponto-page bi-page cheio" : "ponto-page bi-page"}>
       <div className="ponto-bar">
         <span className="ponto-id">
           <span className="ponto-ic">BI</span>
@@ -80,7 +94,7 @@ export default function PainelBI({
         )}
         <iframe
           ref={ref}
-          src={url}
+          src={src}
           title={titulo}
           className="ponto-iframe"
           onLoad={() => setCarregou(true)}

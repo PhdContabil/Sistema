@@ -52,6 +52,16 @@ const ICONS: Record<string, React.ReactNode> = {
       <line x1="8" y1="15" x2="12" y2="15" />
     </Svg>
   ),
+  // Fachada de loja: o MEI é o pequeno negócio de uma pessoa só. Vitrine com
+  // toldo se distingue bem dos outros ícones, que são documento, pasta e tela.
+  mei: (
+    <Svg>
+      <path d="M3.5 9 5 4.6A1 1 0 0 1 6 4h12a1 1 0 0 1 .95.6L20.5 9" />
+      <path d="M3.5 9h17" />
+      <path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9" />
+      <path d="M9.5 21v-5.5h5V21" />
+    </Svg>
+  ),
   tecnologia: (
     <Svg>
       <rect x="2" y="3" width="20" height="14" rx="2" />
