@@ -17,6 +17,7 @@ interface LinhaEnviada {
   responsavel?: string | null;
   grupo?: string | null;
   definido?: boolean;
+  gerado?: boolean;
   visto_em?: string | null;
 }
 
@@ -93,19 +94,24 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
   const paraAjuste: Record<string, unknown>[] = [];
   const paraMarcador: Record<string, unknown>[] = [];
   const paraApagar: number[] = [];
+  const travadas: number[] = [];
 
   if (linhas.length > 0) {
     const codigos = linhas.map((l) => Number(l.codigoempresa)).filter((n) => Number.isInteger(n) && n > 0);
     const { data: atuais } = await sb
       .from("dissidio_ajustes")
-      .select("codigoempresa,analisado_por,analisado_em,individual")
+      .select("codigoempresa,analisado_por,analisado_em,individual,definido,gerado,percentual,valor_novo,valor_base,origem")
       .eq("ano", ano)
       .in("codigoempresa", codigos);
 
+    type LinhaBanco = {
+      codigoempresa: number; analisado_por: string | null; analisado_em: string;
+      individual: boolean; definido: boolean; gerado: boolean;
+      percentual: number | null; valor_novo: number | null; valor_base: number | null;
+      origem: "percentual" | "valor";
+    };
     const noBanco = new Map(
-      (atuais ?? []).map((a: { codigoempresa: number; analisado_por: string | null; analisado_em: string; individual: boolean }) =>
-        [a.codigoempresa, a]
-      )
+      ((atuais ?? []) as LinhaBanco[]).map((a) => [a.codigoempresa, a])
     );
 
     for (const l of linhas) {
@@ -113,6 +119,30 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
       if (!Number.isInteger(cod) || cod <= 0) continue;
 
       const atual = noBanco.get(cod);
+
+      // Boleto e NF já emitidos: o valor saiu para o cliente. O servidor recusa
+      // qualquer alteração de número aqui, e não só a tela — a trava não pode
+      // depender de o campo estar desabilitado no navegador. Desmarcar o G é a
+      // única forma de reabrir, e vem no mesmo lugar.
+      const travada = !!atual?.gerado && l.gerado !== false;
+      if (travada) {
+        travadas.push(cod);
+        if (l.responsavel !== undefined || l.blacklist !== undefined
+            || l.blacklist_motivo !== undefined || l.grupo !== undefined) {
+          // Marcadores da empresa (grupo, blacklist) não são o valor cobrado —
+          // seguem editáveis.
+          paraMarcador.push({
+            codigoempresa: cod,
+            blacklist: l.blacklist ?? false,
+            blacklist_motivo: l.blacklist_motivo ?? null,
+            responsavel: l.responsavel || null,
+            grupo: l.grupo ? String(l.grupo).trim().toUpperCase() : null,
+            atualizado_por: email,
+            atualizado_em: agora,
+          });
+        }
+        continue;
+      }
       if (atual?.individual && atual.analisado_por && atual.analisado_por.toLowerCase() !== email) {
         const visto = l.visto_em ? Date.parse(l.visto_em) : 0;
         if (Date.parse(atual.analisado_em) > visto) {
@@ -124,7 +154,8 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
       const temVal = l.valor_novo !== undefined && l.valor_novo !== null && l.valor_novo !== "";
       const mexeuNoAjuste =
         l.percentual !== undefined || l.valor_novo !== undefined
-        || l.observacao !== undefined || l.definido !== undefined;
+        || l.observacao !== undefined || l.definido !== undefined
+        || l.gerado !== undefined;
 
       // Marcar OK sem digitar nada CONGELA o percentual que estava na tela —
       // o da regra geral. A partir daí a empresa tem valor próprio: mudar o
@@ -146,7 +177,7 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
 
         // Limpou os dois campos e não escreveu observação: volta a seguir o
         // percentual geral — a linha é recriada no passo 2.
-        if (!temPct && !temVal && !l.observacao && !l.definido) {
+        if (!temPct && !temVal && !l.observacao && !l.definido && !l.gerado) {
           paraApagar.push(cod);
         } else {
           const base = l.valor_base ?? null;
@@ -163,6 +194,7 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
             origem: v !== null ? "valor" : "percentual",
             individual: temPct || temVal || congelaPorOk,
             definido: l.definido ?? false,
+            gerado: l.gerado ?? false,
             observacao: l.observacao ?? null,
             analisado_por: email,
             analisado_em: agora,
@@ -206,12 +238,13 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
     // regravar pela regra geral apagaria o "definido" de quem já foi analisado.
     // Paginado: acima de 1.000 linhas o PostgREST corta em silêncio, e as
     // decisões cortadas seriam sobrescritas pela regra geral logo abaixo.
-    const individuais = await lerTudo<{ codigoempresa: number; individual: boolean; definido: boolean }>(
-      () => sb.from("dissidio_ajustes")
-        .select("codigoempresa,individual,definido").eq("ano", ano).order("codigoempresa")
-    );
+    const individuais = await lerTudo<{
+      codigoempresa: number; individual: boolean; definido: boolean; gerado: boolean;
+    }>(() => sb.from("dissidio_ajustes")
+      .select("codigoempresa,individual,definido,gerado").eq("ano", ano).order("codigoempresa"));
     const temDecisao = new Set(
-      individuais.filter((x) => x.individual || x.definido).map((x) => x.codigoempresa)
+      individuais.filter((x) => x.individual || x.definido || x.gerado)
+        .map((x) => x.codigoempresa)
     );
 
     const lote = (perfil.dados ?? [])
@@ -258,5 +291,6 @@ export async function POST(req: Request, { params }: { params: { ano: string } }
     removidas: paraApagar.length,
     derivadas,
     conflitos,
+    travadas,
   });
 }

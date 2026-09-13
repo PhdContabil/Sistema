@@ -14,8 +14,8 @@
 //   Conhecimento) é só de T.I.
 // - Societário virou um submódulo de Paralegal (deixou de ser módulo à
 //   parte) — quem tem Paralegal, tem Societário.
-// - "MEI" não tem módulo próprio no Núcleo ainda — fica só no acesso livre
-//   (Pessoas + Tickets) até o Pedro decidir onde encaixar.
+// - MEI passou a ter módulo próprio (13/09/2026), começando pelo painel do
+//   Power BI. Quem é do setor "mei" enxerga o módulo "mei".
 //
 // Ainda só local (não subiu pra prod) — ver instrução do Pedro em 01/09.
 
@@ -36,7 +36,7 @@ const MODULOS_POR_SETOR: Partial<Record<SetorId, string[]>> = {
   financeiro: ["financeiro"],
   paralegal: ["paralegal"],
   contabil: ["contabil"],
-  mei: [],
+  mei: ["mei"],
   // "ti" é tratado à parte (acesso total, ver ehDaTI).
 };
 

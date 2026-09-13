@@ -99,6 +99,13 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
+    id: "mei", name: "MEI", initials: "ME", color: "#c2410c",
+    desc: "Carteira MEI: acompanhamento, obrigações e indicadores do setor.",
+    apps: [
+      { name: "Painel MEI", desc: "Indicadores da carteira, direto do Power BI.", href: "/m/mei/painel" },
+    ],
+  },
+  {
     id: "tecnologia", name: "Tecnologia e Inovação", initials: "TI", color: "#5a5fc4",
     desc: "Chamados, inventário, acessos e as ferramentas que sustentam o escritório.",
     apps: [

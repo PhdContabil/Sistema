@@ -18,7 +18,9 @@ interface PreviaGrupos {
   totalPastas?: number;
 }
 
-type Situacao = "todas" | "ajustadas" | "pendentes" | "sem_mensalidade" | "ok" | "falta_definir";
+type Situacao =
+  | "todas" | "ajustadas" | "pendentes" | "sem_mensalidade"
+  | "ok" | "falta_definir" | "gerado" | "nao_gerado";
 type Ordenar =
   | "nome" | "mensalidade" | "faturamento" | "empregados" | "horas"
   | "diferenca" | "percentual" | "responsavel" | "grupo"
@@ -57,20 +59,29 @@ interface Rascunho {
   responsavel: string;
   grupo: string;
   definido: boolean;
+  gerado: boolean;
   /** `analisado_em` que veio do servidor — detecta edição simultânea. */
   visto_em: string | null;
 }
 
 function rascunhoDe(aj: Ajuste | undefined, mk: MarcadorEmpresa | undefined): Rascunho {
+  // Só decisão INDIVIDUAL preenche os campos. Toda empresa tem uma linha
+  // gravada — inclusive as que apenas seguem a regra geral, com percentual e
+  // valor_novo derivados. Preencher os campos com esses valores derivados fazia
+  // a tela tratá-los como digitados à mão: o `valor_novo` mandava, o percentual
+  // aparecia vazio e a regra geral parava de ser recalculada. Campo vazio é o
+  // que significa "segue o percentual da rodada".
+  const meu = aj?.individual ? aj : undefined;
   return {
-    percentual: aj?.percentual != null ? String(aj.percentual) : "",
-    valor_novo: aj?.valor_novo != null ? String(aj.valor_novo) : "",
+    percentual: meu && meu.origem !== "valor" && meu.percentual != null ? String(meu.percentual) : "",
+    valor_novo: meu && meu.origem === "valor" && meu.valor_novo != null ? String(meu.valor_novo) : "",
     observacao: aj?.observacao ?? "",
     blacklist: mk?.blacklist ?? false,
     blacklist_motivo: mk?.blacklist_motivo ?? "",
     responsavel: mk?.responsavel ?? "",
     grupo: mk?.grupo ?? "",
     definido: aj?.definido ?? false,
+    gerado: aj?.gerado ?? false,
     visto_em: aj?.analisado_em ?? null,
   };
 }
@@ -317,6 +328,7 @@ export default function AnaliseDissidio({
         responsavel: r.responsavel || null,
         grupo: r.grupo.trim() || null,
         definido: r.definido,
+        gerado: r.gerado,
         visto_em: r.visto_em,
       }));
 
@@ -391,6 +403,8 @@ export default function AnaliseDissidio({
         if (situacao === "sem_mensalidade" && base) return false;
         if (situacao === "ok" && !st.definido) return false;
         if (situacao === "falta_definir" && st.definido) return false;
+        if (situacao === "gerado" && !st.gerado) return false;
+        if (situacao === "nao_gerado" && st.gerado) return false;
         if (!q) return true;
         return (
           (e.nome ?? "").toLowerCase().includes(q) ||
@@ -439,16 +453,18 @@ export default function AnaliseDissidio({
   const visiveis = filtradas.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
 
   const totais = useMemo(() => {
-    let atual = 0, novo = 0, comAjuste = 0, black = 0, ok = 0;
+    let atual = 0, novo = 0, comAjuste = 0, black = 0, ok = 0, gerados = 0;
     for (const l of filtradas) {
       if (l.st.blacklist) black++;
       if (l.st.definido) ok++;
+      if (l.st.gerado) gerados++;
       if (l.base === null) continue;
       atual += l.base;
       novo += l.calc.valorNovo ?? l.base;
       if (l.aj) comAjuste++;
     }
-    return { atual, novo, diferenca: novo - atual, comAjuste, black, ok, falta: filtradas.length - ok };
+    return { atual, novo, diferenca: novo - atual, comAjuste, black, ok, gerados,
+             falta: filtradas.length - ok };
   }, [filtradas]);
 
   function ordenarPor(col: Ordenar) {
@@ -469,7 +485,7 @@ export default function AnaliseDissidio({
   function exportar() {
     const cab = [
       "Cód. financeiro", "Cód. empresa", "Empresa", "CNPJ", "Grupo", "Atividade", "Regime", "Ativa",
-      "Blacklist", "Responsável", "Definido (OK)",
+      "Blacklist", "Responsável", "Definido (OK)", "Gerado (boleto/NF)",
       ...INDICADORES.filter((i) => i.id !== "reajuste")
         .flatMap((i) => anosComparados.map((a) => `${i.nome} ${a}`)),
       ...anosComparados.map((a) => `Reajuste aplicado ${a}`),
@@ -482,7 +498,7 @@ export default function AnaliseDissidio({
       e.atividade?.descricao ?? "", e.regime ?? "",
       e.codigocliente_ativo === false ? "Não" : "Sim",
       st.blacklist ? "Sim" : "Não", RESPONSAVEL_NOME[st.responsavel] ?? "",
-      st.definido ? "Sim" : "Não",
+      st.definido ? "Sim" : "Não", st.gerado ? "Sim" : "Não",
       ...anosComparados.map((a) => anoDe(e, a)?.faturamento_media_mes ?? ""),
       ...anosComparados.map((a) => anoDe(e, a)?.empregados_media_mes ?? ""),
       ...anosComparados.map((a) => anoDe(e, a)?.horas_media_mes ?? ""),
@@ -523,7 +539,7 @@ export default function AnaliseDissidio({
     URL.revokeObjectURL(url);
   }
 
-  const colunas = 5 + INDICADORES.length * anosComparados.length + SERVICOS.length + 4;
+  const colunas = 6 + INDICADORES.length * anosComparados.length + SERVICOS.length + 4;
   const temPendencia = pendentes > 0 || cabecalhoMudou;
 
   return (
@@ -612,6 +628,11 @@ export default function AnaliseDissidio({
         </span>
         <span className={`chip ${situacao === "ok" ? "on" : ""}`}
               onClick={() => setSituacao(situacao === "ok" ? "todas" : "ok")}>OK</span>
+        <span className={`chip ${situacao === "gerado" ? "on" : ""}`}
+              title="Boleto e nota fiscal já gerados — linhas travadas"
+              onClick={() => setSituacao(situacao === "gerado" ? "todas" : "gerado")}>
+          Gerado {totais.gerados > 0 ? totais.gerados : ""}
+        </span>
         <span className={`chip ${situacao === "ajustadas" ? "on" : ""}`}
               onClick={() => setSituacao(situacao === "ajustadas" ? "todas" : "ajustadas")}>Ajustadas</span>
         <span className={`chip ${soBlacklist ? "on" : ""}`} onClick={() => setSoBlacklist((v) => !v)}>Blacklist</span>
@@ -630,7 +651,8 @@ export default function AnaliseDissidio({
               <th rowSpan={2} className="mini-col">
                 <button className="th-ord" onClick={() => ordenarPor("responsavel")}>Resp.{seta("responsavel")}</button>
               </th>
-              <th rowSpan={2} className="mini-col">OK</th>
+              <th rowSpan={2} className="mini-col" title="Análise concluída nesta rodada">OK</th>
+              <th rowSpan={2} className="mini-col g-col" title="Boleto e nota fiscal gerados — trava a linha">G</th>
               {INDICADORES.map((ind) => (
                 <th key={ind.id} className="ano" colSpan={anosComparados.length}>
                   {ind.ordena
@@ -1017,7 +1039,7 @@ function LinhaEmpresa({
   };
 
   return (
-    <tr className={`${calc.individual ? "tem-ajuste" : ""} ${sujo ? "nao-salvo" : ""} ${st.definido ? "definida" : ""}`}>
+    <tr className={`${calc.individual ? "tem-ajuste" : ""} ${sujo ? "nao-salvo" : ""} ${st.definido ? "definida" : ""} ${st.gerado ? "faturada" : ""}`}>
       <td className="col-empresa">
         <button className="link-empresa" onClick={onAbrir} title="Abrir detalhes">
           {e.nome ?? `Empresa #${e.codigoempresa}`}
@@ -1033,7 +1055,7 @@ function LinhaEmpresa({
       </td>
 
       <td className="mini-col">
-        <select className="mini-sel" value={st.responsavel} disabled={salvando}
+        <select className="mini-sel" value={st.responsavel} disabled={salvando || st.gerado}
                 onChange={(ev) => onEditar({ responsavel: ev.target.value })}>
           <option value="">—</option>
           {RESPONSAVEIS.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}
@@ -1041,9 +1063,17 @@ function LinhaEmpresa({
       </td>
 
       <td className="mini-col num">
-        <input type="checkbox" checked={st.definido} disabled={salvando}
+        <input type="checkbox" checked={st.definido} disabled={salvando || st.gerado}
                title="Análise concluída nesta rodada"
                onChange={(ev) => onEditar({ definido: ev.target.checked })} />
+      </td>
+
+      <td className="mini-col num g-col">
+        <input type="checkbox" checked={st.gerado} disabled={salvando}
+               title={st.gerado
+                 ? "Boleto e NF gerados — desmarque para poder editar de novo"
+                 : "Marcar como boleto e NF gerados (trava a linha)"}
+               onChange={(ev) => onEditar({ gerado: ev.target.checked })} />
       </td>
 
       {INDICADORES.map((ind) => anos.map((a) => celula(ind.id, a)))}
@@ -1059,12 +1089,12 @@ function LinhaEmpresa({
 
       <td className="sim num">{base === null ? "—" : formatBRL(base)}</td>
       <td className="sim">
-        <input className="mini" inputMode="decimal" value={st.percentual} disabled={salvando}
+        <input className="mini" inputMode="decimal" value={st.percentual} disabled={salvando || st.gerado}
                placeholder={calc.individual ? "" : String(calc.percentual ?? "")}
                onChange={(ev) => onEditar({ percentual: ev.target.value, valor_novo: "" })} />
       </td>
       <td className="sim">
-        <input className="mini" inputMode="decimal" value={st.valor_novo} disabled={salvando}
+        <input className="mini" inputMode="decimal" value={st.valor_novo} disabled={salvando || st.gerado}
                placeholder={calc.valorNovo !== null ? formatBRL(calc.valorNovo) : ""}
                onChange={(ev) => onEditar({ valor_novo: ev.target.value, percentual: "" })} />
       </td>
@@ -1148,12 +1178,20 @@ function ModalEmpresa({
               </div>
             </div>
 
+            {st.gerado && (
+              <p className="aviso-travado">
+                Boleto e nota fiscal já gerados. Os valores estão travados para não
+                divergirem do que foi cobrado — desmarque o <strong>G</strong> na linha
+                para poder editar.
+              </p>
+            )}
+
             <h3>Ajuste desta empresa</h3>
             <div className="form-linha">
               <label className="campo-inline">
                 <span>Percentual (%)</span>
                 <input
-                  inputMode="decimal" value={st.percentual} disabled={salvando}
+                  inputMode="decimal" value={st.percentual} disabled={salvando || st.gerado}
                   placeholder={calc.individual ? "" : String(calc.percentual ?? "")}
                   onChange={(ev) => onEditar({ percentual: ev.target.value, valor_novo: "" })}
                 />
@@ -1161,7 +1199,7 @@ function ModalEmpresa({
               <label className="campo-inline">
                 <span>ou valor novo (R$)</span>
                 <input
-                  inputMode="decimal" value={st.valor_novo} disabled={salvando}
+                  inputMode="decimal" value={st.valor_novo} disabled={salvando || st.gerado}
                   placeholder={calc.valorNovo !== null ? formatBRL(calc.valorNovo) : ""}
                   onChange={(ev) => onEditar({ valor_novo: ev.target.value, percentual: "" })}
                 />
@@ -1169,7 +1207,7 @@ function ModalEmpresa({
               <label className="campo-inline">
                 <span>Responsável pela validação</span>
                 <select
-                  className="sel" value={st.responsavel} disabled={salvando}
+                  className="sel" value={st.responsavel} disabled={salvando || st.gerado}
                   onChange={(ev) => onEditar({ responsavel: ev.target.value })}
                 >
                   <option value="">Sem responsável</option>

@@ -123,6 +123,12 @@ export interface Ajuste {
   individual?: boolean;
   /** Análise concluída para esta empresa nesta rodada (marcado como OK). */
   definido?: boolean;
+  /**
+   * Financeiro já gerou boleto e nota fiscal. A linha fica travada: o valor já
+   * saiu para o cliente, então mexer nele aqui criaria divergência com o que
+   * foi cobrado. Destravar exige desmarcar o G de propósito.
+   */
+  gerado?: boolean;
   observacao: string | null;
   analisado_por: string | null;
   analisado_em: string;
