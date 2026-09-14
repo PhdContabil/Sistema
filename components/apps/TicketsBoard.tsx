@@ -305,7 +305,12 @@ export default function TicketsBoard({
                       </svg>
                     </button>
                   </div>
-                  <div className="text-sm font-medium leading-snug mb-1">{t.title}</div>
+                  <div className="text-sm font-medium leading-snug mb-1">
+                    {t.numero != null && (
+                      <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500 mr-1.5">#{t.numero}</span>
+                    )}
+                    {t.title}
+                  </div>
                   {t.description && (
                     <div className="text-xs text-slate-500 dark:text-slate-400 leading-snug mb-2 line-clamp-2 whitespace-pre-line">
                       {t.description}
@@ -579,6 +584,8 @@ function DetalheTicket({
         <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-slate-200 dark:border-slate-800">
           <div>
             <div className="text-xs text-slate-500 mb-1">
+              {t.numero != null && <span className="font-mono">#{t.numero}</span>}
+              {t.numero != null && " · "}
               {SETOR_NOME[t.sector]} · aberto por {primeiroNome(t.created_by_name, t.created_by_email)} há {tempoRelativo(t.created_at)}
             </div>
             <h2 className="text-xl font-bold">{t.title}</h2>

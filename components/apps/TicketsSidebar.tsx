@@ -62,6 +62,17 @@ export default function TicketsSidebar({
           </Link>
         ))}
 
+        <div className="px-3 pt-4 pb-1.5 text-[11px] uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          Planejamento
+        </div>
+        <Link
+          href="/m/tecnologia/tickets/sprint"
+          className={`${ITEM} ${pathname === "/m/tecnologia/tickets/sprint" ? ITEM_ON : ITEM_OFF}`}
+        >
+          <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-500" />
+          <span className="flex-1 truncate">Sprint</span>
+        </Link>
+
         {souAdmin && (
           <>
             <div className="px-3 pt-4 pb-1.5 text-[11px] uppercase tracking-widest text-slate-400 dark:text-slate-500">
