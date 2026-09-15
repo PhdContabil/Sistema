@@ -97,12 +97,37 @@ interface UsedRange {
   values?: (string | number | boolean | null)[][];
 }
 
+/**
+ * Intervalo fixo usado quando o `usedRange` da aba não pode ser calculado
+ * (aba antiga com formatação/borda aplicada muito além dos dados reais —
+ * o Graph calcula o "usado" pela formatação, não só pelo conteúdo, e
+ * estoura o limite dele mesmo com poucas linhas de dado de verdade).
+ * Generoso o bastante para qualquer aba de controle de boletos: 78 colunas
+ * (A a BZ) por 5.000 linhas.
+ */
+const INTERVALO_LIMITADO = "A1:BZ5000";
+
+async function valoresDaAba(
+  token: string, driveId: string, itemId: string, aba: string
+): Promise<UsedRange> {
+  const base = `/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(aba)}')`;
+  try {
+    return await graph<UsedRange>(token, `${base}/usedRange(valuesOnly=true)`);
+  } catch (e) {
+    // "RangeExceedsLimit": o Graph não consegue calcular o usedRange (comum
+    // em aba antiga com formatação espalhada). Cai para um intervalo fixo,
+    // que não depende desse cálculo.
+    if (e instanceof BoletosSharePointErro && e.status === 400 && /RangeExceedsLimit/i.test(e.message)) {
+      return await graph<UsedRange>(token, `${base}/range(address='${INTERVALO_LIMITADO}')`);
+    }
+    throw e;
+  }
+}
+
 async function lerAba(
   token: string, driveId: string, itemId: string, aba: string
 ): Promise<LinhaBoletoPlanilha[]> {
-  const caminho =
-    `/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(aba)}')/usedRange(valuesOnly=true)`;
-  const r = await graph<UsedRange>(token, caminho);
+  const r = await valoresDaAba(token, driveId, itemId, aba);
   const linhas = r.values ?? [];
   if (linhas.length < 2) return [];
 
