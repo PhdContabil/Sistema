@@ -19,8 +19,12 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 
 const HOSTNAME = process.env.SP_HOSTNAME || "phdcontabil.sharepoint.com";
 const SITE_PATH = process.env.SP_FINANCEIRO_SITE_PATH || "/sites/Financeiro";
-/** Pasta (biblioteca de documentos) onde a planilha fica — ela não está na raiz do site. */
-const PASTA = process.env.SP_BOLETOS_PASTA ?? "PLANILHA FINANCEIRO";
+/**
+ * Pasta (dentro da biblioteca de documentos padrão do site) onde a planilha
+ * fica — não está na raiz. Caminho confirmado ao vivo no SharePoint:
+ * Documentos > 1 - PHD > CONTAS A RECEBER > PLANILHA FINANCEIRO > PLANILHA 2026.xlsx
+ */
+const PASTA = process.env.SP_BOLETOS_PASTA ?? "1 - PHD/CONTAS A RECEBER/PLANILHA FINANCEIRO";
 const ARQUIVO = process.env.SP_BOLETOS_ARQUIVO || "PLANILHA 2026.xlsx";
 /** Caminho completo (pasta + arquivo) dentro da biblioteca de documentos, para mensagens de erro. */
 const CAMINHO_ARQUIVO = [PASTA, ARQUIVO].filter(Boolean).join("/");
