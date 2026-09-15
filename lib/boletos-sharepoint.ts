@@ -19,7 +19,11 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 
 const HOSTNAME = process.env.SP_HOSTNAME || "phdcontabil.sharepoint.com";
 const SITE_PATH = process.env.SP_FINANCEIRO_SITE_PATH || "/sites/Financeiro";
+/** Pasta (biblioteca de documentos) onde a planilha fica — ela não está na raiz do site. */
+const PASTA = process.env.SP_BOLETOS_PASTA ?? "PLANILHA FINANCEIRO";
 const ARQUIVO = process.env.SP_BOLETOS_ARQUIVO || "PLANILHA 2026.xlsx";
+/** Caminho completo (pasta + arquivo) dentro da biblioteca de documentos, para mensagens de erro. */
+const CAMINHO_ARQUIVO = [PASTA, ARQUIVO].filter(Boolean).join("/");
 /** Uma aba por equipe/carteira — as demais (histórico, dados de cliente etc.) não entram. */
 const ABAS = (process.env.SP_BOLETOS_ABAS || "Contabil,Digital,Negocios")
   .split(",").map((s) => s.trim()).filter(Boolean);
@@ -40,7 +44,7 @@ function amigavel(status: number, corpo: string): string {
     return "O aplicativo não tem permissão para ler o SharePoint. "
       + "Falta conceder Sites.Read.All (tipo Aplicação) e o consentimento do administrador no Azure.";
   }
-  if (status === 404) return `Arquivo ou aba não encontrada em ${HOSTNAME}${SITE_PATH} (${ARQUIVO}).`;
+  if (status === 404) return `Arquivo ou aba não encontrada em ${HOSTNAME}${SITE_PATH} (${CAMINHO_ARQUIVO}).`;
   if (status === 429) return "Muitas consultas em pouco tempo. Tente de novo em instantes.";
   return `Erro ${status} ao consultar o SharePoint: ${corpo.slice(0, 200)}`;
 }
@@ -75,7 +79,7 @@ function normalizarCabecalho(s: string): string {
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-\u036f]/g, "");
+    .replace(/[̀-ͯ]/g, "");
 }
 
 export interface LinhaBoletoPlanilha {
@@ -142,8 +146,12 @@ export async function lerBoletosGerados(): Promise<{
   const token = await obterToken();
   const site = await graph<{ id: string }>(token, `/sites/${HOSTNAME}:${SITE_PATH}`);
   const drive = await graph<{ id: string }>(token, `/sites/${site.id}/drive`);
+  // O `root:/` do Graph aceita caminho com várias pastas — cada segmento
+  // precisa ser codificado à parte, senão uma "/" dentro do nome da pasta
+  // (não é o caso aqui, mas por segurança) quebraria o caminho.
+  const caminhoCodificado = CAMINHO_ARQUIVO.split("/").map(encodeURIComponent).join("/");
   const item = await graph<{ id: string }>(
-    token, `/drives/${drive.id}/root:/${encodeURIComponent(ARQUIVO)}`
+    token, `/drives/${drive.id}/root:/${caminhoCodificado}`
   );
 
   const todas: LinhaBoletoPlanilha[] = [];
