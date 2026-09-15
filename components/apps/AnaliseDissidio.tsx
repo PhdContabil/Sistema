@@ -18,6 +18,14 @@ interface PreviaGrupos {
   totalPastas?: number;
 }
 
+interface PreviaBoletos {
+  gerados: { codigoempresa: number; codigocliente: number; empresa: string | null; aba: string }[];
+  semEmpresa: { aba: string; codigofinanceiro: number; empresa: string | null; ok: boolean }[];
+  ambiguos: { codigofinanceiro: number; aba: string; candidatos: number[] }[];
+  abasComErro: { aba: string; erro: string }[];
+  totalLinhas: number;
+}
+
 type Situacao =
   | "todas" | "ajustadas" | "pendentes" | "sem_mensalidade"
   | "ok" | "falta_definir" | "gerado" | "nao_gerado";
@@ -183,6 +191,8 @@ export default function AnaliseDissidio({
   const [obsAberta, setObsAberta] = useState(false);
   const [previa, setPrevia] = useState<PreviaGrupos | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  const [previaBoletos, setPreviaBoletos] = useState<PreviaBoletos | null>(null);
+  const [sincronizandoBoletos, setSincronizandoBoletos] = useState(false);
   const [conflitos, setConflitos] = useState<{ codigoempresa: number; por: string | null; em: string }[]>([]);
 
   const percentualGeral = Number(String(percGeral).replace(",", ".")) || 0;
@@ -289,6 +299,49 @@ export default function AnaliseDissidio({
       setErro(e instanceof Error ? e.message : "Falha ao gravar os grupos.");
     } finally {
       setSincronizando(false);
+    }
+  }
+
+  /**
+   * Lê a planilha de boletos do financeiro (SharePoint) e mostra quantas
+   * empresas bateriam pelo código financeiro — sem gravar nada ainda.
+   */
+  async function verBoletos() {
+    setSincronizandoBoletos(true);
+    setErro(null);
+    try {
+      const r = await fetch(`/api/dissidio/boletos?ano=${ano}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "Falha ao ler a planilha de boletos.");
+      setPreviaBoletos(j as PreviaBoletos);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao ler a planilha de boletos.");
+    } finally {
+      setSincronizandoBoletos(false);
+    }
+  }
+
+  async function aplicarBoletos() {
+    setSincronizandoBoletos(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/dissidio/boletos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ano }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "Falha ao marcar os boletos gerados.");
+      setPreviaBoletos(null);
+      setAviso(
+        `${j.marcados} empresa(s) marcada(s) como gerado`
+        + (j.jaEstava ? ` (${j.jaEstava} já estava(m)).` : ".")
+      );
+      router.refresh();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao marcar os boletos gerados.");
+    } finally {
+      setSincronizandoBoletos(false);
     }
   }
 
@@ -603,6 +656,10 @@ export default function AnaliseDissidio({
                 title="Lê as pastas do SharePoint e casa pelo código da empresa">
           {sincronizando ? "Lendo…" : "⟳ Grupos"}
         </button>
+        <button className="btn" onClick={verBoletos} disabled={sincronizandoBoletos}
+                title="Lê a PLANILHA 2026 do financeiro (SharePoint) e marca o G de quem já teve o boleto gerado">
+          {sincronizandoBoletos ? "Lendo…" : "⟳ Boletos"}
+        </button>
         <button className="btn" onClick={exportar}>↓ Excel</button>
       </div>
 
@@ -652,7 +709,8 @@ export default function AnaliseDissidio({
                 <button className="th-ord" onClick={() => ordenarPor("responsavel")}>Resp.{seta("responsavel")}</button>
               </th>
               <th rowSpan={2} className="mini-col" title="Análise concluída nesta rodada">OK</th>
-              <th rowSpan={2} className="mini-col g-col" title="Boleto e nota fiscal gerados — trava a linha">G</th>
+              <th rowSpan={2} className="mini-col g-col"
+                  title="Boleto e nota fiscal gerados — trava a linha. Pode vir marcado sozinho pelo botão ⟳ Boletos ou ser marcado na mão.">G</th>
               {INDICADORES.map((ind) => (
                 <th key={ind.id} className="ano" colSpan={anosComparados.length}>
                   {ind.ordena
@@ -808,6 +866,92 @@ export default function AnaliseDissidio({
               </button>
               <button className="btn primary" disabled={sincronizando} onClick={() => aplicarGrupos(false)}>
                 {sincronizando ? "Gravando…" : "Gravar só os seguros"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previaBoletos && (
+        <div className="modal-bg" onClick={() => setPreviaBoletos(null)}>
+          <div className="modal estreito" onClick={(ev) => ev.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <div className="tk-crumbs">SharePoint · /sites/Financeiro · PLANILHA 2026.xlsx</div>
+                <h2>Sincronizar boletos gerados (G)</h2>
+              </div>
+              <button className="btn icon" onClick={() => setPreviaBoletos(null)} aria-label="Fechar">✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="nota">
+                Casamento pelo <strong>código financeiro</strong> (coluna &quot;COD Q&quot; da planilha),
+                nas abas <strong>Contabil</strong>, <strong>Digital</strong> e <strong>Negocios</strong> —
+                conta quem está &quot;ok&quot; na coluna do mês vigente.
+              </p>
+              <div className="medicao">
+                <div className="med destaque">
+                  <div className="k">Serão marcadas</div>
+                  <div className="v">{previaBoletos.gerados.length}</div>
+                  <div className="ajuda">empresa(s) com boleto já gerado, achadas pelo código</div>
+                </div>
+                <div className="med">
+                  <div className="k">Sem empresa</div>
+                  <div className="v">{previaBoletos.semEmpresa.length}</div>
+                  <div className="ajuda">código da planilha não existe no Questor</div>
+                </div>
+                <div className="med">
+                  <div className="k">Ambíguos</div>
+                  <div className="v">{previaBoletos.ambiguos.length}</div>
+                  <div className="ajuda">código financeiro em mais de uma empresa</div>
+                </div>
+                <div className="med">
+                  <div className="k">Linhas lidas</div>
+                  <div className="v">{previaBoletos.totalLinhas}</div>
+                </div>
+              </div>
+
+              {previaBoletos.abasComErro.length > 0 && (
+                <p className="nota" style={{ color: "var(--res-div, #b00)" }}>
+                  Não consegui ler {previaBoletos.abasComErro.length} aba(s):{" "}
+                  {previaBoletos.abasComErro.map((a) => `${a.aba} (${a.erro})`).join("; ")}
+                </p>
+              )}
+
+              {previaBoletos.gerados.length > 0 && (
+                <>
+                  <h3>O que será marcado</h3>
+                  <div className="table-wrap" style={{ maxHeight: 260 }}>
+                    <table className="grid mini-perfil">
+                      <thead>
+                        <tr><th>Cód. financeiro</th><th>Empresa</th><th>Aba</th></tr>
+                      </thead>
+                      <tbody>
+                        {previaBoletos.gerados.slice(0, 300).map((c) => (
+                          <tr key={c.codigoempresa}>
+                            <td>{c.codigocliente}</td>
+                            <td>{c.empresa ?? `#${c.codigoempresa}`}</td>
+                            <td>{c.aba}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {previaBoletos.ambiguos.length > 0 && (
+                <p className="nota">
+                  {previaBoletos.ambiguos.length} código(s) financeiro(s) pertencem a mais de uma
+                  empresa (matriz/filial, por exemplo) e ficam de fora — dá pra marcar o G na mão,
+                  na linha de cada uma.
+                </p>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setPreviaBoletos(null)}>Cancelar</button>
+              <button className="btn primary" disabled={sincronizandoBoletos || previaBoletos.gerados.length === 0}
+                      onClick={aplicarBoletos}>
+                {sincronizandoBoletos ? "Gravando…" : `Marcar ${previaBoletos.gerados.length} empresa(s)`}
               </button>
             </div>
           </div>
@@ -1072,7 +1216,7 @@ function LinhaEmpresa({
         <input type="checkbox" checked={st.gerado} disabled={salvando}
                title={st.gerado
                  ? "Boleto e NF gerados — desmarque para poder editar de novo"
-                 : "Marcar como boleto e NF gerados (trava a linha)"}
+                 : "Marcar como boleto e NF gerados (trava a linha). O botão ⟳ Boletos marca isso sozinho, pela planilha do financeiro."}
                onChange={(ev) => onEditar({ gerado: ev.target.checked })} />
       </td>
 
