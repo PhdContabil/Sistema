@@ -218,6 +218,73 @@ export async function historicoDoAno(ano: number) {
   }));
 }
 
+/**
+ * Marca "gerado" (boleto e NF já emitidos) para um lote de empresas — usado
+ * pela sincronização com a planilha de boletos do SharePoint.
+ *
+ * Preserva tudo que já estava gravado no ajuste da empresa (percentual, valor,
+ * observação...); só liga a trava. Quem ainda não tinha nenhuma linha nesta
+ * rodada ganha uma com os campos em branco — exatamente o que acontece hoje
+ * quando alguém marca o G na tela sem digitar percentual nenhum. Empresa que
+ * já estava marcada é ignorada (idempotente: rodar de novo não faz nada nela).
+ */
+export async function marcarGerado(
+  ano: number,
+  itens: { codigoempresa: number; valor_base: number | null }[],
+  email: string
+): Promise<{ marcados: number; jaEstava: number; error?: string }> {
+  const sb = db();
+  if (!sb) return { marcados: 0, jaEstava: 0, error: "Banco indisponível." };
+  if (itens.length === 0) return { marcados: 0, jaEstava: 0 };
+
+  type AjusteAtual = {
+    codigoempresa: number; gerado: boolean;
+    percentual: number | null; valor_novo: number | null; valor_base: number | null;
+    origem: "percentual" | "valor"; individual: boolean; definido: boolean;
+    observacao: string | null; analisado_por: string | null; analisado_em: string;
+  };
+
+  const codigos = itens.map((i) => i.codigoempresa);
+  const atuais = await lerTudo<AjusteAtual>(() =>
+    sb.from("dissidio_ajustes")
+      .select("codigoempresa,gerado,percentual,valor_novo,valor_base,origem,individual,definido,observacao,analisado_por,analisado_em")
+      .eq("ano", ano).in("codigoempresa", codigos)
+  );
+  const porCodigo = new Map(atuais.map((a) => [a.codigoempresa, a]));
+
+  const agora = new Date().toISOString();
+  let jaEstava = 0;
+  const lote: Record<string, unknown>[] = [];
+
+  for (const it of itens) {
+    const atual = porCodigo.get(it.codigoempresa);
+    if (atual?.gerado) { jaEstava++; continue; }
+    lote.push({
+      ano,
+      codigoempresa: it.codigoempresa,
+      percentual: atual?.percentual ?? null,
+      valor_novo: atual?.valor_novo ?? null,
+      valor_base: atual?.valor_base ?? it.valor_base,
+      origem: atual?.origem ?? "valor",
+      individual: atual?.individual ?? false,
+      definido: atual?.definido ?? false,
+      gerado: true,
+      observacao: atual?.observacao ?? null,
+      analisado_por: atual?.analisado_por ?? email,
+      analisado_em: atual?.analisado_em ?? agora,
+    });
+  }
+
+  for (let i = 0; i < lote.length; i += 500) {
+    const { error } = await sb
+      .from("dissidio_ajustes")
+      .upsert(lote.slice(i, i + 500), { onConflict: "ano,codigoempresa" });
+    if (error) return { marcados: 0, jaEstava, error: error.message };
+  }
+
+  return { marcados: lote.length, jaEstava };
+}
+
 /** Remove o ajuste individual — a empresa volta a seguir o percentual geral. */
 export async function removerAjuste(ano: number, codigoempresa: number) {
   const sb = db();
