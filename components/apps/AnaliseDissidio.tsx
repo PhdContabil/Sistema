@@ -201,7 +201,9 @@ export default function AnaliseDissidio({
 
   useEffect(() => {
     if (!aviso) return;
-    const t = setTimeout(() => setAviso(null), 3000);
+    // Avisos com "⚠️" (ex.: sincronização de boletos incompleta) ficam mais
+    // tempo na tela — são exceção, não a confirmação de rotina de um salvamento.
+    const t = setTimeout(() => setAviso(null), aviso.includes("⚠️") ? 12000 : 3000);
     return () => clearTimeout(t);
   }, [aviso]);
 
@@ -336,6 +338,9 @@ export default function AnaliseDissidio({
       setAviso(
         `${j.marcados} empresa(s) marcada(s) como gerado`
         + (j.jaEstava ? ` (${j.jaEstava} já estava(m)).` : ".")
+        + (j.faltando
+          ? ` ⚠️ ${j.faltando} não confirmada(s) no banco — clique em ⟳ Boletos e Marcar de novo.`
+          : "")
       );
       router.refresh();
     } catch (e) {
