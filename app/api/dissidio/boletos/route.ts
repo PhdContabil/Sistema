@@ -38,7 +38,32 @@ async function montarPrevia(ano: number) {
   );
 
   const r = casarBoletos(sp.linhas, empresas);
-  return { ...r, abasComErro: sp.abasComErro, totalLinhas: sp.linhas.length, baseMap };
+
+  // Diagnóstico (só leitura, não afeta o que é gravado): quantas linhas "ok" a
+  // planilha tem por aba, e se algum código financeiro aparece "ok" mais de
+  // uma vez na MESMA aba — nesse caso a 2ª ocorrência da mesma empresa some
+  // silenciosamente do resultado (não conta como gerada de novo, não é
+  // ambígua, não é "sem empresa"), o que explica uma contagem manual da aba
+  // ficar 1 (ou mais) acima do total de gerados+semEmpresa+ambíguos.
+  const okPorAba: Record<string, number> = {};
+  const contagem = new Map<string, number>();
+  for (const l of sp.linhas) {
+    if (!l.ok) continue;
+    okPorAba[l.aba] = (okPorAba[l.aba] ?? 0) + 1;
+    const chave = `${l.aba}::${l.codigofinanceiro}`;
+    contagem.set(chave, (contagem.get(chave) ?? 0) + 1);
+  }
+  const duplicadosOk = [...contagem.entries()]
+    .filter(([, n]) => n > 1)
+    .map(([chave, n]) => {
+      const [aba, codigofinanceiro] = chave.split("::");
+      return { aba, codigofinanceiro: Number(codigofinanceiro), ocorrencias: n };
+    });
+
+  return {
+    ...r, abasComErro: sp.abasComErro, totalLinhas: sp.linhas.length, baseMap,
+    okPorAba, duplicadosOk,
+  };
 }
 
 export async function GET(req: Request) {
@@ -50,8 +75,11 @@ export async function GET(req: Request) {
   if (!ano) return NextResponse.json({ error: "Ano inválido." }, { status: 400 });
 
   try {
-    const { gerados, semEmpresa, ambiguos, abasComErro, totalLinhas } = await montarPrevia(ano);
-    return NextResponse.json({ gerados, semEmpresa, ambiguos, abasComErro, totalLinhas });
+    const { gerados, semEmpresa, ambiguos, abasComErro, totalLinhas, okPorAba, duplicadosOk } =
+      await montarPrevia(ano);
+    return NextResponse.json({
+      gerados, semEmpresa, ambiguos, abasComErro, totalLinhas, okPorAba, duplicadosOk,
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Falha ao ler a planilha de boletos." },
