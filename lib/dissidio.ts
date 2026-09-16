@@ -285,6 +285,28 @@ export async function marcarGerado(
   return { marcados: lote.length, jaEstava };
 }
 
+/**
+ * Confere, depois de `marcarGerado`, que todo mundo do lote realmente ficou
+ * com "gerado" no banco.
+ *
+ * O upsert responder sem erro não é garantia total: a leitura do SharePoint
+ * e da API do Questor acontece um pouco antes da gravação, e se qualquer um
+ * dos dois piscar por um instante (os dois são sistemas externos, fora do
+ * nosso controle) uma empresa pode entrar na lista sem que a gente perceba —
+ * sem erro nenhum aparecer na tela. Aqui a gente relê o banco de verdade em
+ * vez de confiar só no retorno do upsert, para nunca informar sucesso quando
+ * sobrou alguém sem marcar.
+ */
+export async function conferirGerados(ano: number, codigos: number[]): Promise<number[]> {
+  const sb = db();
+  if (!sb || codigos.length === 0) return [];
+  const linhas = await lerTudo<{ codigoempresa: number; gerado: boolean }>(() =>
+    sb.from("dissidio_ajustes").select("codigoempresa,gerado").eq("ano", ano).in("codigoempresa", codigos)
+  );
+  const okSet = new Set(linhas.filter((l) => l.gerado).map((l) => l.codigoempresa));
+  return codigos.filter((c) => !okSet.has(c));
+}
+
 /** Remove o ajuste individual — a empresa volta a seguir o percentual geral. */
 export async function removerAjuste(ano: number, codigoempresa: number) {
   const sb = db();
