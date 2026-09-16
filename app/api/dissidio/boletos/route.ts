@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { marcarGerado, conferirGerados } from "@/lib/dissidio";
 import { getPerfilEmpresas } from "@/lib/questor";
-import { lerBoletosGerados } from "@/lib/boletos-sharepoint";
+import { lerBoletosGerados, COLUNA_STATUS } from "@/lib/boletos-sharepoint";
 import { casarBoletos } from "@/lib/dissidio-boletos";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +79,7 @@ export async function GET(req: Request) {
       await montarPrevia(ano);
     return NextResponse.json({
       gerados, semEmpresa, ambiguos, abasComErro, totalLinhas, okPorAba, duplicadosOk,
+      colunaStatus: COLUNA_STATUS,
     });
   } catch (e) {
     return NextResponse.json(
