@@ -24,6 +24,7 @@ interface PreviaBoletos {
   ambiguos: { codigofinanceiro: number; aba: string; candidatos: number[] }[];
   abasComErro: { aba: string; erro: string }[];
   totalLinhas: number;
+  colunaStatus?: string;
 }
 
 type Situacao =
@@ -891,7 +892,8 @@ export default function AnaliseDissidio({
               <p className="nota">
                 Casamento pelo <strong>código financeiro</strong> (coluna &quot;COD Q&quot; da planilha),
                 nas abas <strong>Contabil</strong>, <strong>Digital</strong> e <strong>Negocios</strong> —
-                conta quem está &quot;ok&quot; na coluna do mês vigente.
+                conta quem está &quot;ok&quot; na coluna{" "}
+                {previaBoletos.colunaStatus ? <strong>&quot;{previaBoletos.colunaStatus}&quot;</strong> : "do mês vigente"}.
               </p>
               <div className="medicao">
                 <div className="med destaque">
