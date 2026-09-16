@@ -31,8 +31,23 @@ const CAMINHO_ARQUIVO = [PASTA, ARQUIVO].filter(Boolean).join("/");
 /** Uma aba por equipe/carteira — as demais (histórico, dados de cliente etc.) não entram. */
 const ABAS = (process.env.SP_BOLETOS_ABAS || "Contabil,Digital,Negocios")
   .split(",").map((s) => s.trim()).filter(Boolean);
-/** Mês vigente da rodada — "08.26" = agosto/2026, quando o reajuste passou a valer. */
-const COLUNA_STATUS = process.env.SP_BOLETOS_COLUNA || "08.26";
+/**
+ * Mês vigente da rodada — ex.: "09.26" = setembro/2026. Antes ficava fixo
+ * ("08.26", de quando o reajuste passou a valer), e por isso parou de pegar
+ * as marcações "ok" que o financeiro passou a fazer na coluna do mês
+ * seguinte: a rodada virou o mês (setembro), a planilha ganhou a coluna
+ * "09.26" e o sistema continuou lendo "08.26" para sempre, como se o tempo
+ * tivesse parado em agosto. Agora acompanha o mês corrente sozinho; dá pra
+ * forçar um mês específico (ex.: pra reprocessar um ciclo antigo) definindo
+ * SP_BOLETOS_COLUNA.
+ */
+function colunaStatusPadrao(): string {
+  const agora = new Date();
+  const mes = String(agora.getUTCMonth() + 1).padStart(2, "0");
+  const ano = String(agora.getUTCFullYear() % 100).padStart(2, "0");
+  return `${mes}.${ano}`;
+}
+const COLUNA_STATUS = process.env.SP_BOLETOS_COLUNA || colunaStatusPadrao();
 
 export class BoletosSharePointErro extends Error {
   status: number;
