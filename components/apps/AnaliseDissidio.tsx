@@ -523,7 +523,7 @@ export default function AnaliseDissidio({
       if (l.aj) comAjuste++;
     }
     return { atual, novo, diferenca: novo - atual, comAjuste, black, ok, gerados,
-             falta: filtradas.length - ok };
+             falta: filtradas.length - ok, naoGerados: filtradas.length - gerados };
   }, [filtradas]);
 
   function ordenarPor(col: Ordenar) {
@@ -695,6 +695,11 @@ export default function AnaliseDissidio({
               title="Boleto e nota fiscal já gerados — linhas travadas"
               onClick={() => setSituacao(situacao === "gerado" ? "todas" : "gerado")}>
           Gerado {totais.gerados > 0 ? totais.gerados : ""}
+        </span>
+        <span className={`chip ${situacao === "nao_gerado" ? "on" : ""}`}
+              title="Ainda faltam gerar boleto/NF (coluna G desmarcada)"
+              onClick={() => setSituacao(situacao === "nao_gerado" ? "todas" : "nao_gerado")}>
+          Não gerado {totais.naoGerados > 0 ? totais.naoGerados : ""}
         </span>
         <span className={`chip ${situacao === "ajustadas" ? "on" : ""}`}
               onClick={() => setSituacao(situacao === "ajustadas" ? "todas" : "ajustadas")}>Ajustadas</span>
