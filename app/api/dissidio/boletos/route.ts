@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { marcarGerado } from "@/lib/dissidio";
+import { marcarGerado, conferirGerados } from "@/lib/dissidio";
 import { getPerfilEmpresas } from "@/lib/questor";
 import { lerBoletosGerados } from "@/lib/boletos-sharepoint";
 import { casarBoletos } from "@/lib/dissidio-boletos";
@@ -108,6 +108,10 @@ export async function POST(req: Request) {
     const r = await marcarGerado(ano, itens, email);
     if (r.error) return NextResponse.json({ error: r.error }, { status: 500 });
 
+    // Confere de verdade: mesmo sem erro no upsert, alguém pode ter ficado de
+    // fora se o SharePoint/Questor piscou entre a leitura e a gravação.
+    const faltando = await conferirGerados(ano, previa.gerados.map((c) => c.codigoempresa));
+
     return NextResponse.json({
       ok: true,
       marcados: r.marcados,
@@ -116,6 +120,7 @@ export async function POST(req: Request) {
       semEmpresa: previa.semEmpresa.length,
       ambiguos: previa.ambiguos.length,
       abasComErro: previa.abasComErro,
+      faltando: faltando.length,
     });
   } catch (e) {
     return NextResponse.json(
