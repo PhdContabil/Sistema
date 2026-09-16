@@ -1,0 +1,90 @@
+-- Inventário de T.I. — criação da tabela e carga inicial a partir da
+-- planilha Controle de Notebook.xlsx (26/09/2026).
+--
+-- Rode isso uma vez no SQL Editor do Supabase (Pedro/T.I.). Depois disso o
+-- Núcleo lê e escreve nessa tabela pela tela /m/tecnologia/inventario.
+
+create table if not exists inventario_ti (
+  id bigint generated always as identity primary key,
+  categoria text not null check (categoria in ('notebook_uso', 'notebook_estoque', 'periferico')),
+  item text not null,
+  responsavel text,
+  setor text,
+  marca text,
+  especificacao text,
+  ano integer,
+  categoria_periferico text,
+  status text not null default 'Ativo',
+  quantidade integer not null default 1,
+  observacao text,
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+
+create index if not exists inventario_ti_categoria_idx on inventario_ti (categoria);
+create index if not exists inventario_ti_setor_idx on inventario_ti (setor);
+
+-- Seed inicial do Inventário de T.I., extraído de Controle de Notebook.xlsx (26/09/2026).
+-- Pode editar/completar os dados direto pela tela depois de rodar isso uma vez.
+insert into inventario_ti (categoria, item, responsavel, setor, marca, especificacao, ano, categoria_periferico, status, quantidade, observacao) values
+  ('notebook_uso', 'Notebook', 'Pedro', 'T.I', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Gabriel', 'T.I', 'DELL', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Julia H', 'T.I', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Carla', 'MEI', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Luana', 'MEI', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Julia Araujo', 'MEI', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Beatriz', 'MEI', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Isabelly', 'MEI', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Débora', 'Financeiro', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Graciele', 'Financeiro', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Eloiza', 'Financeiro', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Anna', 'Financeiro', 'HP', null, null, null, 'Inativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Rhafael', 'Paralegal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Rafael', 'Paralegal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Kelly', 'Paralegal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Flavia', 'Paralegal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Sara', 'Paralegal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Monica', 'Contabil', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Carol', 'Contabil', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Julia R', 'Contabil', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Maisa', 'Contabil', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Mariana', 'Contabil', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Gustavo', 'Fiscal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Camila', 'Fiscal', 'HP', null, null, null, 'Inativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Giovanna', 'Fiscal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Gregory', 'Fiscal', 'HP', null, null, null, 'Inativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Milena', 'Fiscal', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Marcio', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Gean', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Jaine', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Aline', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Jaison', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Maria Aparecida', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Luisa', 'Trabalhista', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Eduardo', 'Diretoria', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Junior', 'Diretoria', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Ed Carlos', 'Diretoria', 'LENOVO', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Dercino', 'Terceiros', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Angela', 'Terceiros', 'HP', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Renata', 'Terceiros', 'LENOVO', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Desktop', 'Juliana', 'Terceiros', 'Desktop', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Karina', 'Terceiros', 'Note', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Desktop', 'Karina Dias', 'Terceiros', 'Desktop', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Desktop', 'Tatiane', 'Terceiros', 'Desktop', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Desktop', 'Elaine', 'Terceiros', 'Desktop', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Desktop', 'Solange', 'Terceiros', 'Desktop', null, null, null, 'Inativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Leide', 'Terceiros', 'Note', null, null, null, 'Ativo', 1, null),
+  ('notebook_uso', 'Notebook', 'Rodolfo', 'Terceiros', 'Note', null, null, null, 'Ativo', 1, null),
+  ('notebook_estoque', 'Inspirion 15 - P75F', null, null, 'DELL', 'I3 - 8130U | 6 RAM | 256 GB', 2021, null, 'Funcionando', 1, 'Bom estado porém com processamento lento'),
+  ('notebook_estoque', 'Inspirion 15', null, null, 'DELL', 'i5‑8250U  | 4 RAM', 2021, null, 'Ambos não ligam', 2, null),
+  ('notebook_estoque', 'ASUS - X450L', null, null, 'ASUS', 'i5 - 4200U | 120GB | 4 RAM', 2014, null, 'Funcionando', 1, 'Latencia muito grande'),
+  ('notebook_estoque', 'HP - EliteBook 8470P', null, null, 'HP', 'Core i5‑3ª gen | 4 GB DDR3', 2013, null, 'Não Liga', 1, null),
+  ('notebook_estoque', 'LENOVO - IdealPad 3', null, null, 'LENOVO', 'I3 - 10110U | 250 GB | 4 RAM', 2020, null, 'Funcionando', 1, 'Problema na entrada do cabo de rede'),
+  ('notebook_estoque', 'LENOVO - IdealPad 330', null, null, 'LENOVO', 'I3 - 7020U |250GB |4 RAM', 2018, null, 'Funcionando', 1, 'Não aceita cabo de rede, Carcaça precisando de troca'),
+  ('periferico', 'Teclado HP', null, null, null, null, null, 'Teclado', 'Novo', 3, null),
+  ('periferico', 'Teclado Dell', null, null, null, null, null, 'Teclado', 'Novo', 3, null),
+  ('periferico', 'Teclado Multilaser', null, null, null, null, null, 'Teclado', 'Novo', 1, null),
+  ('periferico', 'Teclados', null, null, null, null, null, 'Teclado', 'Usado', 7, null),
+  ('periferico', 'Fones de Ouvido', null, null, null, null, null, 'Fone', 'Usado', 13, null),
+  ('periferico', 'Mouses', null, null, null, null, null, 'Mouse', 'Usado', 7, null),
+  ('periferico', 'Impressora HP LaserJet M1536dnf MFP', null, null, null, null, null, 'Impressora Multifuncional', 'Usado', 1, null);
