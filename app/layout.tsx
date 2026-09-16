@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import AssistenteChat from "@/components/AssistenteChat";
 
 export const metadata: Metadata = {
   title: "Núcleo Contábil",
@@ -22,7 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body suppressHydrationWarning>
         {children}
-        <AssistenteChat />
       </body>
     </html>
   );
