@@ -7,7 +7,7 @@ import {
   type Ticket, type PessoaTickets,
 } from "@/lib/tickets";
 import {
-  diasUteis, resumoCapacidade, formatDuracao, fimPadrao, restante, horasEmTexto,
+  diasUteis, resumoCapacidade, fimPadrao, restante, horasEmTexto,
   burndown, analytics,
   type LinhaCapacidade, type PontoBurndown, type Analytics,
 } from "@/lib/sprints-calculo";
@@ -31,8 +31,6 @@ interface Apontamento {
   segundos: number;
   horas: number;
   comentario: string | null;
-  manual: boolean;
-  emAberto: boolean;
 }
 
 interface ItemSprint {
@@ -44,8 +42,6 @@ interface ItemSprint {
   segundosExecutados: number;
   horasApontadas: number;
   apontamentos: Apontamento[];
-  rodandoPor: string | null;
-  rodandoDesde: string | null;
 }
 
 interface Folga {
@@ -121,13 +117,6 @@ export default function TicketsSprint({
   const [pessoaFiltro, setPessoaFiltro] = useState("");
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [colunaSobre, setColunaSobre] = useState<string | null>(null);
-  const [agora, setAgora] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!itens.some((i) => i.rodandoPor)) return;
-    const t = setInterval(() => setAgora(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [itens]);
 
   useEffect(() => {
     if (!aviso) return;
@@ -276,46 +265,7 @@ export default function TicketsSprint({
     if (ok) setAviso(`Movido para ${STATUS_NOME[status] ?? status} — o setor de origem já vê.`);
   }
 
-  // ------------------------------------------------------------- cronômetro
-
-  async function iniciar(item: ItemSprint) {
-    if (!sprintId) return;
-    if (!await chamar("/api/sprints/execucao", {
-      method: "POST",
-      body: JSON.stringify({ acao: "iniciar", ticket_id: item.ticket_id, sprint_id: sprintId }),
-    })) return;
-
-    const st = item.ticket?.status;
-    if (st === "backlog" || st === "analise") {
-      await chamar(`/api/tickets/${item.ticket_id}`, {
-        method: "PATCH", body: JSON.stringify({ status: "desenvolvimento" }),
-      });
-    }
-    carregar(sprintId);
-  }
-
-  async function pausar() {
-    if (!sprintId) return;
-    setSalvando(true);
-    setErro(null);
-    try {
-      const r = await fetch("/api/sprints/execucao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acao: "parar" }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) { setErro(j.error ?? "Não foi possível pausar."); return; }
-      // O servidor avisa quando o relógio passou do previsto e o excedente
-      // não coube — isso precisa chegar à pessoa, não sumir.
-      if (j.aviso) setErro(j.aviso);
-      carregar(sprintId);
-    } catch {
-      setErro("Falha de rede.");
-    } finally {
-      setSalvando(false);
-    }
-  }
+  // --------------------------------------------------------- apontamentos
 
   async function lancarHoras(ticketId: string, campos: { data: string; horas: string; comentario: string }) {
     if (!sprintId) return false;
@@ -496,12 +446,10 @@ export default function TicketsSprint({
                       )}
                       {c.itens.map((i) => (
                         <CartaoBoard
-                          key={i.ticket_id} item={i} agora={agora} meuEmail={meuEmail}
-                          nomePorEmail={nomePorEmail} salvando={salvando}
+                          key={i.ticket_id} item={i}
+                          nomePorEmail={nomePorEmail}
                           encerrada={sprint.estado === "encerrada"}
                           onAbrir={() => setAberto(i.ticket_id)}
-                          onIniciar={() => iniciar(i)}
-                          onPausar={pausar}
                           onArrastar={() => setArrastando(i.ticket_id)}
                         />
                       ))}
@@ -549,14 +497,12 @@ export default function TicketsSprint({
 
       {itemAberto && sprint && (
         <DetalheCartao
-          item={itemAberto} agora={agora} meuEmail={meuEmail} pessoasTI={pessoasTI}
+          item={itemAberto} meuEmail={meuEmail} pessoasTI={pessoasTI}
           nomePorEmail={nomePorEmail} salvando={salvando}
           encerrada={sprint.estado === "encerrada"}
           onFechar={() => setAberto(null)}
           onMudar={(campos) => mudarItem(itemAberto.ticket_id, campos)}
           onStatus={(st) => mudarStatus(itemAberto.ticket_id, st)}
-          onIniciar={() => iniciar(itemAberto)}
-          onPausar={pausar}
           onLancar={(c) => lancarHoras(itemAberto.ticket_id, c)}
           onApagarApontamento={apagarApontamento}
           onDevolver={() => devolverAoBacklog(itemAberto.ticket_id)}
@@ -569,34 +515,23 @@ export default function TicketsSprint({
 // ------------------------------------------------------------ cartão board
 
 function CartaoBoard({
-  item, agora, meuEmail, nomePorEmail, salvando, encerrada, onAbrir, onIniciar, onPausar, onArrastar,
+  item, nomePorEmail, encerrada, onAbrir, onArrastar,
 }: {
   item: ItemSprint;
-  agora: number;
-  meuEmail: string | null;
   nomePorEmail: Record<string, string>;
-  salvando: boolean;
   encerrada: boolean;
   onAbrir: () => void;
-  onIniciar: () => void;
-  onPausar: () => void;
   onArrastar: () => void;
 }) {
   const t = item.ticket;
-  const emAndamento = item.rodandoDesde
-    ? Math.max(0, Math.round((agora - new Date(item.rodandoDesde).getTime()) / 1000))
-    : 0;
-  const feito = item.horasApontadas + emAndamento / 3600;
-  const r = restante(item.horas_planejadas, feito);
-  const souEu = item.rodandoPor === meuEmail;
+  const r = restante(item.horas_planejadas, item.horasApontadas);
 
   return (
     <div
       draggable={!encerrada}
       onDragStart={(e) => { e.dataTransfer.setData("text/plain", item.ticket_id); onArrastar(); }}
-      className={`bg-white dark:bg-slate-900 border rounded-lg p-2.5 cursor-pointer hover:border-blue-400 transition ${
-        item.rodandoPor ? "border-emerald-400 dark:border-emerald-600" : "border-slate-200 dark:border-slate-800"
-      }`}
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
+                 rounded-lg p-2.5 cursor-pointer hover:border-blue-400 transition"
       onClick={onAbrir}
     >
       <div className="flex items-center gap-1.5 mb-1">
@@ -604,11 +539,6 @@ function CartaoBoard({
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
           {t ? (SETOR_NOME[t.sector] ?? t.sector) : "—"}
         </span>
-        {item.rodandoPor && (
-          <span className="ml-auto text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-            ▶ {formatDuracao(emAndamento)}
-          </span>
-        )}
       </div>
 
       <div className="text-sm font-medium text-slate-900 dark:text-white leading-snug line-clamp-2 mb-2">
@@ -643,17 +573,11 @@ function CartaoBoard({
           <span className="text-[10px] text-amber-600 dark:text-amber-400">sem dono</span>
         )}
 
-        <div className="ml-auto flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {t?.status !== "finalizado" && (
-            souEu ? (
-              <button className="text-xs px-1.5 py-0.5 rounded border border-emerald-400 text-emerald-600 dark:text-emerald-400"
-                      disabled={salvando} onClick={onPausar} title="Pausar">⏸</button>
-            ) : (
-              <button className="text-xs px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-emerald-400 hover:text-emerald-600"
-                      disabled={salvando || encerrada} onClick={onIniciar} title="Iniciar cronômetro">▶</button>
-            )
-          )}
-        </div>
+        <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500">
+          {item.apontamentos.length > 0
+            ? `${item.apontamentos.length} apontamento(s)`
+            : encerrada ? "" : "sem apontamento"}
+        </span>
       </div>
     </div>
   );
@@ -915,11 +839,10 @@ function PainelBacklog({
 // ---------------------------------------------------------- detalhe cartão
 
 function DetalheCartao({
-  item, agora, meuEmail, pessoasTI, nomePorEmail, salvando, encerrada,
-  onFechar, onMudar, onStatus, onIniciar, onPausar, onLancar, onApagarApontamento, onDevolver,
+  item, meuEmail, pessoasTI, nomePorEmail, salvando, encerrada,
+  onFechar, onMudar, onStatus, onLancar, onApagarApontamento, onDevolver,
 }: {
   item: ItemSprint;
-  agora: number;
   meuEmail: string | null;
   pessoasTI: PessoaTickets[];
   nomePorEmail: Record<string, string>;
@@ -928,8 +851,6 @@ function DetalheCartao({
   onFechar: () => void;
   onMudar: (campos: Record<string, unknown>) => void;
   onStatus: (st: string) => void;
-  onIniciar: () => void;
-  onPausar: () => void;
   onLancar: (c: { data: string; horas: string; comentario: string }) => Promise<boolean>;
   onApagarApontamento: (id: string) => void;
   onDevolver: () => void;
@@ -950,12 +871,7 @@ function DetalheCartao({
     return () => document.removeEventListener("keydown", tecla);
   }, [onFechar]);
 
-  const emAndamento = item.rodandoDesde
-    ? Math.max(0, Math.round((agora - new Date(item.rodandoDesde).getTime()) / 1000))
-    : 0;
-  const feito = item.horasApontadas + emAndamento / 3600;
-  const r = restante(item.horas_planejadas, feito);
-  const souEu = item.rodandoPor === meuEmail;
+  const r = restante(item.horas_planejadas, item.horasApontadas);
 
   // Regra do time: o cartão não estoura. Sem estimate não há teto, e com o
   // teto atingido só resta aumentar a estimativa ou abrir outro cartão.
@@ -967,7 +883,6 @@ function DetalheCartao({
   const porDia = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of item.apontamentos) {
-      if (a.emAberto) continue;
       m.set(a.data, (m.get(a.data) ?? 0) + a.horas);
     }
     return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
@@ -1009,26 +924,11 @@ function DetalheCartao({
             </select>
 
             <div className="flex-1" />
-            {t?.status !== "finalizado" && (
-              souEu
-                ? <button className={BTN} disabled={salvando} onClick={onPausar}>⏸ Pausar</button>
-                : <button className={BTN} disabled={salvando || encerrada || bloqueado} onClick={onIniciar}
-                          title={bloqueado
-                            ? (r.estimate <= 0 ? "Defina o Estimate primeiro" : "O cartão já usou todas as horas previstas")
-                            : "Iniciar o cronômetro"}>▶ Iniciar</button>
-            )}
             <button className={BTN} disabled={salvando || encerrada} onClick={onDevolver}
                     title="Tirar da sprint (o cartão volta ao board do setor)">
               Devolver ao backlog
             </button>
           </div>
-
-          {item.rodandoPor && (
-            <div className="text-xs text-emerald-600 dark:text-emerald-400">
-              ▶ {souEu ? "Você está" : `${primeiroNome(nomePorEmail[item.rodandoPor] ?? null, item.rodandoPor)} está`} contando
-              agora — {formatDuracao(emAndamento)} nesta sessão.
-            </div>
-          )}
 
           {/* esforço */}
           <div>
@@ -1066,7 +966,7 @@ function DetalheCartao({
               </div>
             )}
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-              O restante cai sozinho conforme as horas são lançadas abaixo — pelo cronômetro ou à mão.
+              O restante cai sozinho conforme as horas são lançadas abaixo.
               O cartão <strong>não passa do Estimate</strong>: se o trabalho render mais, aumente a
               estimativa ou abra outro cartão.
             </p>
@@ -1155,15 +1055,15 @@ function DetalheCartao({
 
             <div>
               <div className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
-                Apontamentos ({item.apontamentos.filter((a) => !a.emAberto).length})
+                Apontamentos ({item.apontamentos.length})
               </div>
               <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                {item.apontamentos.filter((a) => !a.emAberto).length === 0 && (
+                {item.apontamentos.length === 0 && (
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">
                     Nenhuma hora lançada neste cartão.
                   </p>
                 )}
-                {item.apontamentos.filter((a) => !a.emAberto).map((a) => (
+                {item.apontamentos.map((a) => (
                   <div key={a.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded
                                              bg-slate-50 dark:bg-slate-800/50">
                     <span className="w-16 shrink-0 text-slate-600 dark:text-slate-300">{dataCurta(a.data)}</span>
@@ -1172,7 +1072,7 @@ function DetalheCartao({
                       {primeiroNome(nomePorEmail[a.email] ?? null, a.email)}
                     </span>
                     <span className="flex-1 truncate text-slate-500 dark:text-slate-400">
-                      {a.comentario ?? (a.manual ? "" : "cronômetro")}
+                      {a.comentario ?? ""}
                     </span>
                     {(a.email === meuEmail) && (
                       <button className="text-slate-300 hover:text-red-500 dark:text-slate-600 shrink-0"
@@ -1400,7 +1300,6 @@ function PainelAnalytics({
     const m: Record<string, number> = {};
     for (const i of itens) {
       for (const a of i.apontamentos) {
-        if (a.emAberto) continue;
         m[a.data] = (m[a.data] ?? 0) + a.horas;
       }
     }

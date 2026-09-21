@@ -3,6 +3,7 @@
 //
 // A conta central é a mesma do TFS/Azure DevOps: a capacidade de uma pessoa na
 // sprint é `horas por dia × dias úteis`, menos os dias em que ela estará fora.
+// As horas gastas entram por apontamento manual, uma vez ao fim do dia.
 // O que já foi planejado para ela consome esse total, e o que sobra é o tempo
 // livre — o número que diz se cabe mais uma tarefa ou não.
 
@@ -222,24 +223,6 @@ export function resumoCapacidade(
     semResponsavel: { horas: Math.round(semRespHoras * 100) / 100, itens: semRespItens },
     diasUteisSprint: uteis,
   };
-}
-
-/** Segundos → "2h 05min" / "45min" / "30s". Para o cronômetro. */
-export function formatDuracao(segundos: number | null | undefined): string {
-  const s = Math.max(0, Math.floor(Number(segundos ?? 0)));
-  if (!Number.isFinite(s) || s === 0) return "0min";
-  const h = Math.floor(s / 3600);
-  const min = Math.floor((s % 3600) / 60);
-  if (h > 0) return `${h}h ${String(min).padStart(2, "0")}min`;
-  if (min > 0) return `${min}min`;
-  return `${s}s`;
-}
-
-/** Segundos → horas decimais, que é como as horas ficam gravadas no ticket. */
-export function segundosEmHoras(segundos: number | null | undefined): number {
-  const s = Math.max(0, Number(segundos ?? 0));
-  if (!Number.isFinite(s)) return 0;
-  return Math.round((s / 3600) * 100) / 100;
 }
 
 /** Sugestão de fim para uma sprint de 15 dias corridos começando em `inicio`. */

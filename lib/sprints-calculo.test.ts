@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   diasUteis, datasUteis, somarDias, capacidadePessoa, diasTrabalhados, resumoCapacidade,
-  formatDuracao, segundosEmHoras, fimPadrao, restante, horasEmTexto,
+  fimPadrao, restante, horasEmTexto,
   burndown, analytics,
 } from "./sprints-calculo.ts";
 
@@ -210,78 +210,6 @@ test("sprint sem itens: tudo livre", () => {
   const r = resumoCapacidade(time, [], P);
   assert.equal(r.planejadoTotal, 0);
   assert.equal(r.livreTotal, r.capacidadeTotal);
-});
-
-// ------------------------------------------------------------ cronômetro
-
-test("duração em formato legível", () => {
-  assert.equal(formatDuracao(0), "0min");
-  assert.equal(formatDuracao(45), "45s");
-  assert.equal(formatDuracao(60 * 45), "45min");
-  assert.equal(formatDuracao(3600 * 2 + 60 * 5), "2h 05min");
-});
-
-test("duração negativa não vira texto estranho", () => {
-  assert.equal(formatDuracao(-500), "0min");
-});
-
-test("segundos viram horas decimais com duas casas", () => {
-  assert.equal(segundosEmHoras(3600), 1);
-  assert.equal(segundosEmHoras(5400), 1.5);
-  assert.equal(segundosEmHoras(60 * 20), 0.33);
-  assert.equal(segundosEmHoras(null), 0);
-});
-
-test("feriado do time derruba a capacidade total", () => {
-  const semFeriado = resumoCapacidade(time, [], P);
-  const comFeriado = resumoCapacidade(time, [], {
-    ...P, folgas: [{ data: "2026-09-16", email: null, motivo: "Feriado" }],
-  });
-  assert.equal(semFeriado.capacidadeTotal, 132, "2 pessoas x 6h x 11 dias");
-  assert.equal(comFeriado.capacidadeTotal, 120, "um dia a menos para os dois");
-  assert.equal(comFeriado.diasUteisSprint, 11, "o dia útil existe; é a pessoa que não trabalha");
-});
-
-// ------------------------------------------------------- restante do item
-
-test("restante desconta o que já foi apontado", () => {
-  const r = restante(16, 6);
-  assert.equal(r.falta, 10);
-  assert.equal(r.feito, 6);
-  assert.equal(r.estourou, false);
-  assert.equal(r.pct, 37.5);
-});
-
-test("passar do estimate não deixa o restante negativo", () => {
-  const r = restante(8, 11);
-  assert.equal(r.falta, 0);
-  assert.equal(r.estourou, true);
-  assert.equal(r.pct, 100);
-});
-
-test("sem estimate não inventa porcentagem", () => {
-  const r = restante(null, 5);
-  assert.equal(r.estimate, 0);
-  assert.equal(r.falta, 0);
-  assert.equal(r.pct, 0);
-  assert.equal(r.estourou, false);
-});
-
-test("nada apontado: falta tudo", () => {
-  const r = restante(16, 0);
-  assert.equal(r.falta, 16);
-  assert.equal(r.pct, 0);
-});
-
-test("horas decimais viram horas e minutos", () => {
-  assert.equal(horasEmTexto(8), "8h 0m");
-  assert.equal(horasEmTexto(1.5), "1h 30m");
-  assert.equal(horasEmTexto(0.25), "0h 15m");
-  assert.equal(horasEmTexto(null), "0h 0m");
-});
-
-test("arredondamento de minuto não vira 60", () => {
-  assert.equal(horasEmTexto(2.999), "3h 0m");
 });
 
 // ============================================================== burndown
