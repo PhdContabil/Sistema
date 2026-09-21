@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   obterSprint, atualizarSprint, excluirSprint,
-  listarItens, listarCapacidade, backlogDisponivel, ehData, ehEstado,
+  listarItens, listarCapacidade, listarFolgas, backlogDisponivel, ehData, ehEstado,
 } from "@/lib/sprints";
 import { exigirTI } from "../_auth";
 
@@ -15,12 +15,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const sprint = await obterSprint(params.id);
   if (!sprint) return NextResponse.json({ error: "Sprint não encontrada." }, { status: 404 });
 
-  const [itens, capacidade, backlog] = await Promise.all([
+  const [itens, capacidade, folgas, backlog] = await Promise.all([
     listarItens(params.id),
     listarCapacidade(params.id),
+    listarFolgas(params.id),
     backlogDisponivel(),
   ]);
-  return NextResponse.json({ sprint, itens, capacidade, backlog });
+  return NextResponse.json({ sprint, itens, capacidade, folgas, backlog });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
