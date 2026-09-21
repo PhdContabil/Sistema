@@ -25,15 +25,15 @@ export async function POST(req: Request) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
 
   if (body.acao === "parar") {
-    const erro = await pararExecucao(email);
-    if (erro) return NextResponse.json({ error: erro }, { status: 500 });
-    return NextResponse.json({ ok: true, aberta: null });
+    const { error, aviso } = await pararExecucao(email);
+    if (error) return NextResponse.json({ error }, { status: 500 });
+    return NextResponse.json({ ok: true, aberta: null, aviso });
   }
 
   if (body.acao === "iniciar") {
     if (!body.ticket_id) return NextResponse.json({ error: "Cartão não informado." }, { status: 400 });
     const erro = await iniciarExecucao(body.ticket_id, body.sprint_id ?? null, email);
-    if (erro) return NextResponse.json({ error: erro }, { status: 500 });
+    if (erro) return NextResponse.json({ error: erro }, { status: 400 });
     return NextResponse.json({ ok: true, aberta: await execucaoAberta(email) });
   }
 

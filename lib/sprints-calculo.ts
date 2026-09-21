@@ -277,3 +277,196 @@ export function horasEmTexto(horas: number | null | undefined): string {
   if (min === 60) return `${inteiras + 1}h 0m`;
   return `${inteiras}h ${min}m`;
 }
+
+// ============================================================== burndown
+
+export interface PontoBurndown {
+  data: string;
+  /** Linha guia: o que restaria se o trabalho caísse por igual todo dia. */
+  ideal: number;
+  /**
+   * O que realmente resta ao fim do dia. `null` em dia futuro — desenhar zero
+   * ali faria a linha despencar e parecer que a sprint terminou.
+   */
+  real: number | null;
+  /** Horas lançadas neste dia, por todo o time. */
+  lancado: number;
+}
+
+/**
+ * Burndown da sprint: quanto de trabalho ainda falta, dia a dia.
+ *
+ * O total é a soma dos estimates dos cartões da sprint. Cada hora lançada
+ * derruba a linha real. A linha ideal é só uma régua: liga o total no primeiro
+ * dia ao zero no último, em dias úteis.
+ *
+ * Trabalho que entra no meio da sprint sobe a linha real — e deve subir mesmo,
+ * porque é escopo novo. Esconder isso é o que faz um burndown mentir.
+ */
+export function burndown(
+  inicio: string,
+  fim: string,
+  totalEstimado: number,
+  lancamentosPorDia: Record<string, number>,
+  hojeIso: string
+): PontoBurndown[] {
+  const dias = datasUteis(inicio, fim);
+  if (dias.length === 0) return [];
+
+  const total = Math.max(0, Number(totalEstimado) || 0);
+  const passo = dias.length > 1 ? total / (dias.length - 1) : total;
+
+  // Horas lançadas em dias não úteis (alguém trabalhou no sábado) não podem
+  // sumir: entram no primeiro dia útil seguinte, senão o total não fecha.
+  const uteis = new Set(dias);
+  const porDia = new Map<string, number>();
+  for (const [data, horas] of Object.entries(lancamentosPorDia ?? {})) {
+    const h = Number(horas) || 0;
+    if (h <= 0) continue;
+    let alvo = data;
+    if (!uteis.has(alvo)) {
+      const seguinte = dias.find((d) => d >= data);
+      alvo = seguinte ?? dias[dias.length - 1];
+      if (data < dias[0]) alvo = dias[0];
+    }
+    porDia.set(alvo, (porDia.get(alvo) ?? 0) + h);
+  }
+
+  let acumulado = 0;
+  return dias.map((d, i) => {
+    const lancado = Math.round((porDia.get(d) ?? 0) * 100) / 100;
+    acumulado += lancado;
+    return {
+      data: d,
+      ideal: Math.round(Math.max(0, total - passo * i) * 100) / 100,
+      real: d <= hojeIso ? Math.round(Math.max(0, total - acumulado) * 100) / 100 : null,
+      lancado,
+    };
+  });
+}
+
+export interface LinhaPrecisao {
+  ticket_id: string;
+  numero: number | null;
+  titulo: string;
+  estimate: number;
+  lancado: number;
+  /** Diferença em horas: positivo = sobrou tempo, negativo = faltou. */
+  desvio: number;
+  /** Quanto do estimate foi consumido, em %. */
+  consumo: number;
+  fechado: boolean;
+}
+
+export interface Analytics {
+  totalEstimado: number;
+  totalLancado: number;
+  cartoes: number;
+  fechados: number;
+  porStatus: { id: string; nome: string; qtd: number; horas: number }[];
+  porSetor: { id: string; nome: string; qtd: number; horas: number }[];
+  porPessoa: { email: string; nome: string | null; planejado: number; lancado: number }[];
+  precisao: LinhaPrecisao[];
+  /** Média do consumo dos cartões já fechados — a leitura de quão boa é a estimativa. */
+  consumoMedioFechados: number | null;
+}
+
+export interface ItemAnalytics {
+  ticket_id: string;
+  numero: number | null;
+  titulo: string;
+  status: string;
+  setor: string;
+  responsavel_email: string | null;
+  estimate: number | null;
+  lancado: number;
+}
+
+/**
+ * Números da sprint para a aba de Analytics.
+ *
+ * Tudo sai do que já está gravado: estimate do item, horas apontadas e o
+ * status atual do ticket. Nada é recalculado a partir de médias.
+ */
+export function analytics(
+  itens: ItemAnalytics[],
+  nomeStatus: Record<string, string>,
+  nomeSetor: Record<string, string>,
+  nomePorEmail: Record<string, string | null> = {}
+): Analytics {
+  const porStatus = new Map<string, { qtd: number; horas: number }>();
+  const porSetor = new Map<string, { qtd: number; horas: number }>();
+  const porPessoa = new Map<string, { planejado: number; lancado: number }>();
+  const precisao: LinhaPrecisao[] = [];
+
+  let totalEstimado = 0;
+  let totalLancado = 0;
+  let fechados = 0;
+  const consumos: number[] = [];
+
+  for (const i of itens) {
+    const est = Math.max(0, Number(i.estimate ?? 0) || 0);
+    const lanc = Math.max(0, Number(i.lancado ?? 0) || 0);
+    totalEstimado += est;
+    totalLancado += lanc;
+
+    const s = porStatus.get(i.status) ?? { qtd: 0, horas: 0 };
+    s.qtd += 1; s.horas += lanc;
+    porStatus.set(i.status, s);
+
+    const se = porSetor.get(i.setor) ?? { qtd: 0, horas: 0 };
+    se.qtd += 1; se.horas += lanc;
+    porSetor.set(i.setor, se);
+
+    const email = (i.responsavel_email ?? "").toLowerCase();
+    if (email) {
+      const p = porPessoa.get(email) ?? { planejado: 0, lancado: 0 };
+      p.planejado += est; p.lancado += lanc;
+      porPessoa.set(email, p);
+    }
+
+    const fechado = i.status === "finalizado";
+    if (fechado) {
+      fechados += 1;
+      if (est > 0) consumos.push((lanc / est) * 100);
+    }
+
+    precisao.push({
+      ticket_id: i.ticket_id,
+      numero: i.numero,
+      titulo: i.titulo,
+      estimate: Math.round(est * 100) / 100,
+      lancado: Math.round(lanc * 100) / 100,
+      desvio: Math.round((est - lanc) * 100) / 100,
+      consumo: est > 0 ? Math.round((lanc / est) * 1000) / 10 : 0,
+      fechado,
+    });
+  }
+
+  precisao.sort((a, b) => Math.abs(b.desvio) - Math.abs(a.desvio));
+
+  return {
+    totalEstimado: Math.round(totalEstimado * 100) / 100,
+    totalLancado: Math.round(totalLancado * 100) / 100,
+    cartoes: itens.length,
+    fechados,
+    porStatus: [...porStatus.entries()].map(([id, v]) => ({
+      id, nome: nomeStatus[id] ?? id, qtd: v.qtd, horas: Math.round(v.horas * 100) / 100,
+    })),
+    porSetor: [...porSetor.entries()]
+      .map(([id, v]) => ({ id, nome: nomeSetor[id] ?? id, qtd: v.qtd, horas: Math.round(v.horas * 100) / 100 }))
+      .sort((a, b) => b.qtd - a.qtd),
+    porPessoa: [...porPessoa.entries()]
+      .map(([email, v]) => ({
+        email,
+        nome: nomePorEmail[email] ?? null,
+        planejado: Math.round(v.planejado * 100) / 100,
+        lancado: Math.round(v.lancado * 100) / 100,
+      }))
+      .sort((a, b) => b.lancado - a.lancado),
+    precisao,
+    consumoMedioFechados: consumos.length > 0
+      ? Math.round((consumos.reduce((a, b) => a + b, 0) / consumos.length) * 10) / 10
+      : null,
+  };
+}

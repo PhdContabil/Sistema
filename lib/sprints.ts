@@ -313,6 +313,15 @@ export async function atualizarItem(
 ): Promise<string | null> {
   const db = ticketsDb();
   if (!db) return "Banco indisponível.";
+
+  // Baixar o estimate abaixo do que já foi lançado deixaria o cartão estourado
+  // por edição — exatamente o estado que a regra proíbe.
+  if (campos.horas_planejadas !== undefined && campos.horas_planejadas !== null) {
+    const { lancado } = await saldoDoCartao(ticketId);
+    if (campos.horas_planejadas < lancado - 0.001) {
+      return `Já foram lançadas ${lancado} h neste cartão — o Estimate não pode ficar abaixo disso.`;
+    }
+  }
   const { error } = await db
     .from("ticket_sprint_itens").update(campos)
     .eq("sprint_id", sprintId).eq("ticket_id", ticketId);
@@ -433,6 +442,43 @@ export async function removerFolga(id: string): Promise<string | null> {
 // ------------------------------------------------------------ apontamentos
 
 /**
+ * Quanto ainda cabe no cartão, em horas.
+ *
+ * Regra do time: o cartão NÃO estoura. Se o trabalho passou do previsto, a
+ * decisão é abrir outro cartão — assim o excedente aparece como escopo novo,
+ * que é o que ele é, em vez de sumir dentro de uma estimativa que ficou
+ * errada. Por isso a conta é feita aqui no servidor: travar só na tela deixaria
+ * a regra passar por qualquer requisição direta.
+ *
+ * Devolve `null` quando o cartão ainda não tem estimate — sem teto não há como
+ * dizer o que é estouro, e lançar às cegas é justamente o que queremos evitar.
+ */
+export async function saldoDoCartao(
+  ticketId: string
+): Promise<{ estimate: number | null; lancado: number; saldo: number | null }> {
+  const db = ticketsDb();
+  if (!db) return { estimate: null, lancado: 0, saldo: null };
+
+  const [{ data: item }, { data: execs }] = await Promise.all([
+    db.from("ticket_sprint_itens").select("horas_planejadas").eq("ticket_id", ticketId).maybeSingle(),
+    db.from("ticket_execucoes").select("segundos,fim").eq("ticket_id", ticketId),
+  ]);
+
+  const estimate = n((item as { horas_planejadas: number | null } | null)?.horas_planejadas);
+  let segundos = 0;
+  for (const e of (execs ?? []) as { segundos: number | null; fim: string | null }[]) {
+    if (e.fim) segundos += e.segundos ?? 0;
+  }
+  const lancado = Math.round((segundos / 3600) * 100) / 100;
+
+  return {
+    estimate,
+    lancado,
+    saldo: estimate === null ? null : Math.round((estimate - lancado) * 100) / 100,
+  };
+}
+
+/**
  * Lançamento manual de horas: "trabalhei 3h no dia 19".
  *
  * Cai na mesma tabela do cronômetro, com `manual = true`. O cartão soma os
@@ -450,6 +496,17 @@ export async function lancarHoras(
 
   const segundos = Math.max(0, Math.round(campos.horas * 3600));
   if (segundos === 0) return "Informe quantas horas foram gastas.";
+
+  const { estimate, lancado, saldo } = await saldoDoCartao(ticketId);
+  if (estimate === null || estimate <= 0) {
+    return "Defina o Estimate do cartão antes de lançar horas.";
+  }
+  if (saldo !== null && campos.horas > saldo + 0.001) {
+    return saldo <= 0
+      ? `Este cartão já consumiu as ${estimate} h previstas. Abra outro cartão para o que falta.`
+      : `Restam só ${saldo} h neste cartão (${lancado} h de ${estimate} h já lançadas). `
+        + "Lance até esse limite e abra outro cartão para o excedente.";
+  }
 
   // inicio/fim marcam o registro, não o relógio: o que vale é `data`.
   const agora = new Date().toISOString();
@@ -543,10 +600,18 @@ export async function iniciarExecucao(
   const db = ticketsDb();
   if (!db) return "Banco indisponível.";
 
+  const { estimate, saldo } = await saldoDoCartao(ticketId);
+  if (estimate === null || estimate <= 0) {
+    return "Defina o Estimate do cartão antes de começar a contar o tempo.";
+  }
+  if (saldo !== null && saldo <= 0) {
+    return `Este cartão já consumiu as ${estimate} h previstas. Abra outro cartão para continuar.`;
+  }
+
   const atual = await execucaoAberta(email);
   if (atual) {
     if (atual.ticket_id === ticketId) return null; // já está rodando neste
-    const erro = await pararExecucao(email);
+    const { error: erro } = await pararExecucao(email);
     if (erro) return erro;
   }
 
@@ -568,24 +633,40 @@ export async function iniciarExecucao(
  */
 export async function pararExecucao(
   email: string
-): Promise<string | null> {
+): Promise<{ error: string | null; aviso?: string }> {
   const db = ticketsDb();
-  if (!db) return "Banco indisponível.";
+  if (!db) return { error: "Banco indisponível." };
 
   const atual = await execucaoAberta(email);
-  if (!atual) return null;
+  if (!atual) return { error: null };
 
   const fim = new Date();
-  const segundos = Math.max(0, Math.round((fim.getTime() - new Date(atual.inicio).getTime()) / 1000));
+  let segundos = Math.max(0, Math.round((fim.getTime() - new Date(atual.inicio).getTime()) / 1000));
+  let aviso: string | undefined;
+
+  // O relógio pode ter passado do previsto — alguém esqueceu de pausar, ou a
+  // tarefa foi maior que a estimativa. Grava só até o teto e diz o que ficou
+  // de fora, em vez de estourar em silêncio ou de jogar o excedente fora sem
+  // avisar. O que sobrou vira cartão novo, como o time decidiu.
+  const { saldo } = await saldoDoCartao(atual.ticket_id);
+  if (saldo !== null) {
+    const limite = Math.max(0, Math.round(saldo * 3600));
+    if (segundos > limite) {
+      const perdidas = Math.round(((segundos - limite) / 3600) * 100) / 100;
+      segundos = limite;
+      aviso = `O cronômetro passou do previsto. Foram gravadas as ${Math.round((limite / 3600) * 100) / 100} h `
+        + `que ainda cabiam; ${perdidas} h ficaram de fora — abra outro cartão para esse tempo.`;
+    }
+  }
 
   const { error } = await db
     .from("ticket_execucoes")
     .update({ fim: fim.toISOString(), segundos })
     .eq("id", atual.id);
-  if (error) return error.message;
+  if (error) return { error: error.message };
 
   await somarNoTicket(atual.ticket_id, Math.round((segundos / 3600) * 100) / 100);
-  return null;
+  return { error: null, aviso };
 }
 
 // ----------------------------------------------------------------- backlog

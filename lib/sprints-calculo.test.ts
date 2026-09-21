@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   diasUteis, datasUteis, somarDias, capacidadePessoa, diasTrabalhados, resumoCapacidade,
   formatDuracao, segundosEmHoras, fimPadrao, restante, horasEmTexto,
+  burndown, analytics,
 } from "./sprints-calculo.ts";
 
 // ------------------------------------------------------------- dias úteis
@@ -281,4 +282,144 @@ test("horas decimais viram horas e minutos", () => {
 
 test("arredondamento de minuto não vira 60", () => {
   assert.equal(horasEmTexto(2.999), "3h 0m");
+});
+
+// ============================================================== burndown
+
+// Semana de 14 a 18/09/2026: segunda a sexta, 5 dias úteis.
+const SEMANA = { inicio: "2026-09-14", fim: "2026-09-18" };
+
+test("sem lançamento, a linha real fica parada no total", () => {
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 40, {}, "2026-09-18");
+  assert.equal(b.length, 5);
+  assert.deepEqual(b.map((p) => p.real), [40, 40, 40, 40, 40]);
+});
+
+test("a linha ideal desce por igual e zera no último dia", () => {
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 40, {}, "2026-09-18");
+  assert.deepEqual(b.map((p) => p.ideal), [40, 30, 20, 10, 0]);
+});
+
+test("cada hora lançada derruba a linha real", () => {
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 40, {
+    "2026-09-14": 8, "2026-09-15": 12,
+  }, "2026-09-18");
+  assert.equal(b[0].real, 32);
+  assert.equal(b[1].real, 20);
+  assert.equal(b[2].real, 20, "dia sem lançamento mantém o patamar");
+});
+
+test("dia futuro não tem linha real", () => {
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 40, { "2026-09-14": 8 }, "2026-09-15");
+  assert.equal(b[1].real, 20 + 12, "15/09 ainda é hoje");
+  assert.equal(b[2].real, null);
+  assert.equal(b[4].real, null);
+  assert.equal(b[2].ideal, 20, "a régua continua desenhada até o fim");
+});
+
+test("trabalho além do total não deixa a linha negativa", () => {
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 10, { "2026-09-14": 25 }, "2026-09-18");
+  assert.equal(b[0].real, 0);
+});
+
+test("hora lançada no sábado entra no dia útil seguinte", () => {
+  // 19/09 é sábado; 21/09 seria segunda, fora da semana — cai no último dia.
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 40, { "2026-09-16": 5, "2026-09-19": 3 }, "2026-09-18");
+  assert.equal(b[2].lancado, 5);
+  assert.equal(b[4].lancado, 3, "não some do total");
+  assert.equal(b[4].real, 32);
+});
+
+test("lançamento antes do início da sprint cai no primeiro dia", () => {
+  const b = burndown(SEMANA.inicio, SEMANA.fim, 40, { "2026-09-10": 4 }, "2026-09-18");
+  assert.equal(b[0].lancado, 4);
+});
+
+test("sprint de um dia só não divide por zero", () => {
+  const b = burndown("2026-09-16", "2026-09-16", 8, {}, "2026-09-16");
+  assert.equal(b.length, 1);
+  assert.equal(b[0].ideal, 8);
+});
+
+test("período sem dia útil devolve lista vazia", () => {
+  assert.deepEqual(burndown("2026-09-19", "2026-09-20", 10, {}, "2026-09-20"), []);
+});
+
+// ============================================================== analytics
+
+const NOME_ST: Record<string, string> = { desenvolvimento: "Desenvolvimento", finalizado: "Finalizado" };
+const NOME_SE: Record<string, string> = { fiscal: "Fiscal", contabil: "Contábil" };
+
+const ITENS = [
+  { ticket_id: "a", numero: 1, titulo: "Um", status: "finalizado", setor: "fiscal",
+    responsavel_email: "gabriel@phd.com", estimate: 10, lancado: 8 },
+  { ticket_id: "b", numero: 2, titulo: "Dois", status: "desenvolvimento", setor: "fiscal",
+    responsavel_email: "gabriel@phd.com", estimate: 6, lancado: 2 },
+  { ticket_id: "c", numero: 3, titulo: "Três", status: "finalizado", setor: "contabil",
+    responsavel_email: "pedro@phd.com", estimate: 4, lancado: 4 },
+];
+
+test("totaliza estimado, lançado e cartões", () => {
+  const a = analytics(ITENS, NOME_ST, NOME_SE);
+  assert.equal(a.totalEstimado, 20);
+  assert.equal(a.totalLancado, 14);
+  assert.equal(a.cartoes, 3);
+  assert.equal(a.fechados, 2);
+});
+
+test("agrupa por status e por setor de origem", () => {
+  const a = analytics(ITENS, NOME_ST, NOME_SE);
+  assert.equal(a.porStatus.find((s) => s.id === "finalizado")!.qtd, 2);
+  assert.equal(a.porSetor[0].id, "fiscal");
+  assert.equal(a.porSetor[0].qtd, 2);
+  assert.equal(a.porSetor[0].horas, 10);
+});
+
+test("soma planejado e lançado por pessoa", () => {
+  const a = analytics(ITENS, NOME_ST, NOME_SE, { "gabriel@phd.com": "Gabriel" });
+  const g = a.porPessoa.find((p) => p.email === "gabriel@phd.com")!;
+  assert.equal(g.nome, "Gabriel");
+  assert.equal(g.planejado, 16);
+  assert.equal(g.lancado, 10);
+});
+
+test("cartão sem dono não entra na conta de ninguém", () => {
+  const a = analytics([
+    { ...ITENS[0], responsavel_email: null },
+  ], NOME_ST, NOME_SE);
+  assert.equal(a.porPessoa.length, 0);
+  assert.equal(a.totalLancado, 8, "mas continua no total da sprint");
+});
+
+test("precisão mostra o desvio e ordena pelo maior", () => {
+  const a = analytics(ITENS, NOME_ST, NOME_SE);
+  assert.equal(a.precisao[0].ticket_id, "b", "4 h de folga é o maior desvio");
+  assert.equal(a.precisao[0].desvio, 4);
+  assert.equal(a.precisao.find((p) => p.ticket_id === "a")!.consumo, 80);
+});
+
+test("consumo médio olha só os cartões fechados", () => {
+  const a = analytics(ITENS, NOME_ST, NOME_SE);
+  // Fechados: 8/10 = 80% e 4/4 = 100% → média 90%.
+  assert.equal(a.consumoMedioFechados, 90);
+});
+
+test("sem cartão fechado não inventa média", () => {
+  const a = analytics([ITENS[1]], NOME_ST, NOME_SE);
+  assert.equal(a.consumoMedioFechados, null);
+});
+
+test("cartão sem estimate não vira divisão por zero", () => {
+  const a = analytics([
+    { ...ITENS[0], estimate: null, lancado: 5 },
+  ], NOME_ST, NOME_SE);
+  assert.equal(a.precisao[0].consumo, 0);
+  assert.equal(a.consumoMedioFechados, null, "sem teto, não entra na média");
+});
+
+test("sprint vazia não quebra", () => {
+  const a = analytics([], NOME_ST, NOME_SE);
+  assert.equal(a.cartoes, 0);
+  assert.equal(a.totalEstimado, 0);
+  assert.equal(a.consumoMedioFechados, null);
 });

@@ -8,7 +8,8 @@ import {
 } from "@/lib/tickets";
 import {
   diasUteis, resumoCapacidade, formatDuracao, fimPadrao, restante, horasEmTexto,
-  type LinhaCapacidade,
+  burndown, analytics,
+  type LinhaCapacidade, type PontoBurndown, type Analytics,
 } from "@/lib/sprints-calculo";
 
 // --------------------------------------------------------------------- tipos
@@ -87,7 +88,7 @@ function horasTexto(v: number): string {
   return `${Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`;
 }
 
-type Aba = "board" | "capacidade" | "backlog";
+type Aba = "board" | "capacidade" | "backlog" | "analytics";
 
 // ================================================================ componente
 
@@ -295,8 +296,24 @@ export default function TicketsSprint({
 
   async function pausar() {
     if (!sprintId) return;
-    if (await chamar("/api/sprints/execucao", { method: "POST", body: JSON.stringify({ acao: "parar" }) })) {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/sprints/execucao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "parar" }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não foi possível pausar."); return; }
+      // O servidor avisa quando o relógio passou do previsto e o excedente
+      // não coube — isso precisa chegar à pessoa, não sumir.
+      if (j.aviso) setErro(j.aviso);
       carregar(sprintId);
+    } catch {
+      setErro("Falha de rede.");
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -403,7 +420,7 @@ export default function TicketsSprint({
         <>
           {/* ---- abas ---- */}
           <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800">
-            {([["board", "Board"], ["capacidade", "Capacidade"], ["backlog", "Backlog"]] as [Aba, string][]).map(([id, nome]) => (
+            {([["board", "Board"], ["backlog", "Backlog"], ["capacidade", "Capacidade"], ["analytics", "Analytics"]] as [Aba, string][]).map(([id, nome]) => (
               <button
                 key={id}
                 onClick={() => setAba(id)}
@@ -509,6 +526,11 @@ export default function TicketsSprint({
           {/* ================================================ BACKLOG ==== */}
           {aba === "backlog" && (
             <PainelBacklog backlog={backlog} salvando={salvando} onPuxar={puxarParaSprint} />
+          )}
+
+          {/* ============================================== ANALYTICS ==== */}
+          {aba === "analytics" && (
+            <PainelAnalytics sprint={sprint} itens={itens} nomePorEmail={nomePorEmail} />
           )}
         </>
       )}
@@ -935,6 +957,13 @@ function DetalheCartao({
   const r = restante(item.horas_planejadas, feito);
   const souEu = item.rodandoPor === meuEmail;
 
+  // Regra do time: o cartão não estoura. Sem estimate não há teto, e com o
+  // teto atingido só resta aumentar a estimativa ou abrir outro cartão.
+  const semSaldo = r.estimate > 0 && r.falta <= 0;
+  const bloqueado = r.estimate <= 0 || semSaldo;
+  const pedido = Number((horas ?? "").replace(",", ".")) || 0;
+  const passaDoTeto = pedido > r.falta + 0.001;
+
   const porDia = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of item.apontamentos) {
@@ -983,7 +1012,10 @@ function DetalheCartao({
             {t?.status !== "finalizado" && (
               souEu
                 ? <button className={BTN} disabled={salvando} onClick={onPausar}>⏸ Pausar</button>
-                : <button className={BTN} disabled={salvando || encerrada} onClick={onIniciar}>▶ Iniciar</button>
+                : <button className={BTN} disabled={salvando || encerrada || bloqueado} onClick={onIniciar}
+                          title={bloqueado
+                            ? (r.estimate <= 0 ? "Defina o Estimate primeiro" : "O cartão já usou todas as horas previstas")
+                            : "Iniciar o cronômetro"}>▶ Iniciar</button>
             )}
             <button className={BTN} disabled={salvando || encerrada} onClick={onDevolver}
                     title="Tirar da sprint (o cartão volta ao board do setor)">
@@ -1035,12 +1067,34 @@ function DetalheCartao({
             )}
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               O restante cai sozinho conforme as horas são lançadas abaixo — pelo cronômetro ou à mão.
+              O cartão <strong>não passa do Estimate</strong>: se o trabalho render mais, aumente a
+              estimativa ou abra outro cartão.
             </p>
           </div>
 
           {/* lançar horas */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Lançar horas</h3>
+            <div className="flex items-baseline gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Lançar horas</h3>
+              {r.estimate > 0 && (
+                <span className={`text-xs ${semSaldo ? "text-red-600 dark:text-red-400 font-medium" : "text-slate-500 dark:text-slate-400"}`}>
+                  {semSaldo ? "cartão cheio" : `cabem mais ${horasEmTexto(r.falta)}`}
+                </span>
+              )}
+            </div>
+
+            {r.estimate <= 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                Defina o Estimate acima antes de lançar horas — sem teto não dá para saber o que é estouro.
+              </p>
+            )}
+            {semSaldo && (
+              <p className="text-xs text-red-700 dark:text-red-400 mb-2">
+                As {horasEmTexto(r.estimate)} previstas já foram usadas. Aumente o Estimate se o escopo
+                cresceu, ou abra outro cartão para o que falta.
+              </p>
+            )}
+
             <div className="flex flex-wrap items-end gap-2">
               <label className="block">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Data</span>
@@ -1048,21 +1102,30 @@ function DetalheCartao({
               </label>
               <label className="block">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Horas</span>
-                <input className={`${INPUT} w-20 mt-1`} inputMode="decimal" placeholder="3,5"
+                <input className={`${INPUT} w-20 mt-1`} inputMode="decimal"
+                       placeholder={r.falta > 0 ? String(r.falta) : "0"}
+                       disabled={bloqueado}
                        value={horas} onChange={(e) => setHoras(e.target.value)} />
               </label>
               <label className="block flex-1 min-w-[180px]">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Comentário (opcional)</span>
-                <input className={`${INPUT} w-full mt-1`} value={comentario}
+                <input className={`${INPUT} w-full mt-1`} value={comentario} disabled={bloqueado}
                        onChange={(e) => setComentario(e.target.value)} placeholder="O que foi feito" />
               </label>
-              <button className={BTN_PRIMARY} disabled={salvando || !horas.trim()}
+              <button className={BTN_PRIMARY} disabled={salvando || bloqueado || !horas.trim() || passaDoTeto}
                       onClick={async () => {
                         if (await onLancar({ data, horas, comentario })) { setHoras(""); setComentario(""); }
                       }}>
                 Lançar
               </button>
             </div>
+
+            {!bloqueado && passaDoTeto && (
+              <p className="text-xs text-red-700 dark:text-red-400 mt-2">
+                Cabem só {horasEmTexto(r.falta)} neste cartão. Lance até esse limite e abra outro
+                cartão para o excedente.
+              </p>
+            )}
           </div>
 
           {/* apontamentos */}
@@ -1218,6 +1281,317 @@ function NovaSprint({
           <button className={BTN_PRIMARY} disabled={salvando || !nome.trim()} onClick={criar}>
             {salvando ? "Criando…" : "Criar sprint"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------- painel analytics
+
+/**
+ * Burndown em SVG puro.
+ *
+ * Sem biblioteca de gráfico: são duas linhas e umas barras, e uma dependência
+ * nova custaria mais do que o desenho. O eixo Y usa o maior valor entre o
+ * total e o pico da linha real, para escopo que entrou no meio não sair da
+ * área visível.
+ */
+function GraficoBurndown({ pontos }: { pontos: PontoBurndown[] }) {
+  if (pontos.length === 0) {
+    return <p className="text-sm text-slate-400 dark:text-slate-500 italic">Sprint sem dias úteis.</p>;
+  }
+
+  const L = 44, T = 12, R = 12, B = 34;
+  const W = 720, H = 240;
+  const areaW = W - L - R;
+  const areaH = H - T - B;
+
+  const maxVal = Math.max(
+    1,
+    ...pontos.map((p) => p.ideal),
+    ...pontos.map((p) => p.real ?? 0),
+    ...pontos.map((p) => p.lancado)
+  );
+  const topo = Math.ceil(maxVal / 4) * 4 || 4;
+
+  const x = (i: number) => L + (pontos.length === 1 ? areaW / 2 : (areaW * i) / (pontos.length - 1));
+  const y = (v: number) => T + areaH - (areaH * v) / topo;
+
+  const reais = pontos.map((p, i) => ({ i, v: p.real })).filter((p) => p.v !== null) as { i: number; v: number }[];
+  const linha = (pts: { i: number; v: number }[]) => pts.map((p, k) => `${k === 0 ? "M" : "L"}${x(p.i)},${y(p.v)}`).join(" ");
+  const larguraBarra = Math.max(4, Math.min(22, areaW / pontos.length - 6));
+
+  const grade = [0, 0.25, 0.5, 0.75, 1].map((f) => topo * f);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Burndown da sprint">
+      {grade.map((v) => (
+        <g key={v}>
+          <line x1={L} y1={y(v)} x2={W - R} y2={y(v)}
+                className="stroke-slate-200 dark:stroke-slate-800" strokeWidth="1" />
+          <text x={L - 6} y={y(v) + 3.5} textAnchor="end"
+                className="fill-slate-400 dark:fill-slate-500" fontSize="9">
+            {Math.round(v)}
+          </text>
+        </g>
+      ))}
+
+      {/* horas lançadas no dia */}
+      {pontos.map((p, i) => p.lancado > 0 && (
+        <rect key={`b${p.data}`} x={x(i) - larguraBarra / 2} y={y(p.lancado)}
+              width={larguraBarra} height={Math.max(0, y(0) - y(p.lancado))}
+              className="fill-blue-200 dark:fill-blue-900/60" rx="2" />
+      ))}
+
+      {/* linha ideal */}
+      <path d={linha(pontos.map((p, i) => ({ i, v: p.ideal })))}
+            fill="none" strokeDasharray="5 4" strokeWidth="1.5"
+            className="stroke-slate-400 dark:stroke-slate-600" />
+
+      {/* linha real */}
+      {reais.length > 0 && (
+        <>
+          <path d={linha(reais)} fill="none" strokeWidth="2.5"
+                className="stroke-emerald-500" strokeLinejoin="round" strokeLinecap="round" />
+          {reais.map((p) => (
+            <circle key={`p${p.i}`} cx={x(p.i)} cy={y(p.v)} r="3" className="fill-emerald-500" />
+          ))}
+        </>
+      )}
+
+      {/* datas */}
+      {pontos.map((p, i) => {
+        const cada = Math.ceil(pontos.length / 8);
+        if (i % cada !== 0 && i !== pontos.length - 1) return null;
+        return (
+          <text key={`d${p.data}`} x={x(i)} y={H - 12} textAnchor="middle"
+                className="fill-slate-400 dark:fill-slate-500" fontSize="9">
+            {p.data.slice(8, 10)}/{p.data.slice(5, 7)}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+function Barra({ valor, maximo, cor }: { valor: number; maximo: number; cor: string }) {
+  const pct = maximo > 0 ? Math.min(100, (valor / maximo) * 100) : 0;
+  return (
+    <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+      <div className={`h-full rounded-full ${cor}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function PainelAnalytics({
+  sprint, itens, nomePorEmail,
+}: {
+  sprint: Sprint;
+  itens: ItemSprint[];
+  nomePorEmail: Record<string, string>;
+}) {
+  const totalEstimado = useMemo(
+    () => itens.reduce((s, i) => s + (Number(i.horas_planejadas) || 0), 0),
+    [itens]
+  );
+
+  const lancamentosPorDia = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const i of itens) {
+      for (const a of i.apontamentos) {
+        if (a.emAberto) continue;
+        m[a.data] = (m[a.data] ?? 0) + a.horas;
+      }
+    }
+    return m;
+  }, [itens]);
+
+  const pontos = useMemo(
+    () => burndown(sprint.inicio, sprint.fim, totalEstimado, lancamentosPorDia, hoje()),
+    [sprint.inicio, sprint.fim, totalEstimado, lancamentosPorDia]
+  );
+
+  const a: Analytics = useMemo(
+    () => analytics(
+      itens.map((i) => ({
+        ticket_id: i.ticket_id,
+        numero: i.ticket?.numero ?? null,
+        titulo: i.ticket?.title ?? "—",
+        status: i.ticket?.status ?? "backlog",
+        setor: i.ticket?.sector ?? "—",
+        responsavel_email: i.responsavel_email,
+        estimate: i.horas_planejadas,
+        lancado: i.horasApontadas,
+      })),
+      STATUS_NOME, SETOR_NOME, nomePorEmail
+    ),
+    [itens, nomePorEmail]
+  );
+
+  const ultimo = [...pontos].reverse().find((p) => p.real !== null);
+  const falta = ultimo?.real ?? totalEstimado;
+  const noRitmo = ultimo ? falta <= ultimo.ideal : true;
+
+  const maxPessoa = Math.max(1, ...a.porPessoa.map((p) => Math.max(p.planejado, p.lancado)));
+  const maxSetor = Math.max(1, ...a.porSetor.map((s) => s.qtd));
+
+  if (itens.length === 0) {
+    return (
+      <div className={`${CARD} p-8 text-center text-sm text-slate-500 dark:text-slate-400`}>
+        Sprint sem cartões — nada para medir ainda.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* números do topo */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className={`${CARD} p-3`}>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">Planejado</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white">{horasTexto(a.totalEstimado)}</div>
+        </div>
+        <div className={`${CARD} p-3`}>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">Lançado</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white">{horasTexto(a.totalLancado)}</div>
+        </div>
+        <div className={`${CARD} p-3`}>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">Falta</div>
+          <div className={`text-lg font-bold ${noRitmo ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+            {horasTexto(falta)}
+          </div>
+        </div>
+        <div className={`${CARD} p-3`}>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">Cartões fechados</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white">{a.fechados}/{a.cartoes}</div>
+        </div>
+        <div className={`${CARD} p-3`}>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400" title="Média do quanto os cartões fechados consumiram do próprio estimate">
+            Precisão da estimativa
+          </div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white">
+            {a.consumoMedioFechados === null ? "—" : `${a.consumoMedioFechados}%`}
+          </div>
+        </div>
+      </div>
+
+      {/* burndown */}
+      <div className={`${CARD} p-4`}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Burndown</h3>
+          <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-4 border-t-2 border-dashed border-slate-400" /> Ideal
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-4 border-t-2 border-emerald-500" /> Restante real
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-blue-200 dark:bg-blue-900" /> Lançado no dia
+            </span>
+          </div>
+        </div>
+
+        <GraficoBurndown pontos={pontos} />
+
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+          {noRitmo
+            ? "A linha real está no ritmo da guia ou abaixo dela."
+            : "A linha real está acima da guia — no ritmo de hoje, a sprint não fecha o planejado."}
+          {" "}Cartão puxado no meio da sprint levanta a linha, porque é escopo novo.
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* por pessoa */}
+        <div className={`${CARD} p-4`}>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Planejado × lançado por pessoa</h3>
+          {a.porPessoa.length === 0 && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum cartão com dono.</p>
+          )}
+          <div className="space-y-3">
+            {a.porPessoa.map((p) => (
+              <div key={p.email}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-slate-700 dark:text-slate-300">{p.nome ?? p.email}</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {horasTexto(p.lancado)} de {horasTexto(p.planejado)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <Barra valor={p.planejado} maximo={maxPessoa} cor="bg-slate-300 dark:bg-slate-700" />
+                  <Barra valor={p.lancado} maximo={maxPessoa} cor="bg-emerald-500" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* por setor de origem */}
+        <div className={`${CARD} p-4`}>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">De onde vieram os cartões</h3>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+            Quanto do tempo do TI cada setor consumiu nesta sprint.
+          </p>
+          <div className="space-y-2.5">
+            {a.porSetor.map((s) => (
+              <div key={s.id}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-slate-700 dark:text-slate-300">{s.nome}</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {s.qtd} cartão(ões) · {horasTexto(s.horas)}
+                  </span>
+                </div>
+                <Barra valor={s.qtd} maximo={maxSetor} cor="bg-blue-500" />
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <div className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+              Por status
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {a.porStatus.map((st) => (
+                <span key={st.id} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded
+                                             bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  <span className={`w-2 h-2 rounded-full ${STATUS_COR[st.id] ?? "bg-slate-400"}`} />
+                  {st.nome} {st.qtd}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* precisão por cartão */}
+      <div className={`${CARD} p-4`}>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Estimativa × realizado</h3>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+          Ordenado pelo maior desvio — é onde a estimativa mais errou, para bom e para ruim.
+        </p>
+        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+          {a.precisao.map((l) => (
+            <div key={l.ticket_id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded
+                                              bg-slate-50 dark:bg-slate-800/50">
+              <span className="w-12 shrink-0 font-mono text-slate-400 dark:text-slate-500">#{l.numero ?? "—"}</span>
+              <span className="flex-1 truncate text-slate-700 dark:text-slate-300">{l.titulo}</span>
+              <span className="w-28 shrink-0 text-right text-slate-500 dark:text-slate-400">
+                {horasEmTexto(l.lancado)} / {horasEmTexto(l.estimate)}
+              </span>
+              <span className={`w-20 shrink-0 text-right font-medium ${
+                l.desvio < 0 ? "text-red-600 dark:text-red-400"
+                : l.desvio > 0 ? "text-emerald-600 dark:text-emerald-400"
+                : "text-slate-400 dark:text-slate-500"
+              }`}>
+                {l.desvio === 0 ? "no ponto" : l.desvio > 0 ? `sobrou ${horasEmTexto(l.desvio)}` : `faltou ${horasEmTexto(-l.desvio)}`}
+              </span>
+              {l.fechado && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Cartão fechado" />
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
