@@ -7,8 +7,8 @@ import {
 } from "@/lib/roda-vida-conteudo";
 import {
   pontosDaRoda, media, respondidas, completa, maisBaixas,
-  poligono, vertice, comparar, corDaNota, progressoAcoes,
-  type Notas, type PontoRoda,
+  poligono, vertice, comparar, corDaNota, progressoAcoes, evolucao,
+  type Notas, type PontoRoda, type Evolucao,
 } from "@/lib/roda-vida-calculo";
 import { formatDataHora } from "@/lib/datas";
 
@@ -30,7 +30,16 @@ interface Roda {
   acoes: Acao[];
 }
 
-type Etapa = "notas" | "roda" | "acoes";
+/** "2026-09-22T…" → "22/09". Rótulo curto do eixo do gráfico. */
+function dataCurta(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo",
+  });
+}
+
+type Etapa = "notas" | "roda" | "acoes" | "evolucao";
 
 export default function RodaVida({
   rodaInicial, historicoInicial, meuEmail, souDiretoria,
@@ -43,7 +52,7 @@ export default function RodaVida({
   const [roda, setRoda] = useState<Roda | null>(rodaInicial);
   const [historico, setHistorico] = useState<Roda[]>(historicoInicial);
   const [etapa, setEtapa] = useState<Etapa>(() =>
-    rodaInicial?.concluida_em ? "acoes" : "notas"
+    rodaInicial?.concluida_em ? "roda" : "notas"
   );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -132,13 +141,17 @@ export default function RodaVida({
     setAviso("Roda fechada. Agora escolha o que quer cuidar.");
   }
 
-  async function reabrir() {
-    if (!roda) return;
-    if (!(await chamar("/api/roda-vida", {
-      method: "PATCH", body: JSON.stringify({ id: roda.id, acao: "reabrir" }),
-    }))) return;
+  /**
+   * Abre uma roda nova. A anterior fica intacta no histórico — é o que permite
+   * comparar depois. Roda fechada não volta a ser editada: se ela pudesse
+   * mudar, a linha do tempo mudaria junto e a evolução deixaria de significar
+   * alguma coisa.
+   */
+  async function novaRoda() {
+    if (!(await chamar("/api/roda-vida", { method: "POST" }))) return;
     await recarregar();
     setEtapa("notas");
+    setAviso("Roda nova aberta. A anterior continua no histórico.");
   }
 
   async function guardarReflexao() {
@@ -217,11 +230,23 @@ export default function RodaVida({
           3. Da reflexão à ação {roda.acoes.length > 0 && `(${roda.acoes.length})`}
         </button>
 
+        {historico.length > 0 && (
+          <button className={`chip ${etapa === "evolucao" ? "on" : ""}`} onClick={() => setEtapa("evolucao")}>
+            Evolução
+          </button>
+        )}
+
         <span className="rv-estado">
           {concluida
             ? `Fechada em ${formatDataHora(roda.concluida_em!)}`
             : "Rascunho — só você está vendo"}
         </span>
+
+        {concluida && (
+          <button className="btn primary rv-nova" disabled={salvando} onClick={novaRoda}>
+            + Nova roda
+          </button>
+        )}
       </div>
 
       {/* ---------------------------------------------------- 1. notas --- */}
@@ -229,47 +254,22 @@ export default function RodaVida({
         <div className="rv-notas">
           {concluida && (
             <p className="rv-nota-info">
-              Esta roda já foi fechada. Para mudar uma nota,{" "}
-              <button className="rv-link" onClick={reabrir} disabled={salvando}>reabra</button> antes.
+              Esta roda está fechada e não muda mais — é o que mantém a evolução confiável.
+              Para pontuar de novo, use <strong>+ Nova roda</strong> acima.
             </p>
           )}
 
           {DIMENSOES.map((d) => (
-            <div key={d.id} className="card rv-dim">
-              <div className="rv-dim-topo">
-                <h3>
-                  <span className="rv-emoji">{d.emoji}</span> {d.nome}
-                </h3>
-                <button className="rv-link" onClick={() => setAbertas((s) => {
-                  const n = new Set(s);
-                  if (n.has(d.id)) n.delete(d.id); else n.add(d.id);
-                  return n;
-                })}>
-                  {abertas.has(d.id) ? "esconder perguntas" : `${d.perguntas.length} perguntas`}
-                </button>
-              </div>
-
-              {abertas.has(d.id) && (
-                <ul className="rv-perguntas">
-                  {d.perguntas.map((p, i) => <li key={i}>{p}</li>)}
-                </ul>
-              )}
-
-              <div className="rv-escala-btns">
-                {Array.from({ length: 11 }, (_, n) => (
-                  <button
-                    key={n}
-                    className={`rv-n ${notas[d.id] === n ? "on" : ""}`}
-                    style={notas[d.id] === n ? { background: corDaNota(n), borderColor: corDaNota(n) } : undefined}
-                    disabled={salvando || concluida}
-                    onClick={() => darNota(d.id, n)}
-                    aria-label={`Nota ${n} para ${d.nome}`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <CartaoDimensao
+              key={d.id} d={d} nota={notas[d.id]} travada={salvando || concluida}
+              perguntasAbertas={abertas.has(d.id)}
+              onAlternarPerguntas={() => setAbertas((s) => {
+                const n = new Set(s);
+                if (n.has(d.id)) n.delete(d.id); else n.add(d.id);
+                return n;
+              })}
+              onNota={(n) => darNota(d.id, n)}
+            />
           ))}
 
           <div className="rv-rodape">
@@ -357,7 +357,11 @@ export default function RodaVida({
         />
       )}
 
-      {historico.length > 0 && (
+      {etapa === "evolucao" && (
+        <PainelEvolucao rodas={historico} />
+      )}
+
+      {etapa !== "evolucao" && historico.length > 0 && (
         <div className="card rv-historico">
           <h3>Minhas rodas anteriores</h3>
           <ul>
@@ -597,5 +601,299 @@ function PainelAcoes({
         })}
       </div>
     </div>
+  );
+}
+
+// ------------------------------------------------------- cartão da dimensão
+
+/**
+ * Uma dimensão na hora de pontuar.
+ *
+ * Régua contínua em vez de onze botões: o gesto é de posicionar-se numa escala,
+ * não de escolher um item de lista. As âncoras embaixo ("Muito baixo", "Neutro",
+ * "Excelente") dizem o que os extremos significam sem precisar de legenda à
+ * parte, e a descrição ao lado do nome evita que cada pessoa interprete a
+ * dimensão de um jeito.
+ */
+function CartaoDimensao({
+  d, nota, travada, perguntasAbertas, onAlternarPerguntas, onNota,
+}: {
+  d: (typeof DIMENSOES)[number];
+  nota: number | undefined;
+  travada: boolean;
+  perguntasAbertas: boolean;
+  onAlternarPerguntas: () => void;
+  onNota: (n: number) => void;
+}) {
+  // Enquanto arrasta, o número acompanha o dedo; só solta é que grava.
+  const [local, setLocal] = useState<number | null>(null);
+  const valor = local ?? nota ?? 5;
+  const respondida = nota !== undefined && nota !== null;
+
+  useEffect(() => { setLocal(null); }, [nota]);
+
+  return (
+    <div className={`card rv-dim ${respondida ? "respondida" : ""}`}>
+      <div className="rv-dim-topo">
+        <div className="rv-dim-id">
+          <h3><span className="rv-emoji">{d.emoji}</span> {d.nome}</h3>
+          <p className="rv-dim-desc">{d.descricao}</p>
+        </div>
+        <span className="rv-dim-valor" style={{ color: respondida || local !== null ? corDaNota(valor) : undefined }}>
+          {respondida || local !== null ? valor : "—"}
+          <small>/10</small>
+        </span>
+      </div>
+
+      <div className="rv-regua">
+        <input
+          type="range" min={0} max={10} step={1} value={valor} disabled={travada}
+          onChange={(e) => setLocal(Number(e.target.value))}
+          onMouseUp={(e) => onNota(Number((e.target as HTMLInputElement).value))}
+          onTouchEnd={(e) => onNota(Number((e.target as HTMLInputElement).value))}
+          onKeyUp={(e) => onNota(Number((e.target as HTMLInputElement).value))}
+          aria-label={`Nota de ${d.nome}`}
+          style={{ ["--pct" as string]: `${valor * 10}%` }}
+        />
+        <div className="rv-ancoras">
+          <span>{ESCALA.ancoras.baixo}</span>
+          <span className="meio">{ESCALA.ancoras.meio}</span>
+          <span>{ESCALA.ancoras.alto}</span>
+        </div>
+      </div>
+
+      <button className="rv-link" onClick={onAlternarPerguntas}>
+        {perguntasAbertas ? "esconder as perguntas" : `ver ${d.perguntas.length} perguntas para pensar`}
+      </button>
+
+      {perguntasAbertas && (
+        <ul className="rv-perguntas">
+          {d.perguntas.map((p, i) => <li key={i}>{p}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------- evolução
+
+function PainelEvolucao({ rodas }: { rodas: Roda[] }) {
+  const [dimSel, setDimSel] = useState<string>("");
+
+  const ev: Evolucao = useMemo(
+    () => evolucao(
+      rodas.map((r) => ({
+        id: r.id,
+        data: r.concluida_em ?? r.criada_em,
+        notas: r.notas,
+        acoes: r.acoes,
+      })),
+      DIMENSOES
+    ),
+    [rodas]
+  );
+
+  if (ev.pontos.length === 0) {
+    return (
+      <div className="card rv-convite">
+        <p>Nenhuma roda fechada ainda — a evolução aparece a partir da primeira.</p>
+      </div>
+    );
+  }
+
+  const umaSo = ev.pontos.length === 1;
+  const serieSel = dimSel ? ev.series.find((s) => s.id === dimSel) ?? null : null;
+
+  return (
+    <div className="rv-evolucao">
+      <div className="rv-ev-topo">
+        <div className="card">
+          <span className="k">Rodas fechadas</span>
+          <span className="v">{ev.pontos.length}</span>
+        </div>
+        <div className="card">
+          <span className="k">Primeira</span>
+          <span className="v" style={{ color: corDaNota(ev.mediaPrimeira) }}>{ev.mediaPrimeira.toFixed(1)}</span>
+        </div>
+        <div className="card">
+          <span className="k">Atual</span>
+          <span className="v" style={{ color: corDaNota(ev.mediaUltima) }}>{ev.mediaUltima.toFixed(1)}</span>
+        </div>
+        <div className="card">
+          <span className="k">Desde a primeira</span>
+          <span className="v">
+            {umaSo ? "—" : `${ev.mediaUltima - ev.mediaPrimeira > 0 ? "+" : ""}${(ev.mediaUltima - ev.mediaPrimeira).toFixed(1)}`}
+          </span>
+        </div>
+      </div>
+
+      {umaSo && (
+        <p className="rv-nota-info">
+          Só há uma roda até agora. Faça uma nova daqui a algumas semanas e esta tela passa a
+          mostrar o que mudou.
+        </p>
+      )}
+
+      {/* média ao longo do tempo */}
+      <div className="card">
+        <h3>Média ao longo do tempo</h3>
+        <LinhaTempo
+          pontos={ev.pontos.map((p) => ({ rotulo: dataCurta(p.data), valor: p.media }))}
+          cor="var(--accent)"
+        />
+      </div>
+
+      {/* dimensão a dimensão */}
+      <div className="card">
+        <div className="rv-ev-cab">
+          <h3>Dimensão a dimensão</h3>
+          <select className="rv-sel" value={dimSel} onChange={(e) => setDimSel(e.target.value)}>
+            <option value="">Todas, lado a lado</option>
+            {DIMENSOES.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+          </select>
+        </div>
+
+        {serieSel ? (
+          <>
+            <LinhaTempo
+              pontos={serieSel.valores.map((v, i) => ({ rotulo: dataCurta(ev.pontos[i].data), valor: v }))}
+              cor={corDaNota(serieSel.ultima)}
+            />
+            <p className="rv-nota-info">
+              {serieSel.emoji} {serieSel.nome}: saiu de <strong>{serieSel.primeira}</strong> e está em{" "}
+              <strong>{serieSel.ultima}</strong>. Melhor momento: {serieSel.melhor}. Pior: {serieSel.pior}.
+            </p>
+          </>
+        ) : (
+          <ul className="rv-ev-dims">
+            {[...ev.series].sort((a, b) => b.variacao - a.variacao).map((s) => (
+              <li key={s.id}>
+                <span className="rv-emoji">{s.emoji}</span>
+                <span className="rv-ev-nome">{s.nome}</span>
+                <Faixa valores={s.valores} />
+                <span className="rv-ev-de-para">
+                  {s.primeira} <span className="rv-ev-seta">→</span>{" "}
+                  <strong style={{ color: corDaNota(s.ultima) }}>{s.ultima}</strong>
+                </span>
+                <span className={`rv-ev-var ${s.variacao > 0 ? "sobe" : s.variacao < 0 ? "desce" : ""}`}>
+                  {umaSo ? "—" : s.variacao === 0 ? "igual" : `${s.variacao > 0 ? "+" : ""}${s.variacao}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {(ev.maiorAlta || ev.maiorQueda) && (
+        <div className="rv-ev-destaques">
+          {ev.maiorAlta && (
+            <div className="card rv-ev-alta">
+              <span className="k">Maior avanço</span>
+              <span className="v">{ev.maiorAlta.emoji} {ev.maiorAlta.nome}</span>
+              <span className="rv-ev-obs">+{ev.maiorAlta.variacao} desde a primeira roda</span>
+            </div>
+          )}
+          {ev.maiorQueda && (
+            <div className="card rv-ev-queda">
+              <span className="k">Mais pediu atenção</span>
+              <span className="v">{ev.maiorQueda.emoji} {ev.maiorQueda.nome}</span>
+              <span className="rv-ev-obs">{ev.maiorQueda.variacao} desde a primeira roda</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* teste por teste */}
+      <div className="card">
+        <h3>Roda por roda</h3>
+        <div className="table-wrap">
+          <table className="grid">
+            <thead>
+              <tr>
+                <th className="col-empresa">Roda</th>
+                <th className="num">Média</th>
+                <th className="num">Variação</th>
+                {DIMENSOES.map((d) => <th key={d.id} className="num" title={d.nome}>{d.emoji}</th>)}
+                <th className="num">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...ev.pontos].reverse().map((p) => (
+                <tr key={p.id}>
+                  <td className="col-empresa">
+                    <strong>{p.numero}ª</strong> <span className="rv-ev-data">{formatDataHora(p.data)}</span>
+                  </td>
+                  <td className="num" style={{ color: corDaNota(p.media), fontWeight: 600 }}>
+                    {p.media.toFixed(1)}
+                  </td>
+                  <td className={`num rv-ev-var ${(p.variacao ?? 0) > 0 ? "sobe" : (p.variacao ?? 0) < 0 ? "desce" : ""}`}>
+                    {p.variacao === null ? "—" : p.variacao === 0 ? "=" : `${p.variacao > 0 ? "+" : ""}${p.variacao}`}
+                  </td>
+                  {DIMENSOES.map((d) => (
+                    <td key={d.id} className="num" style={{ color: corDaNota(p.notas[d.id] ?? 0) }}>
+                      {p.notas[d.id] ?? "—"}
+                    </td>
+                  ))}
+                  <td className="num">{p.acoesTotal > 0 ? `${p.acoesFeitas}/${p.acoesTotal}` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Gráfico de linha simples — a escala é sempre 0 a 10, como as notas. */
+function LinhaTempo({
+  pontos, cor,
+}: {
+  pontos: { rotulo: string; valor: number }[];
+  cor: string;
+}) {
+  const L = 34, T = 10, R = 10, B = 26;
+  const W = 640, H = 200;
+  const areaW = W - L - R, areaH = H - T - B;
+  const n = pontos.length;
+
+  const x = (i: number) => L + (n === 1 ? areaW / 2 : (areaW * i) / (n - 1));
+  const y = (v: number) => T + areaH - (areaH * v) / 10;
+
+  const caminho = pontos.map((p, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(p.valor)}`).join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="rv-linha" role="img" aria-label="Evolução ao longo do tempo">
+      {[0, 2.5, 5, 7.5, 10].map((v) => (
+        <g key={v}>
+          <line x1={L} y1={y(v)} x2={W - R} y2={y(v)} className="rv-anel" />
+          <text x={L - 6} y={y(v) + 3.5} textAnchor="end" className="rv-eixo">{v}</text>
+        </g>
+      ))}
+
+      {n > 1 && <path d={caminho} fill="none" stroke={cor} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+
+      {pontos.map((p, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(p.valor)} r="4" fill={cor} />
+          <text x={x(i)} y={y(p.valor) - 10} textAnchor="middle" className="rv-eixo-valor" fill={cor}>
+            {p.valor.toFixed(1)}
+          </text>
+          <text x={x(i)} y={H - 8} textAnchor="middle" className="rv-eixo">{p.rotulo}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/** Mini barras de uma dimensão, uma por roda — cabe na linha da lista. */
+function Faixa({ valores }: { valores: number[] }) {
+  return (
+    <span className="rv-faixa">
+      {valores.map((v, i) => (
+        <span key={i} title={`${v}/10`}
+              style={{ height: `${Math.max(6, v * 10)}%`, background: corDaNota(v) }} />
+      ))}
+    </span>
   );
 }

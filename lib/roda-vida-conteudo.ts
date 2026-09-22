@@ -13,6 +13,8 @@ export interface Dimensao {
   id: string;
   nome: string;
   emoji: string;
+  /** Uma linha dizendo o que a dimensão cobre, ao lado do nome na hora de pontuar. */
+  descricao: string;
   /** Perguntas de reflexão. Não são pontuadas: servem para chegar à nota. */
   perguntas: string[];
   /** Sugestões de ação concreta para quem escolher cuidar desta dimensão. */
@@ -26,6 +28,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "trabalho",
     nome: "Trabalho",
     emoji: "💼",
+    descricao: "Motivação, sentido e orgulho do que você entrega",
     perguntas: [
       "Como está minha motivação diária para vir trabalhar?",
       "Sinto que estou evoluindo no trabalho, ainda que lentamente?",
@@ -47,6 +50,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "financas",
     nome: "Finanças e vida material",
     emoji: "💰",
+    descricao: "Dívidas, controle de gastos, poupança e reserva",
     perguntas: [
       "Tenho dívidas que hoje me preocupam pelo valor, pelo prazo ou pelos juros?",
       "Tenho conseguido gastar menos do que ganho?",
@@ -72,6 +76,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "familia",
     nome: "Família",
     emoji: "❤️",
+    descricao: "Relacionamentos e presença com quem você ama",
     perguntas: [
       "Tenho demonstrado carinho, afeto, atenção e gratidão, em atitude e palavras, às pessoas que amo?",
       "Tenho conseguido estar verdadeiramente presente para minha família? O que talvez eles responderiam?",
@@ -95,6 +100,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "amizades",
     nome: "Amizades e convivência",
     emoji: "🧑‍🤝‍🧑",
+    descricao: "Amigos de verdade e espaço para ser você mesmo",
     perguntas: [
       "Tenho pessoas com quem posso conversar de verdade, de modo gratuito, sem interesse?",
       "Tenho procurado meus amigos ou espero sempre que eles me procurem?",
@@ -117,6 +123,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "saude",
     nome: "Saúde e cuidado comigo",
     emoji: "🏃",
+    descricao: "Corpo, sono, alimentação, movimento e exames",
     perguntas: [
       "Tenho cuidado do meu corpo ou só me preocupo com ele quando algo dá errado?",
       "Tenho cuidado das necessidades básicas do meu corpo: sono, alimentação, hidratação, movimento e descanso?",
@@ -139,6 +146,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "emocional",
     nome: "Saúde emocional",
     emoji: "🧠",
+    descricao: "Como você lida com o que sente e com a sobrecarga",
     perguntas: [
       "Como tenho lidado com minhas preocupações, frustrações e problemas?",
       "Tenho conseguido reconhecer e expressar aquilo que estou sentindo?",
@@ -163,6 +171,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "lazer",
     nome: "Lazer e vida pessoal",
     emoji: "🎨",
+    descricao: "Descanso, prazer e coisas que você faz só porque gosta",
     perguntas: [
       "Quando foi a última vez que fiz algo simplesmente porque gosto?",
       "Tenho conseguido me divertir sem sentir que estou “perdendo tempo”?",
@@ -185,6 +194,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "espiritualidade",
     nome: "Espiritualidade e propósito",
     emoji: "🙏",
+    descricao: "Sentido, fé, silêncio e direção da sua vida",
     perguntas: [
       "Tenho encontrado sentido naquilo que estou vivendo?",
       "Tenho algo que me dá esperança quando as coisas ficam difíceis? (um Ser Supremo, o Universo, alguma força superior ou algo em que acredito)",
@@ -209,6 +219,7 @@ export const DIMENSOES: Dimensao[] = [
     id: "eu",
     nome: "Eu comigo mesmo",
     emoji: "🌱",
+    descricao: "A relação que você tem consigo mesmo",
     perguntas: [
       "Tenho gostado da pessoa que estou me tornando?",
       "Tenho sido muito mais exigente comigo do que seria com outra pessoa?",
@@ -239,6 +250,8 @@ export const ESCALA = {
   max: 10,
   legendaMin: "está muito ruim / precisa de atenção",
   legendaMax: "estou muito satisfeito(a)",
+  /** Âncoras da régua, como no rodadavida.net. */
+  ancoras: { baixo: "Muito baixo", meio: "Neutro", alto: "Excelente" },
 };
 
 export const PERGUNTA_REFLEXAO = "Olhando para a minha roda, o que ela está me dizendo?";

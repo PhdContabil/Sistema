@@ -172,3 +172,82 @@ test("sem ações, sem porcentagem inventada", () => {
   assert.equal(p.pct, 0);
   assert.equal(p.total, 0);
 });
+
+// ============================================================== evolução
+
+import { evolucao } from "./roda-vida-calculo.ts";
+
+const R1 = { id: "a", data: "2026-01-10T12:00:00Z", notas: { trabalho: 4, familia: 6 }, acoes: [{ feita: true }, { feita: false }] };
+const R2 = { id: "b", data: "2026-04-10T12:00:00Z", notas: { trabalho: 7, familia: 5 }, acoes: [{ feita: true }] };
+const R3 = { id: "c", data: "2026-07-10T12:00:00Z", notas: { trabalho: 9, familia: 5 }, acoes: [] };
+
+test("coloca as rodas em ordem cronológica, venham como vierem", () => {
+  const e = evolucao([R3, R1, R2], DIMENSOES);
+  assert.deepEqual(e.pontos.map((p) => p.id), ["a", "b", "c"]);
+  assert.deepEqual(e.pontos.map((p) => p.numero), [1, 2, 3]);
+});
+
+test("a variação é sempre contra a roda anterior", () => {
+  const e = evolucao([R1, R2, R3], DIMENSOES);
+  assert.equal(e.pontos[0].variacao, null, "a primeira não tem com o que comparar");
+  assert.equal(e.pontos[1].media, 6);
+  assert.equal(e.pontos[0].media, 5);
+  assert.equal(e.pontos[1].variacao, 1);
+});
+
+test("a série de cada dimensão tem um valor por roda", () => {
+  const e = evolucao([R1, R2, R3], DIMENSOES);
+  const trab = e.series.find((s) => s.id === "trabalho")!;
+  assert.deepEqual(trab.valores, [4, 7, 9]);
+  assert.equal(trab.primeira, 4);
+  assert.equal(trab.ultima, 9);
+  assert.equal(trab.variacao, 5);
+  assert.equal(trab.melhor, 9);
+  assert.equal(trab.pior, 4);
+});
+
+test("dimensão nunca respondida entra como zero na série", () => {
+  const e = evolucao([R1, R2], DIMENSOES);
+  const lazer = e.series.find((s) => s.id === "lazer")!;
+  assert.deepEqual(lazer.valores, [0, 0]);
+  assert.equal(lazer.variacao, 0);
+});
+
+test("aponta a maior alta e a maior queda entre a primeira e a última", () => {
+  const e = evolucao([R1, R2, R3], DIMENSOES);
+  assert.equal(e.maiorAlta!.id, "trabalho");
+  assert.equal(e.maiorQueda!.id, "familia", "caiu de 6 para 5");
+  assert.equal(e.maiorQueda!.variacao, -1);
+});
+
+test("com uma roda só não inventa alta nem queda", () => {
+  const e = evolucao([R1], DIMENSOES);
+  assert.equal(e.pontos.length, 1);
+  assert.equal(e.maiorAlta, null);
+  assert.equal(e.maiorQueda, null);
+  assert.equal(e.mediaPrimeira, e.mediaUltima);
+});
+
+test("sem nenhuma roda não quebra", () => {
+  const e = evolucao([], DIMENSOES);
+  assert.equal(e.pontos.length, 0);
+  assert.equal(e.mediaUltima, 0);
+  assert.equal(e.series.length, 9, "as dimensões continuam listadas, vazias");
+});
+
+test("conta as ações feitas de cada roda", () => {
+  const e = evolucao([R1, R2, R3], DIMENSOES);
+  assert.equal(e.pontos[0].acoesFeitas, 1);
+  assert.equal(e.pontos[0].acoesTotal, 2);
+  assert.equal(e.pontos[2].acoesTotal, 0);
+});
+
+test("tudo igual entre as rodas: nem alta nem queda", () => {
+  const e = evolucao([
+    { id: "x", data: "2026-01-01", notas: { trabalho: 5 } },
+    { id: "y", data: "2026-02-01", notas: { trabalho: 5 } },
+  ], DIMENSOES);
+  assert.equal(e.maiorAlta, null);
+  assert.equal(e.maiorQueda, null);
+  assert.equal(e.pontos[1].variacao, 0);
+});

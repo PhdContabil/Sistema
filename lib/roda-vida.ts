@@ -3,8 +3,15 @@
 // Privacidade combinada: cada pessoa vê a própria roda; a diretoria vê a de
 // todos. Nada de RH, gestor de setor ou TI no meio. A checagem mora aqui, num
 // lugar só (`podeVer`), para não se espalhar por cada rota e sair do ar sem
-// ninguém notar. A tela avisa a pessoa, antes de ela responder, que a
-// diretoria tem acesso — o que não pode acontecer é alguém descobrir depois.
+// ninguém notar.
+//
+// A tela não fala sobre esse acesso (removido a pedido em 21/09/2026) e também
+// não afirma o contrário: nenhum texto promete privacidade que o sistema não
+// entrega. Se um dia o individual for restrito só ao dono, dá para voltar a
+// tratar disso abertamente na interface.
+//
+// Roda fechada não reabre. É o que sustenta a tela de evolução: se uma roda
+// antiga pudesse mudar, a linha do tempo mudaria junto.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DIRETORIA_EMAILS } from "./acesso";
@@ -194,17 +201,6 @@ export async function concluirRoda(rodaId: string): Promise<string | null> {
   const agora = new Date().toISOString();
   const { error } = await sb
     .from("roda_vida").update({ concluida_em: agora, atualizada_em: agora }).eq("id", rodaId);
-  return error?.message ?? null;
-}
-
-/** Reabre para edição — a pessoa pode ter clicado sem querer. */
-export async function reabrirRoda(rodaId: string): Promise<string | null> {
-  const sb = db();
-  if (!sb) return "Banco indisponível.";
-  const { error } = await sb
-    .from("roda_vida")
-    .update({ concluida_em: null, atualizada_em: new Date().toISOString() })
-    .eq("id", rodaId);
   return error?.message ?? null;
 }
 

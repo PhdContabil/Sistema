@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import {
-  rodaAtual, historico, abrirRoda, concluirRoda, reabrirRoda, excluirRoda,
+  rodaAtual, historico, abrirRoda, concluirRoda, excluirRoda,
   salvarReflexao, donoDaRoda, podeVer,
 } from "@/lib/roda-vida";
 
@@ -54,12 +54,11 @@ export async function PATCH(req: Request) {
     if (erro) return NextResponse.json({ error: erro }, { status: 500 });
   }
 
+  // Só fechar. Roda fechada não reabre: se ela pudesse mudar depois, a linha
+  // do tempo mudaria junto e a comparação entre rodas perderia o sentido.
   if (body.acao === "concluir") {
     const erro = await concluirRoda(body.id);
     if (erro) return NextResponse.json({ error: erro }, { status: 400 });
-  } else if (body.acao === "reabrir") {
-    const erro = await reabrirRoda(body.id);
-    if (erro) return NextResponse.json({ error: erro }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

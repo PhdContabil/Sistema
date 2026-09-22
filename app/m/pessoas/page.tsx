@@ -39,17 +39,6 @@ export default function PessoasHome() {
         <span className="destaque-go mono">ABRIR ›</span>
       </Link>
 
-      {/* Roda da Vida — aplicação, não conteúdo: entra como destaque, e não
-          na lista de Áreas, que é material de leitura */}
-      <Link className="destaque" href="/m/pessoas/roda-vida">
-        <span className="destaque-ic" style={{ background: cor }}><AppIcon nome="Roda da Vida" /></span>
-        <span className="destaque-txt">
-          <span className="destaque-nome">Roda da Vida</span>
-          <span className="destaque-desc">Um retrato de como está a sua vida hoje, em 9 dimensões — e um plano de pequenas ações.</span>
-        </span>
-        <span className="destaque-go mono">COMEÇAR ›</span>
-      </Link>
-
       <AgendaSemanal />
 
       <div className="section-label mono" style={{ marginTop: 26 }}>Áreas · {AREAS.length}</div>

@@ -167,3 +167,112 @@ export function progressoAcoes(acoes: { feita: boolean }[]): ProgressoAcoes {
   const feitas = (acoes ?? []).filter((a) => a.feita).length;
   return { total, feitas, pct: total > 0 ? Math.round((feitas / total) * 100) : 0 };
 }
+
+// ============================================================== evolução
+
+export interface RodaResumida {
+  id: string;
+  /** Quando a roda foi fechada. */
+  data: string;
+  notas: Notas;
+  acoes?: { feita: boolean }[];
+}
+
+export interface PontoEvolucao {
+  id: string;
+  data: string;
+  /** Ordem cronológica, 1 = a mais antiga. Serve de rótulo curto ("1ª roda"). */
+  numero: number;
+  media: number;
+  notas: Notas;
+  /** Variação da média em relação à roda imediatamente anterior. */
+  variacao: number | null;
+  acoesFeitas: number;
+  acoesTotal: number;
+}
+
+export interface SerieDimensao {
+  id: string;
+  nome: string;
+  emoji: string;
+  /** Uma nota por roda, na mesma ordem de `pontos`. */
+  valores: number[];
+  primeira: number;
+  ultima: number;
+  variacao: number;
+  /** Maior e menor nota que a dimensão já teve. */
+  melhor: number;
+  pior: number;
+}
+
+export interface Evolucao {
+  pontos: PontoEvolucao[];
+  series: SerieDimensao[];
+  /** Quem mais subiu e quem mais caiu entre a primeira e a última roda. */
+  maiorAlta: SerieDimensao | null;
+  maiorQueda: SerieDimensao | null;
+  mediaPrimeira: number;
+  mediaUltima: number;
+}
+
+/**
+ * Linha do tempo das rodas de uma pessoa.
+ *
+ * Recebe as rodas em qualquer ordem e devolve em ordem cronológica — a tela
+ * guarda o histórico do mais recente para o mais antigo, e um gráfico de
+ * evolução lido de trás para a frente enganaria.
+ *
+ * Com uma roda só ainda devolve tudo: a série tem um ponto, a variação é zero
+ * e a tela mostra "sem comparação ainda" em vez de um gráfico vazio.
+ */
+export function evolucao(rodas: RodaResumida[], dimensoes: DimensaoBase[]): Evolucao {
+  const ordenadas = [...(rodas ?? [])].sort((a, b) => a.data.localeCompare(b.data));
+
+  const pontos: PontoEvolucao[] = ordenadas.map((r, i) => {
+    const m = media(r.notas, dimensoes);
+    const anterior = i > 0 ? media(ordenadas[i - 1].notas, dimensoes) : null;
+    const acoes = r.acoes ?? [];
+    return {
+      id: r.id,
+      data: r.data,
+      numero: i + 1,
+      media: m,
+      notas: r.notas,
+      variacao: anterior === null ? null : Math.round((m - anterior) * 10) / 10,
+      acoesFeitas: acoes.filter((a) => a.feita).length,
+      acoesTotal: acoes.length,
+    };
+  });
+
+  const series: SerieDimensao[] = dimensoes.map((d) => {
+    const valores = ordenadas.map((r) => limitar(r.notas?.[d.id]));
+    const primeira = valores[0] ?? 0;
+    const ultima = valores[valores.length - 1] ?? 0;
+    return {
+      id: d.id,
+      nome: d.nome,
+      emoji: d.emoji,
+      valores,
+      primeira,
+      ultima,
+      variacao: Math.round((ultima - primeira) * 10) / 10,
+      melhor: valores.length > 0 ? Math.max(...valores) : 0,
+      pior: valores.length > 0 ? Math.min(...valores) : 0,
+    };
+  });
+
+  // Com menos de duas rodas não há alta nem queda para apontar.
+  const comparaveis = ordenadas.length >= 2 ? [...series] : [];
+  const porVariacao = [...comparaveis].sort((a, b) => b.variacao - a.variacao);
+  const alta = porVariacao[0];
+  const queda = porVariacao[porVariacao.length - 1];
+
+  return {
+    pontos,
+    series,
+    maiorAlta: alta && alta.variacao > 0 ? alta : null,
+    maiorQueda: queda && queda.variacao < 0 ? queda : null,
+    mediaPrimeira: pontos[0]?.media ?? 0,
+    mediaUltima: pontos[pontos.length - 1]?.media ?? 0,
+  };
+}
