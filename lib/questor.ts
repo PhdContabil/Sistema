@@ -1,9 +1,10 @@
 // Cliente server-side da API Questor. NUNCA importe isto em um componente client:
 // a chave X-API-Key só pode existir no servidor (LGPD / dados PII).
 import type { ConciliacaoResponse } from "./conciliacao";
-import type { AnaliseLimiteResponse, DctfwebResponse } from "./fiscal";
+import type { AnaliseLimiteResponse, DctfwebResponse, IcmsDifalResponse } from "./fiscal";
 import type { ConsolidacaoResponse, SocioItem } from "./contabil";
 import type { PerfilResponse } from "./dissidio-tipos";
+import type { FuncionariosAtivosResponse } from "./trabalhista";
 
 const BASE = process.env.QUESTOR_API_URL ?? "https://phdfibra.dyndns.org";
 const KEY = process.env.QUESTOR_API_KEY;
@@ -110,6 +111,31 @@ export function getDctfwebObrigadas(params: { ano?: number; mes?: number; origem
   if (params.cnpj) q.set("cnpj", params.cnpj);
   const qs = q.toString() ? `?${q.toString()}` : "";
   return get<DctfwebResponse>(`/fiscal/dctfweb-obrigadas${qs}`);
+}
+
+/**
+ * ICMS DIFAL — referência real por empresa/estabelecimento/competência/tipo.
+ * Painel de leitura em Apuração de Impostos; `meses` é o tamanho da janela
+ * (1–36, padrão 6 na própria API).
+ */
+export function getIcmsDifal(
+  params: { meses?: number; cnpj?: string; codigoempresa?: number; competencia?: string; tipo_imposto?: string; incluir_zerados?: boolean } = {}
+): Promise<IcmsDifalResponse> {
+  const q = new URLSearchParams();
+  if (params.meses) q.set("meses", String(params.meses));
+  if (params.cnpj) q.set("cnpj", params.cnpj);
+  if (params.codigoempresa) q.set("codigoempresa", String(params.codigoempresa));
+  if (params.competencia) q.set("competencia", params.competencia);
+  if (params.tipo_imposto) q.set("tipo_imposto", params.tipo_imposto);
+  if (params.incluir_zerados) q.set("incluir_zerados", "true");
+  const qs = q.toString() ? `?${q.toString()}` : "";
+  return get<IcmsDifalResponse>(`/fiscal/icms-difal${qs}`);
+}
+
+/** Funcionários ativos (sem dados de salário) — usado só como sugestão na Folha de Pagamento. */
+export function getFuncionariosAtivos(cnpj?: string): Promise<FuncionariosAtivosResponse> {
+  const qs = cnpj ? `?cnpj=${encodeURIComponent(cnpj)}` : "";
+  return get<FuncionariosAtivosResponse>(`/rh/funcionarios-ativos${qs}`);
 }
 
 export function hasApiKey(): boolean {

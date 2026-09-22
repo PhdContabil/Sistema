@@ -15,14 +15,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const email = await exigirTI();
   if (!email) return NextResponse.json({ error: "Sem acesso." }, { status: 403 });
 
-  let body: { email?: string; horas_dia?: unknown; dias_ausente?: unknown };
+  let body: { email?: string; horas_dia?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
 
   const alvo = (body.email ?? "").toLowerCase().trim();
   if (!alvo) return NextResponse.json({ error: "Pessoa não informada." }, { status: 400 });
 
   const hd = naoNegativo(body.horas_dia);
-  const da = naoNegativo(body.dias_ausente);
   if (body.horas_dia !== undefined && hd === undefined) {
     return NextResponse.json({ error: "Horas por dia inválidas." }, { status: 400 });
   }
@@ -30,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Ninguém tem mais de 24 h por dia." }, { status: 400 });
   }
 
-  const erro = await salvarCapacidade(params.id, alvo, { horas_dia: hd, dias_ausente: da });
+  const erro = await salvarCapacidade(params.id, alvo, { horas_dia: hd });
   if (erro) return NextResponse.json({ error: erro }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

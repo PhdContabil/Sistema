@@ -1,5 +1,10 @@
 // Sprint do TI — acesso a dados (SERVIDOR).
 //
+// Apontamento de horas é MANUAL, uma vez por dia. Existiu um cronômetro
+// iniciar/pausar aqui; foi removido porque o time decidiu apontar no fim do
+// expediente. A tabela `ticket_execucoes` continua guardando cada lançamento
+// (data, horas, autor, comentário) — o que mudou foi só de onde o número vem.
+//
 // Desenho central: o cartão continua sendo o mesmo ticket, no mesmo board do
 // setor que o pediu. A sprint não copia nada — só registra que aquele cartão
 // foi puxado para o ciclo atual, por quem e com quantas horas. Assim o board de
@@ -7,7 +12,7 @@
 // sem precisar entrar em outra tela.
 
 import { ticketsDb, type Ticket } from "./tickets";
-import { diasUteis } from "./sprints-calculo";
+import { diasUteis, datasUteis, type Folga } from "./sprints-calculo";
 
 export * from "./sprints-calculo";
 
@@ -31,18 +36,37 @@ export interface ItemSprint {
   horas_planejadas: number | null;
   ordem: number;
   ticket: Ticket | null;
-  /** Segundos já cronometrados neste cartão, somando todas as pessoas. */
+  /** Segundos já lançados neste cartão, somando todo mundo. */
   segundosExecutados: number;
-  /** Cronômetro aberto agora, se houver. */
-  rodandoPor: string | null;
-  rodandoDesde: string | null;
+  /** O mesmo em horas decimais — é com isso que o restante é calculado. */
+  horasApontadas: number;
+  apontamentos: Apontamento[];
 }
 
 export interface CapacidadeLinha {
   sprint_id: string;
   email: string;
   horas_dia: number;
-  dias_ausente: number;
+}
+
+/** Folga gravada: feriado do time (email nulo) ou ausência de uma pessoa. */
+export interface FolgaSprint extends Folga {
+  id: string;
+  sprint_id: string;
+  email: string | null;
+  motivo: string | null;
+}
+
+/** Lançamento de horas no cartão — do cronômetro ou digitado à mão. */
+export interface Apontamento {
+  id: string;
+  ticket_id: string;
+  email: string;
+  data: string;
+  segundos: number;
+  horas: number;
+  comentario: string | null;
+  inicio: string;
 }
 
 function n(v: unknown): number | null {
@@ -171,7 +195,7 @@ export async function listarItens(sprintId: string): Promise<ItemSprint[]> {
     .eq("sprint_id", sprintId)
     .order("ordem", { ascending: true });
 
-  const linhas = (itens ?? []) as Omit<ItemSprint, "ticket" | "segundosExecutados" | "rodandoPor" | "rodandoDesde">[];
+  const linhas = (itens ?? []) as Omit<ItemSprint, "ticket" | "segundosExecutados" | "horasApontadas" | "apontamentos">[];
   if (linhas.length === 0) return [];
 
   const ids = linhas.map((i) => i.ticket_id);
@@ -179,7 +203,10 @@ export async function listarItens(sprintId: string): Promise<ItemSprint[]> {
     db.from("tickets")
       .select("id,numero,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at,horas_estimadas,horas_realizadas,ganho_horas_mes,valor_hora,ganho_mensal")
       .in("id", ids),
-    db.from("ticket_execucoes").select("ticket_id,email,inicio,fim,segundos").in("ticket_id", ids),
+    db.from("ticket_execucoes")
+      .select("id,ticket_id,email,inicio,segundos,comentario,data")
+      .in("ticket_id", ids)
+      .order("data", { ascending: false }),
     db.from("ticket_assignees").select("ticket_id,user_email,user_name").in("ticket_id", ids),
   ]);
 
@@ -201,27 +228,40 @@ export async function listarItens(sprintId: string): Promise<ItemSprint[]> {
     });
   }
 
+  type LinhaExec = {
+    id: string; ticket_id: string; email: string; inicio: string;
+    segundos: number | null; comentario: string | null; data: string;
+  };
+
   const tempo = new Map<string, number>();
-  const aberta = new Map<string, { email: string; inicio: string }>();
-  for (const e of (execs ?? []) as { ticket_id: string; email: string; inicio: string; fim: string | null; segundos: number | null }[]) {
-    if (e.fim) {
-      tempo.set(e.ticket_id, (tempo.get(e.ticket_id) ?? 0) + (e.segundos ?? 0));
-    } else {
-      aberta.set(e.ticket_id, { email: e.email, inicio: e.inicio });
-    }
+  const lancamentos = new Map<string, Apontamento[]>();
+
+  for (const e of (execs ?? []) as LinhaExec[]) {
+    const seg = e.segundos ?? 0;
+    tempo.set(e.ticket_id, (tempo.get(e.ticket_id) ?? 0) + seg);
+
+    const lista = lancamentos.get(e.ticket_id) ?? [];
+    lista.push({
+      id: e.id,
+      ticket_id: e.ticket_id,
+      email: e.email,
+      data: e.data,
+      segundos: seg,
+      horas: Math.round((seg / 3600) * 100) / 100,
+      comentario: e.comentario,
+      inicio: e.inicio,
+    });
+    lancamentos.set(e.ticket_id, lista);
   }
 
-  return linhas.map((i) => {
-    const rodando = aberta.get(i.ticket_id);
-    return {
-      ...i,
-      horas_planejadas: n(i.horas_planejadas),
-      ticket: porTicket.get(i.ticket_id) ?? null,
-      segundosExecutados: tempo.get(i.ticket_id) ?? 0,
-      rodandoPor: rodando?.email ?? null,
-      rodandoDesde: rodando?.inicio ?? null,
-    };
-  });
+  return linhas.map((i) => ({
+    ...i,
+    horas_planejadas: n(i.horas_planejadas),
+    ticket: porTicket.get(i.ticket_id) ?? null,
+    segundosExecutados: tempo.get(i.ticket_id) ?? 0,
+    horasApontadas: Math.round(((tempo.get(i.ticket_id) ?? 0) / 3600) * 100) / 100,
+    apontamentos: lancamentos.get(i.ticket_id) ?? [],
+  }));
 }
 
 export async function adicionarItem(
@@ -264,6 +304,15 @@ export async function atualizarItem(
 ): Promise<string | null> {
   const db = ticketsDb();
   if (!db) return "Banco indisponível.";
+
+  // Baixar o estimate abaixo do que já foi lançado deixaria o cartão estourado
+  // por edição — exatamente o estado que a regra proíbe.
+  if (campos.horas_planejadas !== undefined && campos.horas_planejadas !== null) {
+    const { lancado } = await saldoDoCartao(ticketId);
+    if (campos.horas_planejadas < lancado - 0.001) {
+      return `Já foram lançadas ${lancado} h neste cartão — o Estimate não pode ficar abaixo disso.`;
+    }
+  }
   const { error } = await db
     .from("ticket_sprint_itens").update(campos)
     .eq("sprint_id", sprintId).eq("ticket_id", ticketId);
@@ -289,32 +338,231 @@ export async function listarCapacidade(sprintId: string): Promise<CapacidadeLinh
   return ((data ?? []) as CapacidadeLinha[]).map((c) => ({
     ...c,
     horas_dia: Number(c.horas_dia ?? 0),
-    dias_ausente: Number(c.dias_ausente ?? 0),
   }));
 }
 
 export async function salvarCapacidade(
   sprintId: string,
   email: string,
-  campos: { horas_dia?: number; dias_ausente?: number }
+  campos: { horas_dia?: number }
 ): Promise<string | null> {
   const db = ticketsDb();
   if (!db) return "Banco indisponível.";
   const { data: atual } = await db
-    .from("ticket_sprint_capacidade").select("horas_dia,dias_ausente")
+    .from("ticket_sprint_capacidade").select("horas_dia")
     .eq("sprint_id", sprintId).eq("email", email).maybeSingle();
-  const base = (atual as { horas_dia: number; dias_ausente: number } | null) ?? { horas_dia: 6, dias_ausente: 0 };
+  const base = (atual as { horas_dia: number } | null) ?? { horas_dia: 6 };
 
   const { error } = await db.from("ticket_sprint_capacidade").upsert(
-    {
-      sprint_id: sprintId,
-      email,
-      horas_dia: campos.horas_dia ?? base.horas_dia,
-      dias_ausente: campos.dias_ausente ?? base.dias_ausente,
-    },
+    { sprint_id: sprintId, email, horas_dia: campos.horas_dia ?? base.horas_dia },
     { onConflict: "sprint_id,email" }
   );
   return error?.message ?? null;
+}
+
+// ------------------------------------------------------------------ folgas
+
+export async function listarFolgas(sprintId: string): Promise<FolgaSprint[]> {
+  const db = ticketsDb();
+  if (!db) return [];
+  const { data } = await db
+    .from("ticket_sprint_folgas").select("*").eq("sprint_id", sprintId)
+    .order("data", { ascending: true });
+  return (data ?? []) as FolgaSprint[];
+}
+
+export async function adicionarFolga(
+  sprintId: string,
+  campos: { data: string; email: string | null; motivo: string | null },
+  criadoPor: string
+): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco indisponível.";
+  const { error } = await db.from("ticket_sprint_folgas").insert({
+    sprint_id: sprintId,
+    data: campos.data,
+    email: campos.email,
+    motivo: campos.motivo,
+    criado_por: criadoPor,
+  });
+  // Violação de unicidade: o dia já está lançado, o que não é erro do usuário.
+  if (error && error.code === "23505") return "Esse dia já está lançado.";
+  return error?.message ?? null;
+}
+
+/**
+ * Lança um intervalo de dias de uma vez — férias raramente são um dia só.
+ * Dias que já existem são ignorados, não impedem o resto.
+ */
+export async function adicionarFolgaPeriodo(
+  sprintId: string,
+  campos: { de: string; ate: string; email: string | null; motivo: string | null },
+  criadoPor: string
+): Promise<{ criados: number; error: string | null }> {
+  const db = ticketsDb();
+  if (!db) return { criados: 0, error: "Banco indisponível." };
+
+  const dias = datasUteis(campos.de, campos.ate);
+  if (dias.length === 0) return { criados: 0, error: "Nenhum dia útil nesse período." };
+
+  // Nada de upsert aqui. Os índices que impedem o dia repetido são PARCIAIS
+  // (um para `email is null`, outro para `email is not null`), e o Postgres não
+  // casa ON CONFLICT com índice parcial sem repetir o predicado — coisa que o
+  // PostgREST não sabe expressar. Então descobrimos o que já existe e
+  // inserimos só o que falta, que é determinístico e não depende de conflito.
+  let jaTem = db
+    .from("ticket_sprint_folgas")
+    .select("data")
+    .eq("sprint_id", sprintId)
+    .in("data", dias);
+  jaTem = campos.email ? jaTem.eq("email", campos.email) : jaTem.is("email", null);
+
+  const { data: existentes, error: erroLeitura } = await jaTem;
+  if (erroLeitura) return { criados: 0, error: erroLeitura.message };
+
+  const tem = new Set(((existentes ?? []) as { data: string }[]).map((x) => x.data));
+  const novos = dias.filter((d) => !tem.has(d));
+  if (novos.length === 0) {
+    return { criados: 0, error: "Esses dias já estavam lançados." };
+  }
+
+  const { error } = await db.from("ticket_sprint_folgas").insert(
+    novos.map((d) => ({
+      sprint_id: sprintId,
+      data: d,
+      email: campos.email,
+      motivo: campos.motivo,
+      criado_por: criadoPor,
+    }))
+  );
+  return { criados: novos.length, error: error?.message ?? null };
+}
+
+export async function removerFolga(id: string): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco indisponível.";
+  const { error } = await db.from("ticket_sprint_folgas").delete().eq("id", id);
+  return error?.message ?? null;
+}
+
+// ------------------------------------------------------------ apontamentos
+
+/**
+ * Quanto ainda cabe no cartão, em horas.
+ *
+ * Regra do time: o cartão NÃO estoura. Se o trabalho passou do previsto, a
+ * decisão é abrir outro cartão — assim o excedente aparece como escopo novo,
+ * que é o que ele é, em vez de sumir dentro de uma estimativa que ficou
+ * errada. Por isso a conta é feita aqui no servidor: travar só na tela deixaria
+ * a regra passar por qualquer requisição direta.
+ *
+ * Devolve `null` quando o cartão ainda não tem estimate — sem teto não há como
+ * dizer o que é estouro, e lançar às cegas é justamente o que queremos evitar.
+ */
+export async function saldoDoCartao(
+  ticketId: string
+): Promise<{ estimate: number | null; lancado: number; saldo: number | null }> {
+  const db = ticketsDb();
+  if (!db) return { estimate: null, lancado: 0, saldo: null };
+
+  const [{ data: item }, { data: execs }] = await Promise.all([
+    db.from("ticket_sprint_itens").select("horas_planejadas").eq("ticket_id", ticketId).maybeSingle(),
+    db.from("ticket_execucoes").select("segundos").eq("ticket_id", ticketId),
+  ]);
+
+  const estimate = n((item as { horas_planejadas: number | null } | null)?.horas_planejadas);
+  let segundos = 0;
+  for (const e of (execs ?? []) as { segundos: number | null }[]) {
+    segundos += e.segundos ?? 0;
+  }
+  const lancado = Math.round((segundos / 3600) * 100) / 100;
+
+  return {
+    estimate,
+    lancado,
+    saldo: estimate === null ? null : Math.round((estimate - lancado) * 100) / 100,
+  };
+}
+
+/**
+ * Lançamento manual de horas: "trabalhei 3h no dia 19".
+ *
+ * Cai na mesma tabela do cronômetro, com `manual = true`. O cartão soma os
+ * dois numa lista só, e `horas_realizadas` do ticket acompanha — é o número
+ * que o resto do sistema já usa.
+ */
+export async function lancarHoras(
+  ticketId: string,
+  sprintId: string | null,
+  email: string,
+  campos: { data: string; horas: number; comentario: string | null }
+): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco indisponível.";
+
+  const segundos = Math.max(0, Math.round(campos.horas * 3600));
+  if (segundos === 0) return "Informe quantas horas foram gastas.";
+
+  const { estimate, lancado, saldo } = await saldoDoCartao(ticketId);
+  if (estimate === null || estimate <= 0) {
+    return "Defina o Estimate do cartão antes de lançar horas.";
+  }
+  if (saldo !== null && campos.horas > saldo + 0.001) {
+    return saldo <= 0
+      ? `Este cartão já consumiu as ${estimate} h previstas. Abra outro cartão para o que falta.`
+      : `Restam só ${saldo} h neste cartão (${lancado} h de ${estimate} h já lançadas). `
+        + "Lance até esse limite e abra outro cartão para o excedente.";
+  }
+
+  // inicio/fim marcam o registro, não o relógio: o que vale é `data`.
+  const agora = new Date().toISOString();
+  const { error } = await db.from("ticket_execucoes").insert({
+    ticket_id: ticketId,
+    sprint_id: sprintId,
+    email,
+    inicio: agora,
+    fim: agora,
+    segundos,
+    data: campos.data,
+    comentario: campos.comentario,
+    manual: true,
+  });
+  if (error) return error.message;
+
+  await somarNoTicket(ticketId, Math.round((segundos / 3600) * 100) / 100);
+  return null;
+}
+
+export async function apagarApontamento(id: string, email: string, podeTudo: boolean): Promise<string | null> {
+  const db = ticketsDb();
+  if (!db) return "Banco indisponível.";
+
+  const { data } = await db
+    .from("ticket_execucoes").select("id,ticket_id,email,segundos").eq("id", id).maybeSingle();
+  const linha = data as { ticket_id: string; email: string; segundos: number | null } | null;
+  if (!linha) return "Lançamento não encontrado.";
+  if (!podeTudo && linha.email.toLowerCase() !== email.toLowerCase()) {
+    return "Só quem lançou pode apagar.";
+  }
+
+  const { error } = await db.from("ticket_execucoes").delete().eq("id", id);
+  if (error) return error.message;
+
+  // Devolve as horas: apagar o lançamento sem descontar deixaria o total
+  // maior do que a soma da lista, e ninguém entenderia a diferença.
+  await somarNoTicket(linha.ticket_id, -Math.round(((linha.segundos ?? 0) / 3600) * 100) / 100);
+  return null;
+}
+
+/** Soma (ou desconta) horas em `tickets.horas_realizadas`, sem deixar negativo. */
+async function somarNoTicket(ticketId: string, horas: number): Promise<void> {
+  const db = ticketsDb();
+  if (!db || horas === 0) return;
+  const { data } = await db
+    .from("tickets").select("horas_realizadas").eq("id", ticketId).maybeSingle();
+  const antes = Number((data as { horas_realizadas: number | null } | null)?.horas_realizadas ?? 0);
+  const total = Math.max(0, Math.round((antes + horas) * 100) / 100);
+  await db.from("tickets").update({ horas_realizadas: total }).eq("id", ticketId);
 }
 
 export async function removerCapacidade(sprintId: string, email: string): Promise<string | null> {
@@ -323,92 +571,6 @@ export async function removerCapacidade(sprintId: string, email: string): Promis
   const { error } = await db
     .from("ticket_sprint_capacidade").delete().eq("sprint_id", sprintId).eq("email", email);
   return error?.message ?? null;
-}
-
-// -------------------------------------------------------------- cronômetro
-
-export interface ExecucaoAberta {
-  id: string;
-  ticket_id: string;
-  sprint_id: string | null;
-  email: string;
-  inicio: string;
-}
-
-export async function execucaoAberta(email: string): Promise<ExecucaoAberta | null> {
-  const db = ticketsDb();
-  if (!db) return null;
-  const { data } = await db
-    .from("ticket_execucoes").select("id,ticket_id,sprint_id,email,inicio")
-    .eq("email", email).is("fim", null).maybeSingle();
-  return (data as ExecucaoAberta) ?? null;
-}
-
-/**
- * Começa a contar o tempo. Se a pessoa já tinha algo rodando, aquilo é fechado
- * antes — ninguém trabalha em duas coisas ao mesmo tempo, e deixar dois
- * cronômetros abertos inflaria as horas das duas tarefas.
- */
-export async function iniciarExecucao(
-  ticketId: string,
-  sprintId: string | null,
-  email: string
-): Promise<string | null> {
-  const db = ticketsDb();
-  if (!db) return "Banco indisponível.";
-
-  const atual = await execucaoAberta(email);
-  if (atual) {
-    if (atual.ticket_id === ticketId) return null; // já está rodando neste
-    const erro = await pararExecucao(email);
-    if (erro) return erro;
-  }
-
-  const { error } = await db.from("ticket_execucoes").insert({
-    ticket_id: ticketId,
-    sprint_id: sprintId,
-    email,
-    inicio: new Date().toISOString(),
-  });
-  return error?.message ?? null;
-}
-
-/**
- * Fecha o intervalo aberto e soma o tempo em `horas_realizadas` do ticket.
- *
- * O total continua num campo só, o mesmo que já existia e que a equipe pode
- * corrigir à mão — o cronômetro alimenta, não substitui. Os intervalos ficam
- * guardados para auditar de onde veio o número.
- */
-export async function pararExecucao(
-  email: string
-): Promise<string | null> {
-  const db = ticketsDb();
-  if (!db) return "Banco indisponível.";
-
-  const atual = await execucaoAberta(email);
-  if (!atual) return null;
-
-  const fim = new Date();
-  const segundos = Math.max(0, Math.round((fim.getTime() - new Date(atual.inicio).getTime()) / 1000));
-
-  const { error } = await db
-    .from("ticket_execucoes")
-    .update({ fim: fim.toISOString(), segundos })
-    .eq("id", atual.id);
-  if (error) return error.message;
-
-  const horas = Math.round((segundos / 3600) * 100) / 100;
-  if (horas > 0) {
-    const { data: t } = await db
-      .from("tickets").select("horas_realizadas").eq("id", atual.ticket_id).maybeSingle();
-    const antes = Number((t as { horas_realizadas: number | null } | null)?.horas_realizadas ?? 0);
-    await db
-      .from("tickets")
-      .update({ horas_realizadas: Math.round((antes + horas) * 100) / 100 })
-      .eq("id", atual.ticket_id);
-  }
-  return null;
 }
 
 // ----------------------------------------------------------------- backlog

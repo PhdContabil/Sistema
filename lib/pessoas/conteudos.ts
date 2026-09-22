@@ -116,6 +116,10 @@ export const AREAS: AreaPessoas[] = [
         ],
       },
       {
+        id: "roda-vida", titulo: "Roda da Vida", resumo: "Retrato da sua vida em 9 dimensões e um plano de pequenas ações.",
+        rota: "/m/pessoas/roda-vida",
+      },
+      {
         id: "mental", titulo: "Saúde mental — NR1", resumo: "Orientações, diagnóstico e ações.",
         itens: [
           { id: "orientacoes", titulo: "Orientações", resumo: "Medidas iniciais adotadas pela PHD.", pendente: true, nota: "Texto do Júnior." },

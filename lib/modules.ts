@@ -23,10 +23,10 @@ export const MODULES: ModuleDef[] = [
     apps: [
       { name: "Simples Nacional", desc: "Análise de limite, faturamento, projeção e estouro do Simples.", href: "/m/fiscal/simples" },
       { name: "DCTFWeb", desc: "Empresas obrigadas por competência e débito apurado.", href: "/m/fiscal/dctfweb" },
-      { name: "Apuração de Impostos", desc: "Cálculo de ICMS, PIS, COFINS e IPI por competência." },
+      { name: "Apuração de Impostos", desc: "Cálculo de ICMS, PIS, COFINS e IPI por competência.", href: "/m/fiscal/apuracao-impostos" },
       { name: "Notas Fiscais", desc: "Emissão, importação e escrituração de NF-e e NFS-e." },
       { name: "SPED Fiscal", desc: "Geração, validação e transmissão dos arquivos." },
-      { name: "Obrigações Acessórias", desc: "Controle de entregas e prazos por cliente." },
+      { name: "Obrigações Acessórias", desc: "Controle de entregas e prazos por cliente.", href: "/m/fiscal/obrigacoes-acessorias" },
     ],
   },
   {
@@ -43,6 +43,7 @@ export const MODULES: ModuleDef[] = [
       { name: "Comunicação", desc: "Férias, ausências, reuniões e confraternizações.", href: "/m/pessoas/comunicacao" },
       { name: "Remuneração", desc: "Cargos e salários, PLR e benefícios.", href: "/m/pessoas/remuneracao" },
       { name: "Saúde e Bem-Estar", desc: "Escuta, exames, convênios e saúde mental.", href: "/m/pessoas/saude" },
+      { name: "Roda da Vida", desc: "Retrato pessoal em 9 dimensões — dentro de Saúde e Bem-Estar.", href: "/m/pessoas/roda-vida" },
       { name: "Normas e Procedimentos", desc: "Políticas internas da PHD.", href: "/m/pessoas/normas" },
       { name: "Avaliação de Desempenho", desc: "Experiência e avaliação semestral.", href: "/m/pessoas/avaliacao" },
     ],
@@ -51,8 +52,8 @@ export const MODULES: ModuleDef[] = [
     id: "trabalhista", name: "Trabalhista", initials: "TR", color: "#1f8f76",
     desc: "Folha de pagamento, eSocial e rotinas de departamento pessoal.",
     apps: [
-      { name: "Folha de Pagamento", desc: "Cálculo de salários, encargos e benefícios." },
-      { name: "eSocial", desc: "Eventos, envios e retornos ao governo." },
+      { name: "Folha de Pagamento", desc: "Cálculo de salários, encargos e benefícios.", href: "/m/trabalhista/folha-pagamento" },
+      { name: "eSocial", desc: "Eventos, envios e retornos ao governo.", href: "/m/trabalhista/esocial" },
       { name: "Admissões", desc: "Registro e onboarding de novos colaboradores." },
       { name: "Férias e 13º", desc: "Programação, avisos e cálculos." },
       { name: "Rescisões", desc: "Cálculo de verbas e homologação." },
