@@ -235,6 +235,14 @@ const APP_ICONS: Record<string, React.ReactNode> = {
       <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
     </Svg>
   ),
+  roda: (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M12 3v6.5M12 14.5V21M3 12h6.5M14.5 12H21" />
+      <path d="M5.6 5.6l4.6 4.6M13.8 13.8l4.6 4.6M18.4 5.6l-4.6 4.6M10.2 13.8l-4.6 4.6" />
+    </Svg>
+  ),
   coracao: (
     <Svg>
       <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
@@ -287,6 +295,7 @@ function chaveIcone(nomeApp: string): keyof typeof APP_ICONS {
   if (n === "pessoas") return "usuarios";
   if (n.includes("comunicação")) return "mensagem";
   if (n.includes("remuneração")) return "cifrao";
+  if (n.includes("roda")) return "roda";
   if (n.includes("saúde")) return "coracao";
   if (n.includes("normas")) return "escudo";
   if (n.includes("avaliação")) return "premio";

@@ -179,8 +179,7 @@ export default function RodaVida({
   if (!roda) {
     return (
       <div className="rv-abertura">
-        <AvisoPrivacidade souDiretoria={souDiretoria} />
-        <div className="card rv-convite">
+          <div className="card rv-convite">
           <h2>Como está a sua vida hoje?</h2>
           <p>
             São {DIMENSOES.length} dimensões. Para cada uma, algumas perguntas para pensar e
@@ -206,7 +205,6 @@ export default function RodaVida({
       {erro && <div className="rv-erro">{erro}</div>}
       {aviso && <div className="rv-aviso-ok">{aviso}</div>}
 
-      <AvisoPrivacidade souDiretoria={souDiretoria} />
 
       <div className="rv-abas">
         <button className={`chip ${etapa === "notas" ? "on" : ""}`} onClick={() => setEtapa("notas")}>
@@ -318,7 +316,7 @@ export default function RodaVida({
                 rows={5} value={reflexao} disabled={salvando}
                 onChange={(e) => setReflexao(e.target.value)}
                 onBlur={guardarReflexao}
-                placeholder="Escreva o que vier. Ninguém precisa ler isso além de você e da diretoria."
+                placeholder="Escreva o que vier — não precisa ficar bonito."
               />
             </div>
 
@@ -385,15 +383,15 @@ export default function RodaVida({
 
 // ------------------------------------------------------------------ aviso
 
-function AvisoPrivacidade({ souDiretoria }: { souDiretoria: boolean }) {
-  return (
-    <div className="rv-privacidade">
-      <strong>Quem vê isto:</strong> só você e a diretoria. Colegas, gestores de setor e o
-      time de TI não têm acesso à sua roda pelo sistema.
-      {souDiretoria && " Como você é da diretoria, também vê a roda das outras pessoas."}
-    </div>
-  );
-}
+/**
+ * Aviso de quem tem acesso — removido a pedido (21/09/2026).
+ *
+ * Fica registrado porque a informação continua verdadeira: a diretoria vê a
+ * roda de todo mundo. A tela deixou de dizer isso, mas também não afirma o
+ * contrário: nenhum texto aqui promete privacidade que o sistema não entrega.
+ * Se um dia o acesso for restringido só ao dono, dá para voltar a falar disso
+ * abertamente.
+ */
 
 // ---------------------------------------------------------------- gráfico
 
