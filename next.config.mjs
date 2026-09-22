@@ -17,8 +17,21 @@ const nextConfig = {
     // descobrir sozinho que esse arquivo precisa ir junto da função. Sem
     // isso, o deploy funcionaria, mas o OCR falharia por não achar o idioma
     // "por" assim que caísse no fallback de PDF escaneado.
+    //
+    // O mesmo vale pros próprios binários .wasm do motor do Tesseract
+    // (tesseract.js-core): o rastreamento automático pegou só os arquivos
+    // .js "carregadores" de cada variante (simd/lstm/simd-lstm/plano), mas
+    // não os .wasm que eles carregam em runtime (o loader Emscripten
+    // resolve o caminho de um jeito que o rastreador estático não segue) —
+    // confirmado em produção: "ENOENT ... tesseract-core-simd.wasm" bem no
+    // meio do OCR, o que também explica o 504 (a função ficava presa
+    // tentando lidar com esse erro até estourar os 60s). Sem os .wasm,
+    // nenhuma variante do motor consegue carregar.
     outputFileTracingIncludes: {
-      "/api/paralegal/robo-zen/**": ["./lib/robo-zen/tessdata/**/*"],
+      "/api/paralegal/robo-zen/**": [
+        "./lib/robo-zen/tessdata/**/*",
+        "./node_modules/tesseract.js-core/*.wasm",
+      ],
     },
   },
 };
