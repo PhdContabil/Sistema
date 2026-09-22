@@ -83,6 +83,7 @@ export const MODULES: ModuleDef[] = [
       { name: "Prazos", desc: "Agenda de vencimentos e alertas." },
       { name: "Procurações", desc: "Controle de mandatos e vigências." },
       { name: "Documentos", desc: "Repositório digital por cliente." },
+      { name: "Robô Zen", desc: "Varre contratos no SharePoint e cadastra no Questor Zen (Edoc).", href: "/m/paralegal/robo-zen" },
       { name: "Protocolos", desc: "Registro de protocolos em órgãos públicos." },
     ],
   },

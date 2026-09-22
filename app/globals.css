@@ -1472,6 +1472,40 @@ table.grid.dissidio tr.faturada select:disabled { background: transparent; borde
 .ponto-page.bi-page { height: calc(100vh - 92px); }
 .ponto-page.bi-page .ponto-box { background: #1f1f1f; }
 
+/* ===== Robô Zen (Paralegal) =====
+   Barra de progresso dos jobs incrementais (simulação e envio em lote) e
+   o painel de confirmação do envio real de uma empresa. */
+.rz-secao { margin-bottom: 28px; }
+.rz-secao h3 { font-size: 15px; margin: 0 0 6px; }
+.rz-secao > p.desc { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.rz-sep { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+.rz-progress-bg { background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; height: 10px; overflow: hidden; margin-top: 14px; }
+.rz-progress-fill { height: 100%; background: var(--accent); transition: width .35s ease; }
+.rz-progress-fill.perigo { background: var(--div); }
+.rz-progress-texto { font-size: 13px; margin: 8px 0 2px; }
+.rz-empresa-atual { font-size: 12px; color: var(--muted); min-height: 16px; }
+.rz-perigo-box {
+  background: color-mix(in srgb, var(--div) 7%, var(--surface));
+  border: 1px solid var(--div); border-radius: 12px; padding: 16px 18px; margin-top: 10px;
+}
+.rz-perigo-box p { margin: 0 0 10px; font-size: 13px; line-height: 1.55; }
+.rz-check { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; margin: 10px 0 12px; cursor: pointer; }
+.rz-check input { margin-top: 2px; }
+.rz-erros { max-height: 170px; overflow-y: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-top: 10px; }
+.rz-erros ul { margin: 0; padding-left: 16px; }
+.rz-erros li { font-size: 12px; font-family: ui-monospace, monospace; margin-bottom: 5px; color: var(--text); }
+.rz-dl { display: grid; grid-template-columns: max-content 1fr; gap: 5px 16px; font-size: 13px; margin: 12px 0; }
+.rz-dl dt { color: var(--muted); font-weight: 600; }
+.rz-dl dd { margin: 0; }
+.rz-confirm { background: color-mix(in srgb, var(--div) 6%, var(--surface)); border: 1px solid var(--div); border-radius: 12px; padding: 16px 18px; margin-top: 14px; }
+.rz-confirm h4 { margin: 0 0 8px; font-size: 14px; }
+.rz-linha-busca { display: flex; gap: 10px; margin-bottom: 14px; }
+.rz-linha-busca input { flex: 1; max-width: 420px; }
+.rz-resultado-empresa { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: baseline; }
+.rz-resultado-empresa .nome { font-size: 15px; font-weight: 600; }
+.rz-resultado-empresa .origem { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.badge-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.badge-mudo { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 
 /* ============================================================ Roda da Vida
    Tela de autoavaliação pessoal. Mais espaçada que as telas operacionais do
