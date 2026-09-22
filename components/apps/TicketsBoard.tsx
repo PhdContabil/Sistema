@@ -400,6 +400,11 @@ function DetalheTicket({
   const [textoEdicao, setTextoEdicao] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
+  const [editandoTitulo, setEditandoTitulo] = useState(false);
+  const [tituloEdicao, setTituloEdicao] = useState(d.ticket.title);
+  const [editandoDescricao, setEditandoDescricao] = useState(false);
+  const [descricaoEdicao, setDescricaoEdicao] = useState(d.ticket.description ?? "");
+
   const souResponsavel = !!meuEmail && responsaveis.some((r) => r.user_email.toLowerCase() === meuEmail);
   const desvio = desvioHoras(t);
   const retorno = mesesRetorno(t);
@@ -463,6 +468,31 @@ function DetalheTicket({
           ? Math.round(novo.ganho_horas_mes * novo.valor_hora * 100) / 100
           : null;
       setT(novo);
+    }
+  }
+
+  function comecarEdicaoTitulo() {
+    setTituloEdicao(t.title);
+    setEditandoTitulo(true);
+  }
+  async function salvarTitulo() {
+    const novo = tituloEdicao.trim();
+    if (!novo) return;
+    if (await patch({ title: novo })) {
+      setT({ ...t, title: novo });
+      setEditandoTitulo(false);
+    }
+  }
+
+  function comecarEdicaoDescricao() {
+    setDescricaoEdicao(t.description ?? "");
+    setEditandoDescricao(true);
+  }
+  async function salvarDescricao() {
+    const nova = descricaoEdicao.trim();
+    if (await patch({ description: nova })) {
+      setT({ ...t, description: nova });
+      setEditandoDescricao(false);
     }
   }
 
@@ -582,13 +612,46 @@ function DetalheTicket({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-slate-200 dark:border-slate-800">
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="text-xs text-slate-500 mb-1">
               {t.numero != null && <span className="font-mono">#{t.numero}</span>}
               {t.numero != null && " · "}
               {SETOR_NOME[t.sector]} · aberto por {primeiroNome(t.created_by_name, t.created_by_email)} há {tempoRelativo(t.created_at)}
             </div>
-            <h2 className="text-xl font-bold">{t.title}</h2>
+            {editandoTitulo ? (
+              <div className="flex items-center gap-2">
+                <input
+                  className={`${INPUT} text-xl font-bold flex-1`}
+                  value={tituloEdicao}
+                  onChange={(e) => setTituloEdicao(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") salvarTitulo();
+                    if (e.key === "Escape") setEditandoTitulo(false);
+                  }}
+                  autoFocus
+                />
+                <button className={BTN} onClick={() => setEditandoTitulo(false)} disabled={salvando}>
+                  Cancelar
+                </button>
+                <button className={BTN_PRIMARY} onClick={salvarTitulo} disabled={salvando || !tituloEdicao.trim()}>
+                  {salvando ? "Salvando…" : "Salvar"}
+                </button>
+              </div>
+            ) : (
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span className="truncate">{t.title}</span>
+                <button
+                  onClick={comecarEdicaoTitulo}
+                  title="Editar título"
+                  aria-label="Editar título"
+                  className="w-6 h-6 shrink-0 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                  </svg>
+                </button>
+              </h2>
+            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -763,12 +826,46 @@ function DetalheTicket({
             </>
           )}
 
-          {t.description && (
-            <div>
-              <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Descrição</h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">{t.description}</p>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs uppercase tracking-widest text-slate-500">Descrição</h3>
+              {!editandoDescricao && (
+                <button
+                  onClick={comecarEdicaoDescricao}
+                  title="Editar descrição"
+                  aria-label="Editar descrição"
+                  className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                  </svg>
+                </button>
+              )}
             </div>
-          )}
+            {editandoDescricao ? (
+              <div className="space-y-2">
+                <textarea
+                  rows={4}
+                  value={descricaoEdicao}
+                  onChange={(e) => setDescricaoEdicao(e.target.value)}
+                  className={`${INPUT} w-full resize-y`}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <button className={BTN} onClick={() => setEditandoDescricao(false)} disabled={salvando}>
+                    Cancelar
+                  </button>
+                  <button className={BTN_PRIMARY} onClick={salvarDescricao} disabled={salvando}>
+                    {salvando ? "Salvando…" : "Salvar"}
+                  </button>
+                </div>
+              </div>
+            ) : t.description ? (
+              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">{t.description}</p>
+            ) : (
+              <p className="text-sm text-slate-500 italic">Sem descrição.</p>
+            )}
+          </div>
 
           {d.anexos.length > 0 && (
             <div>

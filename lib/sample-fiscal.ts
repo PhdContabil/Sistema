@@ -1,5 +1,5 @@
 // Dados de exemplo do módulo Fiscal, usados quando a QUESTOR_API_KEY não está configurada.
-import type { AnaliseLimiteResponse, DctfwebResponse, LimiteMensalItem } from "./fiscal";
+import type { AnaliseLimiteResponse, DctfwebResponse, IcmsDifalResponse, LimiteMensalItem } from "./fiscal";
 
 function serie(base: number, ultimoMes: number, media: number): LimiteMensalItem[] {
   const out: LimiteMensalItem[] = [];
@@ -64,5 +64,19 @@ export const SAMPLE_DCTFWEB: DctfwebResponse = {
     { codigoempresa: 64, cnpj: "32425127000149", nome: "AMYNA CLINICA MEDICA LTDA", ano: 2026, mes: 7, total_folha: 178.31, total_reinf: 12.65, debito_apurado: 190.96, origem: "ambos", deve_entregar: true },
     { codigoempresa: 120, cnpj: "11222333000181", nome: "BETA INDUSTRIA LTDA", ano: 2026, mes: 7, total_folha: 2540.9, total_reinf: null, debito_apurado: 2540.9, origem: "folha", deve_entregar: true },
     { codigoempresa: 305, cnpj: "44555666000172", nome: "GAMA TRANSPORTES LTDA", ano: 2026, mes: 7, total_folha: null, total_reinf: 880.0, debito_apurado: 880.0, origem: "reinf", deve_entregar: true },
+  ],
+};
+
+export const SAMPLE_DIFAL: IcmsDifalResponse = {
+  meses: 6,
+  periodo: "2026-04 a 2026-09",
+  total: 5,
+  total_valor: 18432.77,
+  dados: [
+    { codigoempresa: 1119, codigoestab: 1, cnpj: "50715659000100", nome: "ACME COMERCIO LTDA", competencia: "2026-09", tipo_imposto: "Uso e Consumo", valor: 4210.5 },
+    { codigoempresa: 1119, codigoestab: 1, cnpj: "50715659000100", nome: "ACME COMERCIO LTDA", competencia: "2026-08", tipo_imposto: "Ativo Fixo", valor: 1890.0 },
+    { codigoempresa: 204, codigoestab: 1, cnpj: "12345678000190", nome: "BRASIL SERVICOS EIRELI", competencia: "2026-09", tipo_imposto: "Uso e Consumo", valor: 6350.27 },
+    { codigoempresa: 204, codigoestab: 1, cnpj: "12345678000190", nome: "BRASIL SERVICOS EIRELI", competencia: "2026-07", tipo_imposto: "Divergência", valor: 980.0 },
+    { codigoempresa: 88, codigoestab: 1, cnpj: "98765432000121", nome: "DELTA MEI ME", competencia: "2026-09", tipo_imposto: "Com Encerramento", valor: 5002.0 },
   ],
 };

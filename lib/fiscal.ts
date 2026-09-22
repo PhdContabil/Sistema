@@ -95,3 +95,33 @@ export const MESES_ABREV = [
   "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
   "Jul", "Ago", "Set", "Out", "Nov", "Dez",
 ];
+
+// ICMS DIFAL — referência real vinda de GET /fiscal/icms-difal (API Questor).
+// Usado como painel de leitura em Apuração de Impostos; não confundir com o
+// registro manual (tabela apuracao_impostos), que é controlado pelo usuário.
+
+export const TIPOS_ICMS_DIFAL = [
+  "Uso e Consumo",
+  "Ativo Fixo",
+  "Sem Encerramento",
+  "Divergência",
+  "Com Encerramento",
+] as const;
+
+export interface IcmsDifalItem {
+  codigoempresa: number;
+  codigoestab: number;
+  cnpj: string | null;
+  nome: string | null;
+  competencia: string;
+  tipo_imposto: string;
+  valor: number;
+}
+
+export interface IcmsDifalResponse {
+  meses: number;
+  periodo: string;
+  total: number;
+  total_valor: number;
+  dados: IcmsDifalItem[];
+}
