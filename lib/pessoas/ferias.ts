@@ -28,6 +28,32 @@ export function admin() {
 }
 
 /** Encarregado responsável por um setor (fallback: gestão de pessoas). */
+/**
+ * Quem enxerga as solicitações de TODOS os setores em "Aprovar férias".
+ *
+ * Normalmente é quem está no setor "Gestores". Fora disso, esta lista abre a
+ * mesma visão para quem apoia a gestão de pessoas sem ser gestor de setor —
+ * hoje a Julia Rodrigues, que é do Contábil (pedido do Gabriel, 24/09/2026).
+ *
+ * Preferi a lista a mudar o setor dela no cadastro: o setor alimenta agenda,
+ * férias e organograma, e trocá-lo por causa de uma permissão espalharia o
+ * efeito por telas que não têm nada a ver com isso.
+ */
+export const APOIO_GESTAO_PESSOAS = ["julia.rodrigues@phdcontabil.com.br"];
+
+export function ehApoioGestaoPessoas(email: string | null | undefined): boolean {
+  const e = email?.toLowerCase();
+  return !!e && APOIO_GESTAO_PESSOAS.includes(e);
+}
+
+/** Visão completa: todos os setores, e não só o próprio. */
+export function temVisaoDeGestores(
+  email: string | null | undefined,
+  setor: string | null | undefined
+): boolean {
+  return setor === "Gestores" || ehApoioGestaoPessoas(email);
+}
+
 export async function encarregadoDoSetor(setor: string): Promise<{ nome: string; email: string } | null> {
   const sb = admin();
   if (!sb) return null;

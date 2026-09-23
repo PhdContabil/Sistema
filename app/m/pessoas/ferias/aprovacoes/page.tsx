@@ -1,7 +1,7 @@
 import Workspace from "@/components/Workspace";
 import Aprovacoes from "@/components/pessoas/Aprovacoes";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { admin, type SolicitacaoFerias } from "@/lib/pessoas/ferias";
+import { admin, temVisaoDeGestores, ehApoioGestaoPessoas, type SolicitacaoFerias } from "@/lib/pessoas/ferias";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +18,13 @@ export default async function AprovacoesPage() {
   if (sb && email) {
     const { data: p } = await sb
       .from("pessoas_perfil").select("setor,encarregado").ilike("email", email).maybeSingle();
-    ehEncarregado = Boolean(p?.encarregado);
     setor = p?.setor ?? "";
+    // Quem apoia a gestão de pessoas entra mesmo sem a marca de encarregado no
+    // cadastro — a marca diz "responde por um setor", que não é o caso dela.
+    ehEncarregado = Boolean(p?.encarregado) || ehApoioGestaoPessoas(email);
 
     if (ehEncarregado) {
-      const ehGestor = setor === "Gestores";
+      const ehGestor = temVisaoDeGestores(email, setor);
       const q = sb
         .from("ferias_solicitacoes")
         .select("id,pessoa_id,solicitante,setor,observacao,status,aprovador,avaliado_em,motivo_recusa,criado_em,ferias_periodos(id,inicio,fim,dias),pessoas_perfil(nome)")
@@ -48,7 +50,9 @@ export default async function AprovacoesPage() {
           <h1>Aprovar férias</h1>
           <div className="desc">
             {ehEncarregado
-              ? setor === "Gestores" ? "Solicitações de todos os setores." : `Solicitações do ${setor}.`
+              ? temVisaoDeGestores(email, setor)
+                ? "Solicitações de todos os setores."
+                : `Solicitações do ${setor}.`
               : "Área restrita aos encarregados."}
           </div>
         </div>

@@ -4,6 +4,10 @@
 // conteúdo editorial: muda por decisão de quem conduz a dinâmica, não pelo uso
 // do dia a dia. Trocar uma pergunta vira commit, com histórico de quem mudou.
 //
+// Textos das ações reescritos pelo RH em 24/09/2026, numa pegada mais de
+// comando ("eu escolho…") do que de intenção ("vou tentar"). Transcritos como
+// vieram, inclusive a pontuação final de cada item.
+//
 // Duas correções em relação ao original, ambas de numeração: a lista de
 // dimensões pulava do 6 para o 6 de novo (Saúde emocional e Lazer), e a lista
 // de ações já vinha numerada até 9. São 9 dimensões, e os `id` abaixo são o
@@ -19,8 +23,10 @@ export interface Dimensao {
   perguntas: string[];
   /** Sugestões de ação concreta para quem escolher cuidar desta dimensão. */
   acoes: string[];
-  /** Frase que abre a lista de ações, quando o documento traz uma. */
+  /** Frase que abre a lista de ações. */
   chamada?: string;
+  /** Observação que antecede a lista, quando a dimensão pede cuidado extra. */
+  aviso?: string;
 }
 
 export const DIMENSOES: Dimensao[] = [
@@ -36,14 +42,14 @@ export const DIMENSOES: Dimensao[] = [
       "Estou satisfeito(a) com aquilo que tenho conseguido entregar, com minha produtividade?",
       "Tenho orgulho do meu desempenho profissional?",
     ],
-    chamada: "Na semana que vem eu…",
+    chamada: "Na próxima semana, eu escolho…",
     acoes: [
-      "Quero e vou conversar com meu gestor sobre algo que está me incomodando",
-      "Vou pedir ou oferecer um feedback",
-      "Vou dizer para minha liderança que desejo aprender algo novo relacionado ao meu trabalho",
-      "Não levarei trabalho para outros espaços da minha vida",
-      "Vou listar todas as tarefas pendentes que estou adiando há meses e pensar numa estratégia para resolvê-las",
-      "Identificarei uma atividade do trabalho que me dá sentido e dedicarei mais atenção a ela",
+      "Conversar com meu gestor sobre algo que está me incomodando.",
+      "Pedir ou oferecer um feedback.",
+      "Expressar à minha liderança algo novo que gostaria de aprender.",
+      "Estabelecer um limite para não levar o trabalho para outros espaços da minha vida.",
+      "Listar as tarefas que venho adiando e definir por onde começar.",
+      "Identificar uma atividade do trabalho que me dá sentido e dedicar mais atenção a ela.",
     ],
   },
   {
@@ -60,16 +66,16 @@ export const DIMENSOES: Dimensao[] = [
       "Minha situação financeira tem afetado meu sono, meu humor, meus relacionamentos ou outras áreas da minha vida?",
       "Tenho algum plano ou reserva para lidar com imprevistos?",
     ],
-    chamada: "Na semana que vem eu…",
+    chamada: "Na próxima semana, eu escolho…",
     acoes: [
-      "Vou anotar meus gastos para identificar onde tenho me descontrolado",
-      "Não vou acessar sites de compras",
-      "Vou pagar no débito / não vou usar o cartão de crédito",
-      "Vou organizar minhas dívidas e entender minha real situação",
-      "Vou definir um pequeno valor mensal para guardar no próximo pagamento",
-      "Vou rever assinaturas e serviços que quase não utilizo",
-      "Vou conversar com alguém de confiança sobre minha organização financeira",
-      "Vou me desafiar: antes de comprar, parar, pensar e deixar para talvez comprar outro dia",
+      "Anotar meus gastos durante a semana para entender para onde meu dinheiro está indo.",
+      "Evitar sites e aplicativos de compras por alguns dias.",
+      "Experimentar passar uma semana sem usar o cartão de crédito para compras não essenciais.",
+      "Organizar minhas dívidas e entender minha situação financeira real.",
+      "Definir um pequeno valor para guardar no próximo pagamento.",
+      "Revisar assinaturas e serviços que pouco utilizo.",
+      "Conversar com alguém de confiança sobre minha organização financeira.",
+      "Criar uma pausa antes de comprar: parar, pensar e decidir no dia seguinte.",
     ],
   },
   {
@@ -85,15 +91,15 @@ export const DIMENSOES: Dimensao[] = [
       "Faz quanto tempo que não compartilho um momento em família (almoço, jantar, sair)?",
       "Tenho dado às pessoas que amo a atenção que elas merecem ou apenas o tempo que sobra da minha rotina?",
     ],
-    chamada: "Neste fim de semana…",
+    chamada: "Neste final de semana, eu escolho…",
     acoes: [
-      "Farei uma refeição em família sem o celular",
-      "Ligarei para alguém da família com quem não falo há mais de um mês",
-      "Farei um ato de carinho ou gratidão a alguém que amo",
-      "Visitarei algum familiar e procurarei estar realmente presente",
-      "Vou pedir desculpas por algo que fiz",
-      "Vou resolver uma conversa que estou evitando",
-      "Vou perguntar a alguém da família: “Como você realmente está?”",
+      "Fazer uma refeição em família sem celular.",
+      "Ligar para alguém da família com quem não falo há algum tempo.",
+      "Demonstrar carinho ou gratidão a alguém que amo.",
+      "Visitar um familiar e estar verdadeiramente presente.",
+      "Pedir desculpas por algo que fiz.",
+      "Retomar uma conversa que estou evitando.",
+      "Perguntar a alguém da família: “Como você realmente está?”",
     ],
   },
   {
@@ -108,15 +114,14 @@ export const DIMENSOES: Dimensao[] = [
       "Sinto que tenho espaço para ser eu mesmo(a) nas minhas relações?",
       "Tenho cultivado amizades ou apenas mantido contatos?",
     ],
+    chamada: "Na próxima semana, eu escolho…",
     acoes: [
-      "Procurar um amigo que não vejo há algum tempo",
-      "Marcar um café, almoço ou encontro",
-      "Mandar uma mensagem simplesmente para saber como alguém está",
-      "Retomar uma amizade que considero importante",
-      "Conhecer pessoas novas",
-      "Participar de alguma atividade coletiva",
-      "Compartilhar com alguém algo que estou vivendo",
-      "Estar mais presente quando estiver conversando com alguém",
+      "Procurar um amigo(a) que não vejo há algum tempo.",
+      "Marcar um café, almoço ou encontro.",
+      "Enviar uma mensagem simplesmente para saber como alguém está.",
+      "Retomar uma amizade que considero importante.",
+      "Participar de alguma atividade coletiva.",
+      "Compartilhar com alguém de confiança algo que estou vivendo.",
     ],
   },
   {
@@ -130,16 +135,16 @@ export const DIMENSOES: Dimensao[] = [
       "Tenho feito exames de rotina (check-up), pelo menos uma vez ao ano?",
       "Tenho dado atenção a exames em virtude de histórico familiar (pressão alta, diabetes, câncer)?",
     ],
+    chamada: "Na próxima semana, eu escolho…",
     acoes: [
-      "Melhorar minha rotina de sono",
-      "Aumentar minha ingestão de água",
-      "Fazer alguma atividade física",
-      "Marcar um exame ou consulta que venho adiando",
-      "Fazer um check-up",
-      "Dar atenção a algum problema de saúde que venho ignorando",
-      "Melhorar minha alimentação em pelo menos uma refeição do dia",
-      "Fazer uma pausa durante o dia para respirar, caminhar ou simplesmente descansar",
-      "Respeitar mais meus limites físicos",
+      "Deixar o celular longe da cama na hora de dormir.",
+      "Usar a cadeira de massagem da PHD.",
+      "Aumentar minha ingestão de água.",
+      "Pesquisar e experimentar uma atividade física que combine comigo.",
+      "Agendar um exame ou consulta que venho adiando.",
+      "Marcar uma consulta de rotina ou check-up, quando necessário.",
+      "Dar atenção a um problema de saúde que venho ignorando.",
+      "Reduzir o consumo de algo que sei que não faz bem para mim.",
     ],
   },
   {
@@ -155,16 +160,18 @@ export const DIMENSOES: Dimensao[] = [
       "Tenho conseguido colocar limites ou frequentemente digo “sim” quando gostaria de dizer “não”?",
       "Tenho acumulado coisas que gostaria de falar, mas não encontro espaço ou coragem para dizer?",
     ],
-    chamada: "Ações simples e possíveis — a dinâmica não é terapia.",
+    chamada: "Na próxima semana, eu escolho…",
+    aviso: "Pequenas atitudes também podem fazer diferença. Escolha uma ação possível para você. Se perceber que precisa de mais apoio, considere conversar com alguém de confiança ou buscar ajuda profissional.",
     acoes: [
-      "Reservar alguns minutos do dia para perceber como estou me sentindo",
-      "Conversar com alguém de confiança sobre algo que estou carregando sozinho(a)",
-      "Pedir ajuda quando perceber que não estou dando conta",
-      "Aprender a dizer “não” para alguma situação",
-      "Identificar uma situação que está me causando estresse e pensar no que posso fazer a respeito",
-      "Fazer uma pausa quando perceber que estou sobrecarregado(a)",
-      "Escrever aquilo que está me preocupando para organizar meus pensamentos",
-      "Procurar ajuda profissional se perceber que preciso de apoio",
+      "Reservar alguns minutos do dia para perceber como estou me sentindo.",
+      "Conversar com alguém de confiança sobre algo que estou carregando sozinho(a).",
+      "Pedir ajuda quando perceber que não estou conseguindo dar conta sozinho(a).",
+      "Dizer “não” a uma situação para a qual normalmente digo “sim”, quando isso for necessário.",
+      "Identificar uma situação que está me causando estresse e decidir qual será meu próximo passo.",
+      "Fazer uma pausa quando perceber que estou sobrecarregado(a).",
+      "Conversar com meu gestor quando uma situação do trabalho estiver afetando meu bem-estar.",
+      "Escrever o que está me preocupando para organizar meus pensamentos.",
+      "Buscar ajuda profissional se perceber que preciso de apoio especializado.",
     ],
   },
   {
@@ -178,16 +185,16 @@ export const DIMENSOES: Dimensao[] = [
       "Minha vida tem espaço para espontaneidade, descanso e coisas que me dão prazer?",
       "Tenho sido apenas produtivo(a) ou também tenho conseguido viver?",
     ],
+    chamada: "Na próxima semana, eu escolho…",
     acoes: [
-      "Fazer algo que gosto sem me preocupar com produtividade",
-      "Retomar um hobby que abandonei",
-      "Assistir a um filme ou série que quero ver",
-      "Ouvir música com atenção, sem fazer outra coisa ao mesmo tempo",
-      "Sair para um lugar que gosto",
-      "Fazer uma atividade ao ar livre",
-      "Reservar um período da semana exclusivamente para mim",
-      "Fazer alguma coisa nova simplesmente por curiosidade",
-      "Ter um momento de ócio sem culpa",
+      "Fazer algo que gosto sem transformar tudo em produtividade.",
+      "Retomar um hobby que abandonei.",
+      "Assistir a um filme ou série que quero ver.",
+      "Ouvir música com atenção, sem fazer outra coisa ao mesmo tempo.",
+      "Sair para um lugar de que gosto.",
+      "Fazer uma atividade ao ar livre.",
+      "Experimentar algo novo simplesmente por curiosidade.",
+      "Permitir-me um momento de ócio, sem culpa.",
     ],
   },
   {
@@ -202,17 +209,18 @@ export const DIMENSOES: Dimensao[] = [
       "Quando enfrento dificuldades, tenho algo em que me apoiar para continuar?",
       "Minha vida hoje está caminhando na direção daquilo que considero importante?",
     ],
-    chamada: "Cada um tem a sua crença — escolha o que fizer sentido para você.",
+    chamada: "Na próxima semana, eu escolho…",
+    aviso: "Cada pessoa tem suas crenças e seus valores. Escolha aquilo que fizer sentido para você.",
     acoes: [
-      "Reservar alguns minutos para oração",
-      "Fazer uma meditação ou momento de silêncio",
-      "Ler algo que me inspire",
-      "Participar de uma celebração ou atividade espiritual",
-      "Fazer uma reflexão sobre aquilo que realmente considero importante",
-      "Retomar uma prática espiritual que abandonei",
-      "Fazer algo que esteja de acordo com meus valores",
-      "Praticar uma atitude de gratidão",
-      "Dedicar algum tempo a uma causa ou pessoa que considero importante",
+      "Reservar alguns minutos para oração.",
+      "Fazer uma meditação ou permanecer alguns minutos em silêncio.",
+      "Ler algo que me inspire.",
+      "Participar de uma celebração ou atividade espiritual.",
+      "Refletir sobre aquilo que realmente considero importante.",
+      "Retomar uma prática espiritual que abandonei.",
+      "Praticar algo que esteja de acordo com meus valores.",
+      "Reconhecer e agradecer por algo bom que aconteceu comigo.",
+      "Dedicar algum tempo a uma causa ou pessoa que considero importante.",
     ],
   },
   {
@@ -227,16 +235,16 @@ export const DIMENSOES: Dimensao[] = [
       "Tenho me tratado com a mesma compreensão que ofereço às pessoas que amo?",
       "Se eu continuasse vivendo exatamente como vivo hoje, estaria satisfeito(a) com a pessoa que me tornaria daqui a cinco anos?",
     ],
+    chamada: "Na próxima semana, eu escolho…",
     acoes: [
-      "Reconhecer três coisas que fiz bem recentemente",
-      "Parar de me comparar tanto com outras pessoas",
-      "Reservar um tempo sozinho(a), sem obrigação de produzir",
-      "Fazer algo que venho adiando por medo ou insegurança",
-      "Perceber e questionar uma cobrança excessiva que faço comigo",
-      "Comemorar uma pequena conquista",
-      "Ser mais gentil comigo diante de um erro",
-      "Fazer algo que represente quem eu quero ser",
-      "Pedir ajuda em algo que não preciso enfrentar sozinho(a)",
+      "Reconhecer três coisas que fiz bem recentemente.",
+      "Reduzir as comparações que faço entre minha vida e a de outras pessoas.",
+      "Reservar um tempo para mim, sem obrigação de produzir.",
+      "Enfrentar algo que venho adiando por medo ou insegurança.",
+      "Perceber uma cobrança excessiva que faço comigo e questionar se ela é realmente necessária.",
+      "Comemorar uma pequena conquista.",
+      "Tratar-me com mais gentileza diante de um erro.",
+      "Pedir ajuda em algo que não preciso enfrentar sozinho(a).",
     ],
   },
 ];
@@ -261,3 +269,29 @@ export const FRASE_FINAL =
 
 /** Quantas dimensões a pessoa escolhe para trabalhar. Veio do documento. */
 export const DIMENSOES_PARA_ESCOLHER = 3;
+
+// ------------------------------------------------------------------ e-mail
+
+/** Texto do e-mail que a pessoa recebe com a roda e o plano. Do RH. */
+export const EMAIL = {
+  assunto: "Sua Roda da Vida: agora é hora de transformar intenção em ação",
+  saudacao: "Parabéns!",
+  paragrafos: [
+    "Você se permitiu parar por alguns minutos, olhar para diferentes áreas da sua vida e refletir sobre como está se sentindo.",
+    "Esse pequeno exercício já é uma forma de cuidado.",
+    "Cuidar de você também é cuidar das pessoas que você ama e das relações que fazem parte da sua vida.",
+  ],
+  chamada: "Agora chegou o momento de dar o próximo passo: TRANSFORMAR INTENÇÃO EM AÇÃO",
+  introCompromisso:
+    "Você escolheu algumas áreas que gostaria de melhorar e identificou possíveis ações para começar. "
+    + "Agora, para cada escolha, transforme a intenção em um compromisso concreto:",
+  perguntas: [
+    { emoji: "📅", texto: "Quando vou começar?" },
+    { emoji: "📍", texto: "Onde vou fazer?" },
+    { emoji: "👣", texto: "Qual será o meu primeiro passo?" },
+    { emoji: "🚧", texto: "O que pode me impedir?" },
+    { emoji: "🔑", texto: "O que posso fazer para superar esse obstáculo?" },
+  ],
+  fecho: "Não precisa resolver tudo de uma vez. Uma pequena mudança já é um começo.",
+  assinatura: "Não preciso mudar tudo. Preciso apenas começar.",
+};

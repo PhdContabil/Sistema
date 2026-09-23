@@ -28,6 +28,8 @@ interface Roda {
   reflexao: string | null;
   notas: Notas;
   acoes: Acao[];
+  enviada_em?: string | null;
+  enviada_para?: string | null;
 }
 
 /** "2026-09-22T…" → "22/09". Rótulo curto do eixo do gráfico. */
@@ -42,12 +44,14 @@ function dataCurta(iso: string): string {
 type Etapa = "notas" | "roda" | "acoes" | "evolucao";
 
 export default function RodaVida({
-  rodaInicial, historicoInicial, meuEmail, souDiretoria,
+  rodaInicial, historicoInicial, meuEmail, souDiretoria, emailPessoalInicial,
 }: {
   rodaInicial: Roda | null;
   historicoInicial: Roda[];
   meuEmail: string | null;
   souDiretoria: boolean;
+  /** E-mail pessoal já cadastrado, se houver. */
+  emailPessoalInicial: string | null;
 }) {
   const [roda, setRoda] = useState<Roda | null>(rodaInicial);
   const [historico, setHistorico] = useState<Roda[]>(historicoInicial);
@@ -58,6 +62,8 @@ export default function RodaVida({
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [reflexao, setReflexao] = useState(rodaInicial?.reflexao ?? "");
+  const [emailPessoal, setEmailPessoal] = useState(emailPessoalInicial ?? "");
+  const [enviando, setEnviando] = useState(false);
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -154,6 +160,40 @@ export default function RodaVida({
     setAviso("Roda nova aberta. A anterior continua no histórico.");
   }
 
+  async function guardarEmail() {
+    const valor = emailPessoal.trim();
+    if (valor === (emailPessoalInicial ?? "")) return;
+    if (await chamar("/api/roda-vida/email", {
+      method: "PUT", body: JSON.stringify({ email_pessoal: valor || null }),
+    })) setAviso(valor ? "E-mail guardado." : "E-mail removido.");
+  }
+
+  /**
+   * Envia a roda e o plano para o e-mail pessoal. Manual: a pessoa decide
+   * quando — normalmente depois de escolher as ações, que é o que dá conteúdo
+   * ao e-mail.
+   */
+  async function enviarPorEmail() {
+    if (!roda) return;
+    setEnviando(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/roda-vida/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roda_id: roda.id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErro(j.error ?? "Não consegui enviar."); return; }
+      setAviso(`Enviado para ${j.destino}.`);
+      recarregar();
+    } catch {
+      setErro("Falha de rede.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
   async function guardarReflexao() {
     if (!roda) return;
     if (reflexao === (roda.reflexao ?? "")) return;
@@ -202,6 +242,20 @@ export default function RodaVida({
           <p className="rv-escala">
             <strong>{ESCALA.min}</strong> = {ESCALA.legendaMin} · <strong>{ESCALA.max}</strong> = {ESCALA.legendaMax}
           </p>
+          <div className="rv-email-campo">
+            <label>
+              <span>Seu e-mail pessoal (opcional)</span>
+              <input type="email" value={emailPessoal} disabled={salvando}
+                     placeholder="voce@exemplo.com"
+                     onChange={(e) => setEmailPessoal(e.target.value)}
+                     onBlur={guardarEmail} />
+            </label>
+            <p className="rv-nota-info">
+              No fim, você pode receber a sua roda e as ações que escolheu neste endereço.
+              Dá para cadastrar depois também.
+            </p>
+          </div>
+
           <button className="btn primary" disabled={salvando} onClick={comecar}>
             Começar minha roda
           </button>
@@ -351,10 +405,40 @@ export default function RodaVida({
 
       {/* ---------------------------------------------------- 3. ações --- */}
       {etapa === "acoes" && (
-        <PainelAcoes
-          roda={roda} notas={notas} salvando={salvando}
-          onEscolher={escolherAcao} onMarcar={marcar} onTirar={tirarAcao}
-        />
+        <>
+          <PainelAcoes
+            roda={roda} notas={notas} salvando={salvando}
+            onEscolher={escolherAcao} onMarcar={marcar} onTirar={tirarAcao}
+          />
+
+          {concluida && (
+            <div className="card rv-envio">
+              <h3>Receber por e-mail</h3>
+              <p className="rv-nota-info">
+                Mandamos a sua roda e as ações que você escolheu para o seu e-mail pessoal,
+                com algumas perguntas para transformar a intenção em compromisso.
+              </p>
+
+              <div className="rv-envio-linha">
+                <input type="email" value={emailPessoal} disabled={salvando || enviando}
+                       placeholder="voce@exemplo.com"
+                       onChange={(e) => setEmailPessoal(e.target.value)}
+                       onBlur={guardarEmail} />
+                <button className="btn primary" disabled={enviando || !emailPessoal.trim()}
+                        onClick={enviarPorEmail}>
+                  {enviando ? "Enviando…" : "Enviar para mim"}
+                </button>
+              </div>
+
+              {roda.enviada_em && (
+                <p className="rv-nota-info">
+                  Já enviado para {roda.enviada_para} em {formatDataHora(roda.enviada_em)}.
+                  Pode enviar de novo se mudar as ações.
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {etapa === "evolucao" && (
@@ -564,6 +648,7 @@ function PainelAcoes({
 
               {aberto && (
                 <div className="rv-lista-acoes">
+                  {d.aviso && <p className="rv-aviso-dim">{d.aviso}</p>}
                   {d.chamada && <p className="rv-chamada">{d.chamada}</p>}
                   {d.acoes.map((a) => {
                     const ja = minhas.some((m) => m.acao === a);

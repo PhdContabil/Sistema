@@ -1739,3 +1739,23 @@ html[data-theme="dark"] .rv-aviso-ok { background: rgba(6,95,70,.25); border-col
 .rv-ev-alta { border-left: 3px solid var(--ok, #16a34a); }
 .rv-ev-queda { border-left: 3px solid #d97706; }
 .rv-ev-data { font-size: 12px; color: var(--muted); font-weight: 400; }
+
+/* ---- Roda da Vida: e-mail pessoal ---- */
+.rv-email-campo { margin: 4px 0 18px; }
+.rv-email-campo label { display: block; }
+.rv-email-campo label span {
+  display: block; font-size: 12px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px;
+}
+.rv-email-campo input, .rv-envio-linha input {
+  width: 100%; max-width: 340px; font-family: inherit; font-size: 14px;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface); color: var(--text);
+}
+.rv-envio h3 { margin: 0 0 6px; font-size: 15px; }
+.rv-envio-linha { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.rv-envio-linha input { flex: 1; min-width: 220px; }
+.rv-aviso-dim {
+  font-size: 12.5px; line-height: 1.6; color: var(--muted); margin: 0 0 10px;
+  padding: 9px 11px; border-radius: 8px; background: var(--accent-soft);
+}

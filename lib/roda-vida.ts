@@ -59,6 +59,8 @@ export interface Roda {
   reflexao: string | null;
   notas: Notas;
   acoes: Acao[];
+  enviada_em?: string | null;
+  enviada_para?: string | null;
 }
 
 function montar(
@@ -251,6 +253,55 @@ export async function removerAcao(acaoId: string): Promise<string | null> {
   if (!sb) return "Banco indisponível.";
   const { error } = await sb.from("roda_vida_acoes").delete().eq("id", acaoId);
   return error?.message ?? null;
+}
+
+// ------------------------------------------------------- e-mail pessoal
+
+/** Endereço pessoal que a pessoa cadastrou para receber a roda. */
+export async function emailPessoal(email: string): Promise<string | null> {
+  const sb = db();
+  if (!sb) return null;
+  const { data } = await sb
+    .from("roda_vida_contato").select("email_pessoal").eq("email", email.toLowerCase()).maybeSingle();
+  return (data as { email_pessoal: string } | null)?.email_pessoal ?? null;
+}
+
+/** Guarda (ou apaga, com `null`) o endereço pessoal. */
+export async function salvarEmailPessoal(
+  email: string, pessoal: string | null
+): Promise<string | null> {
+  const sb = db();
+  if (!sb) return "Banco indisponível.";
+  const chave = email.toLowerCase();
+
+  if (!pessoal) {
+    const { error } = await sb.from("roda_vida_contato").delete().eq("email", chave);
+    return error?.message ?? null;
+  }
+  if (!ehEmail(pessoal)) return "Esse endereço não parece válido.";
+
+  const { error } = await sb.from("roda_vida_contato").upsert(
+    { email: chave, email_pessoal: pessoal.trim(), atualizado_em: new Date().toISOString() },
+    { onConflict: "email" }
+  );
+  return error?.message ?? null;
+}
+
+/**
+ * Validação simples e proposital: só o formato. Confirmar a existência da
+ * caixa exigiria um duplo opt-in, e para um envio que a própria pessoa pede,
+ * na hora, isso seria atrito sem ganho.
+ */
+export function ehEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v ?? "").trim());
+}
+
+export async function marcarEnviada(rodaId: string, para: string): Promise<void> {
+  const sb = db();
+  if (!sb) return;
+  await sb.from("roda_vida")
+    .update({ enviada_em: new Date().toISOString(), enviada_para: para })
+    .eq("id", rodaId);
 }
 
 /** Dono da roda — usado pelas rotas antes de deixar mexer. */

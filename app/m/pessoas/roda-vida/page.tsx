@@ -4,7 +4,7 @@ import RodaVida from "@/components/pessoas/RodaVida";
 import PainelRodaDiretoria from "@/components/pessoas/PainelRodaDiretoria";
 import { getModule } from "@/lib/modules";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { rodaAtual, historico, ehDiretoria, painelDiretoria } from "@/lib/roda-vida";
+import { rodaAtual, historico, ehDiretoria, painelDiretoria, emailPessoal } from "@/lib/roda-vida";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,10 +18,11 @@ export default async function Page() {
   const meuEmail = user?.email?.toLowerCase() ?? null;
   const souDiretoria = ehDiretoria(meuEmail);
 
-  const [roda, anteriores, painel] = await Promise.all([
+  const [roda, anteriores, painel, pessoal] = await Promise.all([
     meuEmail ? rodaAtual(meuEmail) : Promise.resolve(null),
     meuEmail ? historico(meuEmail) : Promise.resolve([]),
     souDiretoria ? painelDiretoria() : Promise.resolve([]),
+    meuEmail ? emailPessoal(meuEmail) : Promise.resolve(null),
   ]);
 
   return (
@@ -42,6 +43,7 @@ export default async function Page() {
         historicoInicial={anteriores}
         meuEmail={meuEmail}
         souDiretoria={souDiretoria}
+        emailPessoalInicial={pessoal}
       />
 
       {souDiretoria && <PainelRodaDiretoria inicial={painel} />}
