@@ -76,6 +76,17 @@ export async function extrairTextoNativo(bytes: Uint8Array | Buffer): Promise<st
     return partes.join("\n").trim();
   } finally {
     doc.destroy();
+    // doc.destroy() só libera os objetos do documento em si — o mupdf
+    // também mantém um "store" interno próprio (cache de fontes, glyphs,
+    // imagens decodificadas) que NÃO é esvaziado automaticamente e só
+    // cresce, documento após documento, dentro da mesma instância WASM.
+    // Numa função serverless de vida curta isso não importaria, mas a
+    // Vercel reaproveita a mesma instância (mesmo processo/heap) entre
+    // chamadas de uma "warm function" — foi exatamente isso que causou o
+    // OOM em produção depois de várias empresas processadas em sequência.
+    // emptyStore() esvazia esse cache a cada documento; é seguro chamar a
+    // qualquer momento (só libera entradas sem referência viva).
+    mupdf.emptyStore();
   }
 }
 
@@ -122,6 +133,11 @@ export async function extrairTextoOcr(
   } finally {
     await worker.terminate();
     doc.destroy();
+    // Ver o comentário equivalente em extrairTextoNativo(): libera o cache
+    // interno do mupdf (fontes/glyphs/imagens), que sobrevive ao destroy()
+    // do documento e só cresce entre chamadas na mesma instância WASM
+    // reaproveitada pela Vercel.
+    mupdf.emptyStore();
   }
 }
 

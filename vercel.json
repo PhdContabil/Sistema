@@ -6,7 +6,7 @@
   ],
   "functions": {
     "app/api/paralegal/robo-zen/**/route.ts": {
-      "memory": 3009
+      "memory": 1024
     }
   }
 }
