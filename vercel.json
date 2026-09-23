@@ -3,5 +3,10 @@
   "crons": [
     { "path": "/api/societario/cron/sync-tareffa", "schedule": "0 9 * * *" },
     { "path": "/api/societario/cron/keepalive", "schedule": "0 4 * * *" }
-  ]
+  ],
+  "functions": {
+    "app/api/paralegal/robo-zen/**/route.ts": {
+      "memory": 3009
+    }
+  }
 }
