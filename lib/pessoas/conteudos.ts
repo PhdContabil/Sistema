@@ -24,6 +24,14 @@ export interface Secao {
   especial?: "hierarquia" | "pessoas" | "agenda";
   /** Link interno direto (o card abre esta rota em vez da tela de conteúdo). */
   rota?: string;
+  /**
+   * Fora da lista da área, mas a rota continua no ar.
+   *
+   * Serve para validar uma aplicação com um grupo pequeno antes de abrir para
+   * o escritório: quem tem o link entra e usa normalmente, e o card não aparece
+   * para quem ainda não deveria ver.
+   */
+  oculto?: boolean;
   /** Aviso de onde virá o dado (ex.: preenchido manualmente pelo JR). */
   nota?: string;
 }
@@ -118,6 +126,8 @@ export const AREAS: AreaPessoas[] = [
       {
         id: "roda-vida", titulo: "Roda da Vida", resumo: "Retrato da sua vida em 9 dimensões e um plano de pequenas ações.",
         rota: "/m/pessoas/roda-vida",
+        // Em validação (22/09/2026). Tirar esta linha publica o card.
+        oculto: true,
       },
       {
         id: "mental", titulo: "Saúde mental — NR1", resumo: "Orientações, diagnóstico e ações.",

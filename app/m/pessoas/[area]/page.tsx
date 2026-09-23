@@ -8,6 +8,10 @@ export default function AreaPage({ params }: { params: { area: string } }) {
   const a = getArea(params.area);
   if (!a) redirect("/m/pessoas");
 
+  // Tópicos em validação não entram na lista nem na contagem; a rota deles
+  // continua acessível por link direto.
+  const secoes = a.secoes.filter((s) => !s.oculto);
+
   return (
     <Workspace moduleId="pessoas" appName={a.titulo}>
       <div className="app-head">
@@ -18,9 +22,9 @@ export default function AreaPage({ params }: { params: { area: string } }) {
         </div>
       </div>
 
-      <div className="section-label mono">Tópicos · {a.secoes.length}</div>
+      <div className="section-label mono">Tópicos · {secoes.length}</div>
       <div className="app-grid">
-        {a.secoes.map((s) => (
+        {secoes.map((s) => (
           <Link key={s.id} href={s.rota ?? `/m/pessoas/${a.id}/${s.id}`} className="app-card on">
             <div className="app-ic-sm mono" style={{ color: a.cor }}>{appInitials(s.titulo)}</div>
             <div className="nm">{s.titulo}</div>
