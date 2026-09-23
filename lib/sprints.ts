@@ -47,6 +47,8 @@ export interface CapacidadeLinha {
   sprint_id: string;
   email: string;
   horas_dia: number;
+  /** Horas separadas para incidentes nesta sprint. */
+  horas_incidente: number;
 }
 
 /** Folga gravada: feriado do time (email nulo) ou ausência de uma pessoa. */
@@ -201,7 +203,7 @@ export async function listarItens(sprintId: string): Promise<ItemSprint[]> {
   const ids = linhas.map((i) => i.ticket_id);
   const [{ data: tickets }, { data: execs }, { data: resp }] = await Promise.all([
     db.from("tickets")
-      .select("id,numero,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at,horas_estimadas,horas_realizadas,ganho_horas_mes,valor_hora,ganho_mensal")
+      .select("id,numero,incidente,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at,horas_estimadas,horas_realizadas,ganho_horas_mes,valor_hora,ganho_mensal")
       .in("id", ids),
     db.from("ticket_execucoes")
       .select("id,ticket_id,email,inicio,segundos,comentario,data")
@@ -338,23 +340,30 @@ export async function listarCapacidade(sprintId: string): Promise<CapacidadeLinh
   return ((data ?? []) as CapacidadeLinha[]).map((c) => ({
     ...c,
     horas_dia: Number(c.horas_dia ?? 0),
+    horas_incidente: Number(c.horas_incidente ?? 0),
   }));
 }
 
 export async function salvarCapacidade(
   sprintId: string,
   email: string,
-  campos: { horas_dia?: number }
+  campos: { horas_dia?: number; horas_incidente?: number }
 ): Promise<string | null> {
   const db = ticketsDb();
   if (!db) return "Banco indisponível.";
   const { data: atual } = await db
-    .from("ticket_sprint_capacidade").select("horas_dia")
+    .from("ticket_sprint_capacidade").select("horas_dia,horas_incidente")
     .eq("sprint_id", sprintId).eq("email", email).maybeSingle();
-  const base = (atual as { horas_dia: number } | null) ?? { horas_dia: 6 };
+  const base = (atual as { horas_dia: number; horas_incidente: number } | null)
+    ?? { horas_dia: 6, horas_incidente: 0 };
 
   const { error } = await db.from("ticket_sprint_capacidade").upsert(
-    { sprint_id: sprintId, email, horas_dia: campos.horas_dia ?? base.horas_dia },
+    {
+      sprint_id: sprintId,
+      email,
+      horas_dia: campos.horas_dia ?? base.horas_dia,
+      horas_incidente: campos.horas_incidente ?? base.horas_incidente,
+    },
     { onConflict: "sprint_id,email" }
   );
   return error?.message ?? null;
@@ -589,7 +598,7 @@ export async function backlogDisponivel(limite = 300): Promise<Ticket[]> {
 
   const { data } = await db
     .from("tickets")
-    .select("id,numero,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at,horas_estimadas,horas_realizadas,ganho_horas_mes,valor_hora,ganho_mensal")
+    .select("id,numero,incidente,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at,horas_estimadas,horas_realizadas,ganho_horas_mes,valor_hora,ganho_mensal")
     .neq("status", "finalizado")
     .order("created_at", { ascending: false })
     .limit(limite + usados.size);

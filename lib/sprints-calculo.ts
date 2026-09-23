@@ -113,12 +113,16 @@ export interface PessoaCapacidade {
   email: string;
   nome?: string | null;
   horas_dia: number;
+  /** Horas separadas para incidentes nesta sprint. Saem da mesma capacidade. */
+  horas_incidente?: number;
 }
 
 export interface ItemPlanejado {
   ticket_id: string;
   responsavel_email: string | null;
   horas_planejadas: number | null;
+  /** Cartão marcado como incidente pelo TI — consome a reserva, não o planejado. */
+  incidente?: boolean;
 }
 
 export interface LinhaCapacidade {
@@ -129,13 +133,29 @@ export interface LinhaCapacidade {
   diasTrabalhados: number;
   /** Dias úteis perdidos: feriado do time + ausência dela. */
   diasFora: number;
+  /** Tudo que a pessoa tem na sprint: horas/dia × dias trabalhados. */
   capacidade: number;
+  /** Fatia da capacidade separada para incidentes. */
+  reservaIncidente: number;
+  /** O que sobra para o trabalho planejado (capacidade − reserva). */
+  capacidadePlanejada: number;
+  /** Horas de cartões normais já alocados. */
   planejado: number;
+  /** Horas de cartões marcados como incidente. */
+  planejadoIncidente: number;
+  /** Livre para planejar (não conta a reserva de incidentes). */
   livre: number;
-  /** Quanto da capacidade já está comprometido, 0–100+ (passa de 100 se estourar). */
+  /** Quanto ainda cabe de incidente antes de furar a reserva. */
+  incidenteLivre: number;
+  /** Quanto da capacidade planejada está comprometido, 0–100+. */
   ocupacao: number;
+  /** Quanto da reserva de incidentes está consumido, 0–100+. */
+  ocupacaoIncidente: number;
   estourou: boolean;
+  /** A reserva de incidentes já foi ultrapassada. */
+  estourouIncidente: boolean;
   itens: number;
+  itensIncidente: number;
 }
 
 /**
@@ -157,10 +177,12 @@ export function resumoCapacidade(
   livreTotal: number;
   semResponsavel: { horas: number; itens: number };
   diasUteisSprint: number;
+  reservaTotal: number;
+  incidenteTotal: number;
 } {
   const folgas = periodo.folgas ?? [];
   const uteis = diasUteis(periodo.inicio, periodo.fim);
-  const porPessoa = new Map<string, { horas: number; itens: number }>();
+  const porPessoa = new Map<string, { horas: number; itens: number; horasInc: number; itensInc: number }>();
   let semRespHoras = 0;
   let semRespItens = 0;
 
@@ -173,9 +195,17 @@ export function resumoCapacidade(
       semRespItens += 1;
       continue;
     }
-    const acc = porPessoa.get(email) ?? { horas: 0, itens: 0 };
-    acc.horas += horas;
-    acc.itens += 1;
+    const acc = porPessoa.get(email) ?? { horas: 0, itens: 0, horasInc: 0, itensInc: 0 };
+    // Incidente e trabalho planejado saem de bolsos diferentes: somar os dois
+    // num total só faria a sprint parecer cheia quando ainda há espaço de
+    // projeto, ou o contrário.
+    if (it.incidente) {
+      acc.horasInc += horas;
+      acc.itensInc += 1;
+    } else {
+      acc.horas += horas;
+      acc.itens += 1;
+    }
     porPessoa.set(email, acc);
   }
 
@@ -191,8 +221,19 @@ export function resumoCapacidade(
     const horasDia = Number(p?.horas_dia ?? 0);
     const dias = diasTrabalhados(periodo.inicio, periodo.fim, folgas, email);
     const capacidade = capacidadePessoa(horasDia, dias);
-    const acc = porPessoa.get(email) ?? { horas: 0, itens: 0 };
+    const acc = porPessoa.get(email) ?? { horas: 0, itens: 0, horasInc: 0, itensInc: 0 };
+
+    // A reserva nunca passa da capacidade: separar 40 h de incidente para quem
+    // tem 30 h na sprint deixaria a capacidade planejada negativa.
+    const reserva = Math.min(
+      capacidade,
+      Math.max(0, Number(p?.horas_incidente ?? 0) || 0)
+    );
+    const capacidadePlanejada = Math.round((capacidade - reserva) * 100) / 100;
+
     const planejado = Math.round(acc.horas * 100) / 100;
+    const planejadoIncidente = Math.round(acc.horasInc * 100) / 100;
+
     return {
       email,
       nome: p?.nome ?? nomePorEmail[email] ?? null,
@@ -200,17 +241,32 @@ export function resumoCapacidade(
       diasTrabalhados: dias,
       diasFora: uteis - dias,
       capacidade,
+      reservaIncidente: reserva,
+      capacidadePlanejada,
       planejado,
-      livre: Math.round((capacidade - planejado) * 100) / 100,
-      ocupacao: capacidade > 0 ? Math.round((planejado / capacidade) * 1000) / 10 : planejado > 0 ? 100 : 0,
-      estourou: planejado > capacidade,
+      planejadoIncidente,
+      livre: Math.round((capacidadePlanejada - planejado) * 100) / 100,
+      incidenteLivre: Math.round((reserva - planejadoIncidente) * 100) / 100,
+      ocupacao: capacidadePlanejada > 0
+        ? Math.round((planejado / capacidadePlanejada) * 1000) / 10
+        : planejado > 0 ? 100 : 0,
+      ocupacaoIncidente: reserva > 0
+        ? Math.round((planejadoIncidente / reserva) * 1000) / 10
+        : planejadoIncidente > 0 ? 100 : 0,
+      estourou: planejado > capacidadePlanejada,
+      estourouIncidente: planejadoIncidente > reserva,
       itens: acc.itens,
+      itensIncidente: acc.itensInc,
     };
   });
 
   linhas.sort((a, b) => (a.nome ?? a.email).localeCompare(b.nome ?? b.email, "pt-BR"));
 
   const capacidadeTotal = Math.round(linhas.reduce((s, l) => s + l.capacidade, 0) * 100) / 100;
+  const reservaTotal = Math.round(linhas.reduce((s, l) => s + l.reservaIncidente, 0) * 100) / 100;
+  const incidenteTotal = Math.round(linhas.reduce((s, l) => s + l.planejadoIncidente, 0) * 100) / 100;
+  // O total planejado inclui os itens sem dono: eles pesam na sprint mesmo
+  // sem estar na conta de ninguém.
   const planejadoTotal = Math.round(
     (linhas.reduce((s, l) => s + l.planejado, 0) + semRespHoras) * 100
   ) / 100;
@@ -219,9 +275,13 @@ export function resumoCapacidade(
     linhas,
     capacidadeTotal,
     planejadoTotal,
-    livreTotal: Math.round((capacidadeTotal - planejadoTotal) * 100) / 100,
+    // O livre de planejamento desconta a reserva: ela já tem dono, mesmo que
+    // nenhum incidente tenha aparecido ainda.
+    livreTotal: Math.round((capacidadeTotal - reservaTotal - planejadoTotal) * 100) / 100,
     semResponsavel: { horas: Math.round(semRespHoras * 100) / 100, itens: semRespItens },
     diasUteisSprint: uteis,
+    reservaTotal,
+    incidenteTotal,
   };
 }
 

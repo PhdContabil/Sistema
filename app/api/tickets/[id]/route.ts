@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { ticketsDb, detalheTicket, ehStatus, ehPrioridade, podeVerMedicao, SETOR_NOME } from "@/lib/tickets";
+import { ticketsDb, detalheTicket, ehStatus, ehPrioridade, podeVerMedicao, ehDaTI, SETOR_NOME } from "@/lib/tickets";
 import { sendTeamsNotification, sendFinalizedNotification } from "@/lib/teams";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
@@ -41,6 +41,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     atribuir?: string; desatribuir?: string;
     horas_estimadas?: unknown; horas_realizadas?: unknown;
     ganho_horas_mes?: unknown; valor_hora?: unknown;
+    incidente?: boolean;
   };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
 
@@ -57,6 +58,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const patch: Record<string, unknown> = {};
+  // Classificar como incidente é decisão do TI, não de quem abriu o chamado:
+  // é o TI que avalia o que chega e escolhe gastar a reserva da sprint com
+  // aquilo. Checado no servidor, não só no botão da tela.
+  if (body.incidente !== undefined) {
+    if (!(await ehDaTI(email))) {
+      return NextResponse.json(
+        { error: "Só o time de Tecnologia classifica um chamado como incidente." },
+        { status: 403 }
+      );
+    }
+    patch.incidente = !!body.incidente;
+  }
+
   if (body.status !== undefined) {
     if (!ehStatus(body.status)) return NextResponse.json({ error: "Status inválido." }, { status: 400 });
     patch.status = body.status;

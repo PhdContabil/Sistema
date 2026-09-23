@@ -51,7 +51,7 @@ interface Folga {
   motivo: string | null;
 }
 
-interface Capacidade { email: string; horas_dia: number }
+interface Capacidade { email: string; horas_dia: number; horas_incidente: number }
 
 const STATUS_COR: Record<string, string> = {
   backlog: "bg-slate-400 dark:bg-slate-500",
@@ -176,14 +176,21 @@ export default function TicketsSprint({
       return {
         linhas: [] as LinhaCapacidade[], capacidadeTotal: 0, planejadoTotal: 0,
         livreTotal: 0, semResponsavel: { horas: 0, itens: 0 }, diasUteisSprint: 0,
+        reservaTotal: 0, incidenteTotal: 0,
       };
     }
     return resumoCapacidade(
-      capacidade.map((c) => ({ email: c.email, nome: nomePorEmail[c.email] ?? null, horas_dia: c.horas_dia })),
+      capacidade.map((c) => ({
+        email: c.email,
+        nome: nomePorEmail[c.email] ?? null,
+        horas_dia: c.horas_dia,
+        horas_incidente: c.horas_incidente,
+      })),
       itens.map((i) => ({
         ticket_id: i.ticket_id,
         responsavel_email: i.responsavel_email,
         horas_planejadas: i.horas_planejadas,
+        incidente: !!i.ticket?.incidente,
       })),
       { inicio: sprint.inicio, fim: sprint.fim, folgas },
       nomePorEmail
@@ -195,10 +202,13 @@ export default function TicketsSprint({
     return pessoasTI.filter((p) => !dentro.has(p.email.toLowerCase()));
   }, [pessoasTI, capacidade]);
 
-  async function definirCapacidade(email: string, horas_dia: number) {
+  async function definirCapacidade(
+    email: string,
+    campos: { horas_dia?: number; horas_incidente?: number }
+  ) {
     if (!sprintId) return;
     if (await chamar(`/api/sprints/${sprintId}/capacidade`, {
-      method: "PUT", body: JSON.stringify({ email, horas_dia }),
+      method: "PUT", body: JSON.stringify({ email, ...campos }),
     })) carregar(sprintId);
   }
 
@@ -254,6 +264,21 @@ export default function TicketsSprint({
    * notificação no Teams e fecha o `closed_at`. O board do setor de origem
    * lê o mesmo registro, então a mudança aparece lá sozinha.
    */
+  /**
+   * Classifica o chamado como incidente. O cartão não muda de lugar: só passa
+   * a consumir a reserva de incidentes de quem o atende, em vez do tempo
+   * planejado da sprint.
+   */
+  async function marcarIncidente(ticketId: string, incidente: boolean) {
+    if (!sprintId) return;
+    if (await chamar(`/api/tickets/${ticketId}`, {
+      method: "PATCH", body: JSON.stringify({ incidente }),
+    })) {
+      setAviso(incidente ? "Marcado como incidente." : "Deixou de ser incidente.");
+      carregar(sprintId);
+    }
+  }
+
   async function mudarStatus(ticketId: string, status: string) {
     if (!sprintId) return;
     // Otimista: a coluna muda na hora e volta atrás se o servidor recusar.
@@ -465,7 +490,7 @@ export default function TicketsSprint({
             <PainelCapacidade
               resumo={resumo} folgas={folgas} pessoasTI={pessoasTI} foraDoCapacity={foraDoCapacity}
               salvando={salvando} sprint={sprint}
-              onHorasDia={definirCapacidade} onTirarPessoa={tirarDoCapacity}
+              onCapacidade={definirCapacidade} onTirarPessoa={tirarDoCapacity}
               onLancarFolga={lancarFolga} onTirarFolga={tirarFolga}
               nomePorEmail={nomePorEmail}
             />
@@ -503,6 +528,7 @@ export default function TicketsSprint({
           onFechar={() => setAberto(null)}
           onMudar={(campos) => mudarItem(itemAberto.ticket_id, campos)}
           onStatus={(st) => mudarStatus(itemAberto.ticket_id, st)}
+          onIncidente={(v) => marcarIncidente(itemAberto.ticket_id, v)}
           onLancar={(c) => lancarHoras(itemAberto.ticket_id, c)}
           onApagarApontamento={apagarApontamento}
           onDevolver={() => devolverAoBacklog(itemAberto.ticket_id)}
@@ -530,15 +556,26 @@ function CartaoBoard({
     <div
       draggable={!encerrada}
       onDragStart={(e) => { e.dataTransfer.setData("text/plain", item.ticket_id); onArrastar(); }}
-      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800
-                 rounded-lg p-2.5 cursor-pointer hover:border-blue-400 transition"
+      className={`bg-white dark:bg-slate-900 border rounded-lg p-2.5 cursor-pointer
+                  hover:border-blue-400 transition ${
+        item.ticket?.incidente
+          ? "border-amber-300 dark:border-amber-700"
+          : "border-slate-200 dark:border-slate-800"
+      }`}
       onClick={onAbrir}
     >
-      <div className="flex items-center gap-1.5 mb-1">
+      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
         <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">#{t?.numero ?? "—"}</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
           {t ? (SETOR_NOME[t.sector] ?? t.sector) : "—"}
         </span>
+        {t?.incidente && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold
+                           bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
+                title="Consome a reserva de incidentes da sprint">
+            INCIDENTE
+          </span>
+        )}
       </div>
 
       <div className="text-sm font-medium text-slate-900 dark:text-white leading-snug line-clamp-2 mb-2">
@@ -587,7 +624,7 @@ function CartaoBoard({
 
 function PainelCapacidade({
   resumo, folgas, pessoasTI, foraDoCapacity, salvando, sprint,
-  onHorasDia, onTirarPessoa, onLancarFolga, onTirarFolga, nomePorEmail,
+  onCapacidade, onTirarPessoa, onLancarFolga, onTirarFolga, nomePorEmail,
 }: {
   resumo: ReturnType<typeof resumoCapacidade>;
   folgas: Folga[];
@@ -595,7 +632,7 @@ function PainelCapacidade({
   foraDoCapacity: PessoaTickets[];
   salvando: boolean;
   sprint: Sprint;
-  onHorasDia: (email: string, horas: number) => void;
+  onCapacidade: (email: string, campos: { horas_dia?: number; horas_incidente?: number }) => void;
   onTirarPessoa: (email: string) => void;
   onLancarFolga: (c: { data: string; ate: string | null; email: string | null; motivo: string }) => Promise<boolean>;
   onTirarFolga: (id: string) => void;
@@ -613,7 +650,18 @@ function PainelCapacidade({
     <div className="grid md:grid-cols-2 gap-4">
       {/* --- pessoas --- */}
       <div className={`${CARD} p-4`}>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Capacidade por pessoa</h3>
+        <div className="flex items-baseline justify-between mb-1">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Capacidade por pessoa</h3>
+          {resumo.reservaTotal > 0 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              {horasTexto(resumo.incidenteTotal)} de {horasTexto(resumo.reservaTotal)} de incidente
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+          A reserva de incidentes sai da capacidade da pessoa e não entra no tempo de
+          planejamento — é o espaço que fica guardado para o que chega no meio do caminho.
+        </p>
 
         {resumo.linhas.length === 0 && (
           <p className="text-xs text-slate-400 dark:text-slate-500 italic mb-3">
@@ -624,7 +672,7 @@ function PainelCapacidade({
         <div className="space-y-3">
           {resumo.linhas.map((l) => (
             <LinhaPessoa key={l.email} l={l} salvando={salvando}
-                         onHoras={(h) => onHorasDia(l.email, h)} onTirar={() => onTirarPessoa(l.email)} />
+                         onCampos={(c) => onCapacidade(l.email, c)} onTirar={() => onTirarPessoa(l.email)} />
           ))}
         </div>
 
@@ -637,7 +685,7 @@ function PainelCapacidade({
 
         {foraDoCapacity.length > 0 && (
           <select className={`${INPUT} text-xs mt-3`} defaultValue=""
-                  onChange={(e) => { if (e.target.value) { onHorasDia(e.target.value, 6); e.target.value = ""; } }}>
+                  onChange={(e) => { if (e.target.value) { onCapacidade(e.target.value, { horas_dia: 6 }); e.target.value = ""; } }}>
             <option value="">+ Adicionar pessoa (entra com 6 h/dia)…</option>
             {foraDoCapacity.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
           </select>
@@ -731,47 +779,91 @@ function PainelCapacidade({
 }
 
 function LinhaPessoa({
-  l, salvando, onHoras, onTirar,
+  l, salvando, onCampos, onTirar,
 }: {
   l: LinhaCapacidade;
   salvando: boolean;
-  onHoras: (h: number) => void;
+  onCampos: (campos: { horas_dia?: number; horas_incidente?: number }) => void;
   onTirar: () => void;
 }) {
   const [hd, setHd] = useState(String(l.horasDia));
+  const [hi, setHi] = useState(String(l.reservaIncidente));
   useEffect(() => { setHd(String(l.horasDia)); }, [l.horasDia]);
+  useEffect(() => { setHi(String(l.reservaIncidente)); }, [l.reservaIncidente]);
+
   const pct = Math.min(100, Math.max(0, l.ocupacao));
+  const pctInc = Math.min(100, Math.max(0, l.ocupacaoIncidente));
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-1.5">
         <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-[10px] font-semibold
                          text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
           {iniciais(l.nome, l.email)}
         </span>
         <span className="text-sm text-slate-800 dark:text-slate-200 truncate flex-1">{l.nome ?? l.email}</span>
-        <label className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+
+        <label className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1"
+               title="Horas de trabalho por dia">
           <input className={`${INPUT} w-14 px-2 py-1 text-xs`} inputMode="decimal" value={hd} disabled={salvando}
                  onChange={(e) => setHd(e.target.value)}
-                 onBlur={() => { const n = Number(hd.replace(",", ".")); if (Number.isFinite(n) && n !== l.horasDia) onHoras(n); }} />
+                 onBlur={() => {
+                   const n = Number(hd.replace(",", "."));
+                   if (Number.isFinite(n) && n !== l.horasDia) onCampos({ horas_dia: n });
+                 }} />
           h/dia
         </label>
+
+        <label className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1"
+               title="Horas guardadas para incidentes nesta sprint">
+          <input className={`${INPUT} w-14 px-2 py-1 text-xs`} inputMode="decimal" value={hi} disabled={salvando}
+                 onChange={(e) => setHi(e.target.value)}
+                 onBlur={() => {
+                   const n = Number(hi.replace(",", "."));
+                   if (Number.isFinite(n) && n !== l.reservaIncidente) onCampos({ horas_incidente: n });
+                 }} />
+          incid.
+        </label>
+
         <button className="text-slate-300 hover:text-red-500 dark:text-slate-600 text-sm" disabled={salvando}
                 title="Tirar do capacity" onClick={onTirar}>✕</button>
       </div>
 
+      {/* planejado */}
       <div className="h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
         <div className={`h-full rounded-full ${l.estourou ? "bg-red-500" : pct > 85 ? "bg-amber-500" : "bg-emerald-500"}`}
              style={{ width: `${pct}%` }} />
       </div>
       <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-        {horasTexto(l.planejado)} de {horasTexto(l.capacidade)} · {l.diasTrabalhados} dias
+        <strong className="font-medium">Planejado</strong>{" "}
+        {horasTexto(l.planejado)} de {horasTexto(l.capacidadePlanejada)} · {l.diasTrabalhados} dias
         {l.diasFora > 0 && <span className="text-amber-600 dark:text-amber-400"> ({l.diasFora} fora)</span>}
         {" · "}
         <span className={l.livre < 0 ? "text-red-600 dark:text-red-400 font-semibold" : ""}>
           {l.livre < 0 ? `${horasTexto(Math.abs(l.livre))} além` : `${horasTexto(l.livre)} livres`}
         </span>
       </div>
+
+      {/* incidentes — só aparece para quem tem reserva ou já gastou */}
+      {(l.reservaIncidente > 0 || l.planejadoIncidente > 0) && (
+        <>
+          <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden mt-1.5">
+            <div className={`h-full rounded-full ${l.estourouIncidente ? "bg-red-500" : "bg-amber-500"}`}
+                 style={{ width: `${pctInc}%` }} />
+          </div>
+          <div className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+            <strong className="font-medium">Incidentes</strong>{" "}
+            {horasTexto(l.planejadoIncidente)} de {horasTexto(l.reservaIncidente)}
+            {l.itensIncidente > 0 && ` · ${l.itensIncidente} cartão(ões)`}
+            {" · "}
+            <span className={l.incidenteLivre < 0 ? "text-red-600 dark:text-red-400 font-semibold" : ""}>
+              {l.incidenteLivre < 0
+                ? `${horasTexto(Math.abs(l.incidenteLivre))} além da reserva`
+                : `${horasTexto(l.incidenteLivre)} de reserva livre`}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -826,6 +918,12 @@ function PainelBacklog({
               <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {SETOR_NOME[t.sector] ?? t.sector} · {STATUS_NOME[t.status] ?? t.status}
                 {t.horas_estimadas ? ` · ${horasTexto(Number(t.horas_estimadas))} estimadas` : ""}
+                {t.incidente && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded font-semibold
+                                   bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                    INCIDENTE
+                  </span>
+                )}
               </div>
             </div>
             <button className={BTN} disabled={salvando} onClick={() => onPuxar(t)}>Puxar</button>
@@ -840,7 +938,7 @@ function PainelBacklog({
 
 function DetalheCartao({
   item, meuEmail, pessoasTI, nomePorEmail, salvando, encerrada,
-  onFechar, onMudar, onStatus, onLancar, onApagarApontamento, onDevolver,
+  onFechar, onMudar, onStatus, onIncidente, onLancar, onApagarApontamento, onDevolver,
 }: {
   item: ItemSprint;
   meuEmail: string | null;
@@ -851,6 +949,7 @@ function DetalheCartao({
   onFechar: () => void;
   onMudar: (campos: Record<string, unknown>) => void;
   onStatus: (st: string) => void;
+  onIncidente: (v: boolean) => void;
   onLancar: (c: { data: string; horas: string; comentario: string }) => Promise<boolean>;
   onApagarApontamento: (id: string) => void;
   onDevolver: () => void;
@@ -896,10 +995,18 @@ function DetalheCartao({
         {/* cabeçalho */}
         <div className="flex items-start justify-between p-5 border-b border-slate-200 dark:border-slate-800">
           <div className="min-w-0">
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5 flex-wrap">
               <span className="font-mono">#{t?.numero ?? "—"}</span>
-              {" · "}{t ? (SETOR_NOME[t.sector] ?? t.sector) : "—"}
-              {t?.created_by_email ? ` · pedido por ${primeiroNome(t.created_by_name, t.created_by_email)}` : ""}
+              <span>· {t ? (SETOR_NOME[t.sector] ?? t.sector) : "—"}</span>
+              {t?.created_by_email && (
+                <span>· pedido por {primeiroNome(t.created_by_name, t.created_by_email)}</span>
+              )}
+              {t?.incidente && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold
+                                 bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                  INCIDENTE
+                </span>
+              )}
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t?.title ?? "Cartão removido"}</h2>
           </div>
@@ -922,6 +1029,16 @@ function DetalheCartao({
               <option value="">Sem dono</option>
               {pessoasTI.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
             </select>
+
+            <label className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded border ${
+              t?.incidente
+                ? "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"
+                : "border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+            }`} title="O TI classifica o chamado; incidente consome a reserva da sprint">
+              <input type="checkbox" checked={!!t?.incidente} disabled={salvando}
+                     onChange={(e) => onIncidente(e.target.checked)} />
+              É incidente
+            </label>
 
             <div className="flex-1" />
             <button className={BTN} disabled={salvando || encerrada} onClick={onDevolver}
@@ -1057,21 +1174,24 @@ function DetalheCartao({
               <div className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
                 Apontamentos ({item.apontamentos.length})
               </div>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+              {/* overflow-x-hidden + min-w-0 no comentário: sem isso, uma
+                  descrição longa esticava a linha e aparecia uma barra
+                  horizontal gigante no lugar de o texto descer. */}
+              <div className="space-y-1.5 max-h-56 overflow-y-auto overflow-x-hidden">
                 {item.apontamentos.length === 0 && (
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">
                     Nenhuma hora lançada neste cartão.
                   </p>
                 )}
                 {item.apontamentos.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded
+                  <div key={a.id} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded
                                              bg-slate-50 dark:bg-slate-800/50">
                     <span className="w-16 shrink-0 text-slate-600 dark:text-slate-300">{dataCurta(a.data)}</span>
                     <span className="w-16 shrink-0 font-medium text-slate-900 dark:text-white">{horasEmTexto(a.horas)}</span>
                     <span className="w-24 shrink-0 truncate text-slate-500 dark:text-slate-400">
                       {primeiroNome(nomePorEmail[a.email] ?? null, a.email)}
                     </span>
-                    <span className="flex-1 truncate text-slate-500 dark:text-slate-400">
+                    <span className="flex-1 min-w-0 break-words whitespace-pre-wrap text-slate-500 dark:text-slate-400">
                       {a.comentario ?? ""}
                     </span>
                     {(a.email === meuEmail) && (

@@ -118,6 +118,8 @@ export interface Ticket extends Medicao {
   id: string;
   /** Número curto e único do cartão — é por ele que o time se refere ao item. */
   numero: number | null;
+  /** Marcado pelo TI: consome a reserva de incidentes da sprint. */
+  incidente?: boolean;
   title: string;
   description: string;
   sector: string;
@@ -176,7 +178,7 @@ export async function listarTickets(
   let q = db
     .from("tickets")
     .select(
-      "id,numero,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at," +
+      "id,numero,incidente,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at," +
       CAMPOS_MEDICAO
     )
     .eq("sector", setor)
@@ -480,7 +482,7 @@ export async function listarTicketsDashboard(f: FiltroDashboard): Promise<Ticket
   let q = db
     .from("tickets")
     .select(
-      "id,numero,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at," +
+      "id,numero,incidente,title,description,sector,status,priority,position,created_by_email,created_by_name,created_at,updated_at,closed_at," +
       CAMPOS_MEDICAO
     )
     .order("created_at", { ascending: false })

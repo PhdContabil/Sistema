@@ -276,6 +276,13 @@ export default function TicketsBoard({
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] text-white ${PRIORIDADE_COR[t.priority] ?? "bg-slate-500"}`}>
                       {PRIORIDADE_NOME[t.priority]}
                     </span>
+                    {t.incidente && (
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold
+                                       bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
+                            title="Classificado como incidente pelo TI">
+                        Incidente
+                      </span>
+                    )}
                     {souVejoMedicao && t.ganho_mensal ? (
                       <span className="text-[11px] text-emerald-600 dark:text-emerald-400" title="Ganho mensal estimado">
                         {formatReais(t.ganho_mensal)}/mês
@@ -429,6 +436,14 @@ function DetalheTicket({
   async function mudarStatus(status: string) {
     if (await patch({ status })) setT({ ...t, status });
   }
+  /**
+   * Classifica o chamado como incidente. Quem decide é o TI — o servidor
+   * recusa de qualquer outra pessoa, então o botão escondido não é a trava.
+   */
+  async function marcarIncidente(v: boolean) {
+    if (await patch({ incidente: v })) onMudou();
+  }
+
   async function mudarPrioridade(priority: string) {
     if (await patch({ priority })) setT({ ...t, priority });
   }
@@ -700,6 +715,22 @@ function DetalheTicket({
             <button className={BTN} onClick={alternarResponsavel} disabled={salvando || !meuEmail}>
               {souResponsavel ? "Deixar de ser responsável" : "Assumir este ticket"}
             </button>
+            {souVejoMedicao ? (
+              <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm ${
+                t.incidente
+                  ? "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"
+                  : "border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+              }`} title="Incidente consome a reserva de incidentes da sprint, não o tempo planejado">
+                <input type="checkbox" checked={!!t.incidente} disabled={salvando}
+                       onChange={(e) => marcarIncidente(e.target.checked)} />
+                É incidente
+              </label>
+            ) : t.incidente ? (
+              <span className="px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-700
+                               text-amber-700 dark:text-amber-400 text-sm">
+                Incidente
+              </span>
+            ) : null}
             {t.status === "finalizado" && t.closed_at && (
               <span className="text-xs text-slate-500 ml-auto pb-2.5">
                 Encerrado em {formatarDataHora(t.closed_at)}

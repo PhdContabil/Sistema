@@ -351,3 +351,106 @@ test("sprint vazia não quebra", () => {
   assert.equal(a.totalEstimado, 0);
   assert.equal(a.consumoMedioFechados, null);
 });
+
+// ------------------------------------------------- reserva de incidentes
+
+const TIME_INC = [
+  { email: "gabriel@phd.com", nome: "Gabriel", horas_dia: 6, horas_incidente: 10 },
+  { email: "pedro@phd.com", nome: "Pedro", horas_dia: 6, horas_incidente: 0 },
+];
+
+test("sem reserva, nada muda em relação a antes", () => {
+  const r = resumoCapacidade(
+    [{ email: "x@phd.com", nome: "X", horas_dia: 6 }],
+    [{ ticket_id: "a", responsavel_email: "x@phd.com", horas_planejadas: 10 }],
+    P
+  );
+  const x = r.linhas[0];
+  assert.equal(x.capacidade, 66);
+  assert.equal(x.reservaIncidente, 0);
+  assert.equal(x.capacidadePlanejada, 66);
+  assert.equal(x.livre, 56);
+});
+
+test("a reserva sai da capacidade de planejar", () => {
+  const r = resumoCapacidade(TIME_INC, [], P);
+  const g = r.linhas.find((l) => l.email === "gabriel@phd.com")!;
+  assert.equal(g.capacidade, 66);
+  assert.equal(g.reservaIncidente, 10);
+  assert.equal(g.capacidadePlanejada, 56, "o planejamento só enxerga o que sobra");
+  assert.equal(g.livre, 56);
+});
+
+test("cartão de incidente consome a reserva, não o planejado", () => {
+  const r = resumoCapacidade(TIME_INC, [
+    { ticket_id: "a", responsavel_email: "gabriel@phd.com", horas_planejadas: 20 },
+    { ticket_id: "b", responsavel_email: "gabriel@phd.com", horas_planejadas: 4, incidente: true },
+  ], P);
+  const g = r.linhas.find((l) => l.email === "gabriel@phd.com")!;
+  assert.equal(g.planejado, 20, "o incidente fica fora do planejado");
+  assert.equal(g.planejadoIncidente, 4);
+  assert.equal(g.livre, 36, "56 de capacidade planejada menos 20");
+  assert.equal(g.incidenteLivre, 6, "10 de reserva menos 4");
+  assert.equal(g.itens, 1);
+  assert.equal(g.itensIncidente, 1);
+});
+
+test("estourar a reserva é sinalizado à parte", () => {
+  const r = resumoCapacidade(TIME_INC, [
+    { ticket_id: "a", responsavel_email: "gabriel@phd.com", horas_planejadas: 14, incidente: true },
+  ], P);
+  const g = r.linhas.find((l) => l.email === "gabriel@phd.com")!;
+  assert.equal(g.estourouIncidente, true);
+  assert.equal(g.incidenteLivre, -4);
+  assert.equal(g.estourou, false, "o planejado continua saudável");
+  assert.ok(g.ocupacaoIncidente > 100);
+});
+
+test("incidente sem reserva nenhuma já nasce estourado", () => {
+  const r = resumoCapacidade(TIME_INC, [
+    { ticket_id: "a", responsavel_email: "pedro@phd.com", horas_planejadas: 2, incidente: true },
+  ], P);
+  const p = r.linhas.find((l) => l.email === "pedro@phd.com")!;
+  assert.equal(p.reservaIncidente, 0);
+  assert.equal(p.estourouIncidente, true);
+  assert.equal(p.incidenteLivre, -2);
+});
+
+test("reserva maior que a capacidade não deixa o planejado negativo", () => {
+  const r = resumoCapacidade(
+    [{ email: "y@phd.com", nome: "Y", horas_dia: 2, horas_incidente: 500 }],
+    [], P
+  );
+  const y = r.linhas[0];
+  assert.equal(y.capacidade, 22);
+  assert.equal(y.reservaIncidente, 22, "limitada à capacidade");
+  assert.equal(y.capacidadePlanejada, 0);
+  assert.equal(y.livre, 0);
+});
+
+test("o livre do time desconta a reserva, que já tem dono", () => {
+  const r = resumoCapacidade(TIME_INC, [
+    { ticket_id: "a", responsavel_email: "gabriel@phd.com", horas_planejadas: 6 },
+  ], P);
+  assert.equal(r.capacidadeTotal, 132, "66 + 66");
+  assert.equal(r.reservaTotal, 10);
+  assert.equal(r.planejadoTotal, 6);
+  assert.equal(r.livreTotal, 116, "132 - 10 de reserva - 6 planejados");
+});
+
+test("total de horas em incidente é somado à parte", () => {
+  const r = resumoCapacidade(TIME_INC, [
+    { ticket_id: "a", responsavel_email: "gabriel@phd.com", horas_planejadas: 3, incidente: true },
+    { ticket_id: "b", responsavel_email: "pedro@phd.com", horas_planejadas: 1, incidente: true },
+  ], P);
+  assert.equal(r.incidenteTotal, 4);
+  assert.equal(r.planejadoTotal, 0, "nenhum cartão normal na sprint");
+});
+
+test("reserva negativa é tratada como zero", () => {
+  const r = resumoCapacidade(
+    [{ email: "z@phd.com", nome: "Z", horas_dia: 6, horas_incidente: -5 }],
+    [], P
+  );
+  assert.equal(r.linhas[0].reservaIncidente, 0);
+});
