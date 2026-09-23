@@ -60,6 +60,12 @@ interface ResultadoExtracao {
   dados: DadosCertidao | null;
   arquivoUsado: ArquivoContrato | null;
   problemas: string[];
+  /** Nomes dos documentos já baixados/extraídos nesta passada (candidatos
+   * tentados até achar o CNPJ, ou todos se nenhum tiver funcionado) — pra
+   * quem chamar não precisar baixar/extrair de novo só pra saber se
+   * "parece escaneado" (ver prepararDadosParaEnvio). */
+  escaneados: string[];
+  tocados: Set<string>;
 }
 
 /**
@@ -71,21 +77,38 @@ interface ResultadoExtracao {
  * a Certidão de Inteiro Teor pode estar salva com um nome que não indica
  * isso, e um documento pode falhar na extração por outros motivos. Em vez
  * de desistir no primeiro candidato, tentamos todos até um funcionar.
+ *
+ * De quebra, já registra quais dos candidatos TENTADOS aqui "parecem
+ * escaneados" (dados.pareceEscaneado, calculado pela mesma extração,
+ * sem custo extra) — antes isso era uma segunda passada inteira, baixando
+ * e reprocessando (mupdf + OCR) TODOS os documentos elegíveis de novo do
+ * zero, só pra descobrir isso. Pra empresas com vários documentos, essa
+ * duplicação chegava a estourar os 60s da função na Vercel (timeout real
+ * em produção) — por isso a fusão das duas passadas numa só.
  */
 async function extrairDadosComFallback(
   ctx: ContextoGraph,
   elegiveis: ArquivoContrato[]
 ): Promise<ResultadoExtracao> {
   const problemas: string[] = [];
+  const escaneados: string[] = [];
+  const tocados = new Set<string>();
   for (const candidato of ordenarCandidatosParaExtrairDados(elegiveis)) {
+    tocados.add(candidato.id);
     let dados: DadosCertidao;
     try {
       const bytes = await baixarConteudo(ctx, candidato.id);
       dados = await extrairDadosCertidao(bytes);
     } catch (e) {
       problemas.push(`${candidato.nome}: erro ao ler (${e instanceof Error ? e.message : String(e)})`);
+      // Mesma regra "à prova de falha" do pdfPareceEscaneado() original:
+      // se nem deu pra extrair nada, trata como "parece escaneado" (mais
+      // seguro avisar de mais do que deixar passar batido um documento
+      // ilegível sem nenhum aviso).
+      escaneados.push(candidato.nome);
       continue;
     }
+    if (dados.pareceEscaneado) escaneados.push(candidato.nome);
     if (!dados.cnpj) {
       const motivo = !dados.textoBruto
         ? "não consegui ler nenhum texto deste arquivo (nem mesmo com OCR) — pode ser um PDF " +
@@ -95,9 +118,9 @@ async function extrairDadosComFallback(
       problemas.push(`${candidato.nome}: ${motivo}`);
       continue;
     }
-    return { dados, arquivoUsado: candidato, problemas };
+    return { dados, arquivoUsado: candidato, problemas, escaneados, tocados };
   }
-  return { dados: null, arquivoUsado: null, problemas };
+  return { dados: null, arquivoUsado: null, problemas, escaneados, tocados };
 }
 
 /**
@@ -131,11 +154,24 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
   resultado.qtdDocumentosIgnorados = ignorados.length;
   resultado.documentosIgnorados = ignorados.map((c) => c.nome);
 
-  // Checagem (sem OCR) de quais elegíveis parecem digitalizados/imagem —
-  // comum não só na Certidão, mas em qualquer contrato assinado e
-  // escaneado. Só avisa; não impede o envio.
-  const escaneados: string[] = [];
+  if (elegiveis.length === 0) {
+    resultado.status = MOTIVO_SEM_DOC_ELEGIVEL;
+    resultado.motivo = MOTIVO_SEM_DOC_ELEGIVEL;
+    return resultado;
+  }
+
+  // Busca o CNPJ tentando os candidatos em ordem de prioridade — já
+  // aproveita essa mesma extração pra marcar quem "parece escaneado"
+  // (dados.pareceEscaneado), em vez de reprocessar tudo de novo abaixo.
+  const { dados, arquivoUsado, problemas, escaneados, tocados } = await extrairDadosComFallback(ctx, elegiveis);
+
+  // Só falta checar "parece escaneado" dos elegíveis que a busca acima
+  // NÃO chegou a tocar (ela para assim que acha o CNPJ, então o que vier
+  // depois do candidato vencedor na ordem pode ter ficado de fora) — só
+  // pra esses vale a pena a checagem RÁPIDA (sem OCR, pdfPareceEscaneado),
+  // já que não precisam mais tentar achar CNPJ nenhum.
   for (const doc of elegiveis) {
+    if (tocados.has(doc.id)) continue;
     try {
       const bytes = await baixarConteudo(ctx, doc.id);
       if (await pdfPareceEscaneado(bytes)) escaneados.push(doc.nome);
@@ -147,13 +183,6 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
   resultado.qtdDocumentosEscaneados = escaneados.length;
   resultado.documentosEscaneados = escaneados;
 
-  if (elegiveis.length === 0) {
-    resultado.status = MOTIVO_SEM_DOC_ELEGIVEL;
-    resultado.motivo = MOTIVO_SEM_DOC_ELEGIVEL;
-    return resultado;
-  }
-
-  const { dados, arquivoUsado, problemas } = await extrairDadosComFallback(ctx, elegiveis);
   if (!dados || !dados.cnpj) {
     const detalhe = problemas.length > 0 ? problemas.join(" | ") : "nenhum documento elegível pôde ser lido";
     resultado.status = `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${detalhe})`;

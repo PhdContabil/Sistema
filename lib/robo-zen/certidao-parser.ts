@@ -36,9 +36,15 @@ export interface DadosCertidao {
   dataExpedicaoCertidao: string | null;
   codigoControle: string | null;
   textoBruto: string;
+  /** true se o texto nativo veio curto demais e precisou de OCR (ou nem
+   * OCR bastou) — ou seja, o PDF "parece escaneado". Já vem calculado aqui
+   * (extrairTexto já faz essa distinção internamente) pra quem for
+   * extrair CNPJ de um documento não precisar rodar uma segunda extração
+   * só pra saber se ele é uma imagem digitalizada. */
+  pareceEscaneado: boolean;
 }
 
-function dadosCertidaoVazio(textoBruto: string): DadosCertidao {
+function dadosCertidaoVazio(textoBruto: string, pareceEscaneado: boolean): DadosCertidao {
   return {
     nomeEmpresarial: null,
     tituloEstabelecimento: null,
@@ -49,6 +55,7 @@ function dadosCertidaoVazio(textoBruto: string): DadosCertidao {
     dataExpedicaoCertidao: null,
     codigoControle: null,
     textoBruto,
+    pareceEscaneado,
   };
 }
 
@@ -144,13 +151,20 @@ export async function extrairTextoOcr(
 /**
  * Extrai o texto do PDF: tenta nativo primeiro, cai para OCR se vier curto
  * demais (< MIN_CARACTERES_TEXTO_NATIVO) — mesmo critério do Python.
+ *
+ * Devolve também `pareceEscaneado` (precisou de OCR) — assim quem chama
+ * não precisa rodar `extrairTextoNativo` de novo só pra descobrir isso
+ * (ver DadosCertidao.pareceEscaneado).
  */
-export async function extrairTexto(bytes: Uint8Array | Buffer): Promise<string> {
-  const texto = await extrairTextoNativo(bytes);
-  if (texto.length >= MIN_CARACTERES_TEXTO_NATIVO) {
-    return texto;
+export async function extrairTexto(
+  bytes: Uint8Array | Buffer
+): Promise<{ texto: string; pareceEscaneado: boolean }> {
+  const textoNativo = await extrairTextoNativo(bytes);
+  if (textoNativo.length >= MIN_CARACTERES_TEXTO_NATIVO) {
+    return { texto: textoNativo, pareceEscaneado: false };
   }
-  return extrairTextoOcr(bytes);
+  const textoOcr = await extrairTextoOcr(bytes);
+  return { texto: textoOcr, pareceEscaneado: true };
 }
 
 /**
@@ -207,8 +221,8 @@ function extrairLinhaValoresAposCabecalho(
   return null;
 }
 
-export function parseCertidao(texto: string): DadosCertidao {
-  const dados = dadosCertidaoVazio(texto);
+export function parseCertidao(texto: string, pareceEscaneado = false): DadosCertidao {
+  const dados = dadosCertidaoVazio(texto, pareceEscaneado);
 
   dados.nomeEmpresarial = buscar(/NOME EMPRESARIAL\s*\n?\s*(.+)/i, texto);
   dados.tituloEstabelecimento = buscar(
@@ -363,6 +377,6 @@ function buscarCnpjProximoAoRotulo(texto: string): string | null {
 
 /** Extrai texto do PDF (nativo com fallback OCR) e faz o parse da certidão. */
 export async function extrairDadosCertidao(bytes: Uint8Array | Buffer): Promise<DadosCertidao> {
-  const texto = await extrairTexto(bytes);
-  return parseCertidao(texto);
+  const { texto, pareceEscaneado } = await extrairTexto(bytes);
+  return parseCertidao(texto, pareceEscaneado);
 }
