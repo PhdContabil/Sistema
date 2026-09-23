@@ -97,10 +97,28 @@ export async function extrairTextoNativo(bytes: Uint8Array | Buffer): Promise<st
   }
 }
 
+// Teto de tamanho (em pixels, no maior lado) do bitmap rasterizado pra
+// OCR a 300 DPI. Só entra em ação quando a página DECLARA (MediaBox) um
+// tamanho maior que ~20 polegadas no lado maior — bem acima de A4/Carta/
+// Ofício/A3 (que continuam saindo a 300 DPI cheio, sem perda de
+// qualidade de OCR). Um PDF com MediaBox gigante ou errado (visto na
+// prática derrubando a função em produção com "instance was killed
+// because it ran out of available memory", mesmo com o ARQUIVO em si
+// pequeno em bytes) gera um bitmap proporcionalmente enorme (RGBA:
+// largura × altura × 4 bytes). Isso não é o vazamento do cache do mupdf
+// (já corrigido com emptyStore) — é pico de memória de UMA página só,
+// então nem emptyStore nem mais memória na função resolveriam de
+// verdade; o certo é nunca deixar o bitmap passar desse tamanho.
+const MAX_LADO_PIXMAP_OCR = 6000;
+
 /**
- * Extrai texto via OCR (tesseract.js), rasterizando a 300 DPI — só as
- * primeiras `paginas` páginas, igual ao `_extrair_texto_ocr(paginas=2)` do
- * Python, já que o CNPJ costuma aparecer bem no início do documento.
+ * Extrai texto via OCR (tesseract.js) — só as primeiras `paginas` páginas,
+ * igual ao `_extrair_texto_ocr(paginas=2)` do Python, já que o CNPJ
+ * costuma aparecer bem no início do documento.
+ *
+ * Rasteriza a 300 DPI por padrão, mas reduz a resolução (nunca abaixo do
+ * necessário) se a página declarar um tamanho grande o bastante pra
+ * estourar MAX_LADO_PIXMAP_OCR nesse DPI — ver o comentário ali.
  */
 export async function extrairTextoOcr(
   bytes: Uint8Array | Buffer,
@@ -117,12 +135,20 @@ export async function extrairTextoOcr(
   try {
     const partes: string[] = [];
     const totalPaginas = Math.min(doc.countPages(), paginas);
-    const dpi = 300;
-    const matrix = mupdf.Matrix.scale(dpi / 72, dpi / 72);
+    const dpiPadrao = 300;
 
     for (let i = 0; i < totalPaginas; i++) {
       const page = doc.loadPage(i);
       try {
+        const [x0, y0, x1, y1] = page.getBounds();
+        const larguraPt = Math.abs(x1 - x0) || 1;
+        const alturaPt = Math.abs(y1 - y0) || 1;
+        const maiorLadoPt = Math.max(larguraPt, alturaPt);
+        // dpi tal que maiorLadoPt * dpi / 72 <= MAX_LADO_PIXMAP_OCR.
+        const dpiMaximoSeguro = (MAX_LADO_PIXMAP_OCR * 72) / maiorLadoPt;
+        const dpi = Math.min(dpiPadrao, dpiMaximoSeguro);
+        const matrix = mupdf.Matrix.scale(dpi / 72, dpi / 72);
+
         const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
         try {
           const png = pixmap.asPNG();
