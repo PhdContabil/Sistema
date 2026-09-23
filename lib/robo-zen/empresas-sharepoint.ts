@@ -529,15 +529,50 @@ async function encontrarPastasContratosEmProfundidade(
 }
 
 /**
+ * Tenta os mesmos `CAMINHOS_CONTRATOS_CANDIDATOS`, mas um nível abaixo de
+ * cada subpasta DIRETA da empresa — cobre o layout comum de empresa com
+ * filial ("1 - Matriz/ParaLegal/Contratos", "2 - Filial/Legalização/
+ * Contratos" etc.), onde os candidatos padrão nunca batem porque falta
+ * exatamente esse nível "N - Matriz"/"N - Filial" no meio do caminho.
+ *
+ * Existe pra NÃO cair sempre no fallback caro
+ * (`encontrarPastasContratosEmProfundidade`, que varre TODA a árvore da
+ * empresa — inclusive pastas grandes e irrelevantes tipo Contábil/Fiscal/RH
+ * — sem nenhum filtro de nome) só por causa dessa uma pasta a mais no
+ * caminho. Visto travando de verdade em produção (empresa "Ferreira e
+ * Machado", código 135): a pasta de Contratos fica em
+ * "1 - Matriz/Legalização/Contratos", então nenhum candidato direto batia,
+ * e a busca caía na varredura completa de "1 - Matriz" — que só em
+ * Contábil+Fiscal+RH passa de 400MB nessa empresa — estourando os 60s da
+ * função. Como aqui só testamos as subpastas DIRETAS da empresa (tipicamente
+ * só "1 - Matriz"/"2 - Filial", 1-3 no total), o custo fica bem mais baixo:
+ * poucas chamadas ao Graph, em vez de uma varredura recursiva de tudo.
+ */
+async function resolverCaminhoEmSubpastasDiretas(
+  ctx: ContextoGraph,
+  itemIdEmpresa: string
+): Promise<FilhoGraph | null> {
+  const subpastas = (await listarFilhos(ctx, itemIdEmpresa)).filter((f) => f.ehPasta);
+  for (const subpasta of subpastas) {
+    for (const candidato of CAMINHOS_CONTRATOS_CANDIDATOS) {
+      const encontrado = await resolverCaminho(ctx, subpasta.id, candidato);
+      if (encontrado) return encontrado;
+    }
+  }
+  return null;
+}
+
+/**
  * Lista os arquivos dentro da(s) pasta(s) de Contratos da empresa — porta
  * de `listar_contratos`.
  *
  * Primeiro tenta o caminho padrão (rápido): o primeiro candidato de
- * `CAMINHOS_CONTRATOS_CANDIDATOS` que existir de verdade como pasta. Se
- * não existir nenhum, ou existir mas estiver vazio, cai para uma busca
- * mais profunda (`encontrarPastasContratosEmProfundidade`) — cobre
- * empresas com filial cujos contratos ficam em "1 - Matriz/..." e
- * "2 - Filial/...", juntando os arquivos de TODAS as pastas de Contratos
+ * `CAMINHOS_CONTRATOS_CANDIDATOS` que existir de verdade como pasta,
+ * direto na pasta da empresa ou (`resolverCaminhoEmSubpastasDiretas`) um
+ * nível abaixo de cada subpasta direta dela (empresa com filial). Se não
+ * existir nenhum, ou existir mas estiver vazio, só então cai para a busca
+ * exaustiva (`encontrarPastasContratosEmProfundidade`, cara — varre TODA a
+ * árvore da empresa), juntando os arquivos de TODAS as pastas de Contratos
  * encontradas.
  */
 export async function listarContratos(ctx: ContextoGraph, empresa: Empresa): Promise<ArquivoContrato[]> {
@@ -545,6 +580,10 @@ export async function listarContratos(ctx: ContextoGraph, empresa: Empresa): Pro
   for (const candidato of CAMINHOS_CONTRATOS_CANDIDATOS) {
     pastaContratos = await resolverCaminho(ctx, empresa.itemId, candidato);
     if (pastaContratos) break;
+  }
+
+  if (!pastaContratos) {
+    pastaContratos = await resolverCaminhoEmSubpastasDiretas(ctx, empresa.itemId);
   }
 
   if (pastaContratos) {
