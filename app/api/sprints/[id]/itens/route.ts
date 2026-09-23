@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adicionarItem, atualizarItem, removerItem } from "@/lib/sprints";
+import { adicionarItem, atualizarItem, removerItem, podeDefinirEstimate } from "@/lib/sprints";
 import { exigirTI } from "../../_auth";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +48,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     campos.responsavel_email = body.responsavel_email ? String(body.responsavel_email).toLowerCase() : null;
   }
   if (body.horas_planejadas !== undefined) {
+    // Alterar o Estimate é de uma pessoa só. Travar no servidor, e não apenas
+    // desabilitando o campo: um PATCH direto passaria pela tela.
+    if (!podeDefinirEstimate(email)) {
+      return NextResponse.json(
+        { error: "Só o Gabriel altera o Estimate dos cartões." },
+        { status: 403 }
+      );
+    }
     const h = horas(body.horas_planejadas);
     if (h === undefined) return NextResponse.json({ error: "Horas inválidas." }, { status: 400 });
     campos.horas_planejadas = h;

@@ -77,6 +77,21 @@ function n(v: unknown): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
+/**
+ * Quem pode mexer no Estimate de um cartão — de qualquer cartão.
+ *
+ * O Estimate é o que o time se compromete a entregar na sprint e o teto de
+ * horas do cartão; deixar cada um ajustar o próprio faria a conta de capacity
+ * virar autodeclaração. Fica com uma pessoa só, por decisão do Gabriel
+ * (23/09/2026). Lista, e não string, para incluir alguém sem mudar a lógica.
+ */
+const DONOS_DO_ESTIMATE = ["gabriel.santos@phdcontabil.com.br"];
+
+export function podeDefinirEstimate(email: string | null | undefined): boolean {
+  const e = email?.toLowerCase();
+  return !!e && DONOS_DO_ESTIMATE.includes(e);
+}
+
 export function ehEstado(v: unknown): v is EstadoSprint {
   return v === "planejada" || v === "ativa" || v === "encerrada";
 }

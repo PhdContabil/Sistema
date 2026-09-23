@@ -89,13 +89,16 @@ type Aba = "board" | "capacidade" | "backlog" | "analytics";
 // ================================================================ componente
 
 export default function TicketsSprint({
-  sprintInicial, sprints: sprintsIniciais, pessoasTI, meuEmail, souDoTI, erroServidor,
+  sprintInicial, sprints: sprintsIniciais, pessoasTI, meuEmail, souDoTI,
+  podeEstimar, erroServidor,
 }: {
   sprintInicial: Sprint | null;
   sprints: Sprint[];
   pessoasTI: PessoaTickets[];
   meuEmail: string | null;
   souDoTI: boolean;
+  /** Só uma pessoa altera o Estimate dos cartões; para as demais o campo é leitura. */
+  podeEstimar: boolean;
   erroServidor: string | null;
 }) {
   const [sprints, setSprints] = useState<Sprint[]>(sprintsIniciais);
@@ -524,6 +527,7 @@ export default function TicketsSprint({
         <DetalheCartao
           item={itemAberto} meuEmail={meuEmail} pessoasTI={pessoasTI}
           nomePorEmail={nomePorEmail} salvando={salvando}
+          podeEstimar={podeEstimar}
           encerrada={sprint.estado === "encerrada"}
           onFechar={() => setAberto(null)}
           onMudar={(campos) => mudarItem(itemAberto.ticket_id, campos)}
@@ -937,7 +941,7 @@ function PainelBacklog({
 // ---------------------------------------------------------- detalhe cartão
 
 function DetalheCartao({
-  item, meuEmail, pessoasTI, nomePorEmail, salvando, encerrada,
+  item, meuEmail, pessoasTI, nomePorEmail, salvando, podeEstimar, encerrada,
   onFechar, onMudar, onStatus, onIncidente, onLancar, onApagarApontamento, onDevolver,
 }: {
   item: ItemSprint;
@@ -945,6 +949,7 @@ function DetalheCartao({
   pessoasTI: PessoaTickets[];
   nomePorEmail: Record<string, string>;
   salvando: boolean;
+  podeEstimar: boolean;
   encerrada: boolean;
   onFechar: () => void;
   onMudar: (campos: Record<string, unknown>) => void;
@@ -1056,14 +1061,20 @@ function DetalheCartao({
             <div className="grid grid-cols-3 gap-3">
               <label className="block">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Estimate</span>
-                <input className={`${INPUT} w-full mt-1`} inputMode="decimal" value={estimate}
-                       disabled={salvando || encerrada}
-                       onChange={(e) => setEstimate(e.target.value)}
-                       onBlur={() => {
-                         const bruto = estimate.trim();
-                         const n = bruto === "" ? null : Number(bruto.replace(",", "."));
-                         if (n === null || Number.isFinite(n)) onMudar({ horas_planejadas: bruto === "" ? "" : n });
-                       }} />
+                {podeEstimar ? (
+                  <input className={`${INPUT} w-full mt-1`} inputMode="decimal" value={estimate}
+                         disabled={salvando || encerrada}
+                         onChange={(e) => setEstimate(e.target.value)}
+                         onBlur={() => {
+                           const bruto = estimate.trim();
+                           const n = bruto === "" ? null : Number(bruto.replace(",", "."));
+                           if (n === null || Number.isFinite(n)) onMudar({ horas_planejadas: bruto === "" ? "" : n });
+                         }} />
+                ) : (
+                  <div className={`${INPUT} mt-1`} title="Só o Gabriel altera o Estimate dos cartões">
+                    {r.estimate > 0 ? horasEmTexto(r.estimate) : "—"}
+                  </div>
+                )}
               </label>
               <div>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Lançado</span>
@@ -1087,8 +1098,8 @@ function DetalheCartao({
             )}
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               O restante cai sozinho conforme as horas são lançadas abaixo.
-              O cartão <strong>não passa do Estimate</strong>: se o trabalho render mais, aumente a
-              estimativa ou abra outro cartão.
+              O cartão <strong>não passa do Estimate</strong>: se o trabalho render mais, abra outro
+              cartão. {!podeEstimar && "O Estimate em si é definido pelo Gabriel."}
             </p>
           </div>
 

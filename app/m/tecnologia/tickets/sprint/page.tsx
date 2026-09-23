@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/societario/supabase-server";
 import {
   ehAdminNav, ehAdminGeral, ehDaTI, obterSetorUsuario, resumoPorSetor, listarPessoas,
 } from "@/lib/tickets";
-import { listarSprints, sprintPadrao } from "@/lib/sprints";
+import { listarSprints, sprintPadrao, podeDefinirEstimate } from "@/lib/sprints";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -56,6 +56,7 @@ export default async function Page() {
           pessoasTI={pessoasTI}
           meuEmail={meuEmail}
           souDoTI={souDoTI}
+          podeEstimar={podeDefinirEstimate(meuEmail)}
           erroServidor={erro}
         />
       </TicketsShell>
