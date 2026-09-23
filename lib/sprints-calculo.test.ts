@@ -454,3 +454,68 @@ test("reserva negativa é tratada como zero", () => {
   );
   assert.equal(r.linhas[0].reservaIncidente, 0);
 });
+
+// --------------------------------------------------- passo de meia hora
+
+import { PASSO_HORAS, horaValida, ajustarAoPasso, opcoesDeHoras } from "./sprints-calculo.ts";
+
+test("meia em meia hora é válido", () => {
+  assert.equal(PASSO_HORAS, 0.5);
+  assert.equal(horaValida(0.5), true);
+  assert.equal(horaValida(1), true);
+  assert.equal(horaValida(3.5), true);
+  assert.equal(horaValida(8), true);
+});
+
+test("hora quebrada é recusada", () => {
+  assert.equal(horaValida(3.3), false, "3h18");
+  assert.equal(horaValida(0.25), false, "15 min");
+  assert.equal(horaValida(1.1), false);
+});
+
+test("zero e negativo não são lançamento", () => {
+  assert.equal(horaValida(0), false);
+  assert.equal(horaValida(-1), false);
+  assert.equal(horaValida(null), false);
+  assert.equal(horaValida(undefined), false);
+});
+
+test("valor não numérico não passa", () => {
+  assert.equal(horaValida("três" as unknown as number), false);
+  assert.equal(horaValida(Infinity), false);
+});
+
+test("arredonda para o passo mais próximo", () => {
+  assert.equal(ajustarAoPasso(3.3), 3.5);
+  assert.equal(ajustarAoPasso(3.2), 3);
+  assert.equal(ajustarAoPasso(1.24), 1);
+  assert.equal(ajustarAoPasso(1.26), 1.5);
+});
+
+test("arredondar nunca zera um lançamento", () => {
+  // Quem apontou 10 minutos trabalhou; virar zero apagaria o registro.
+  assert.equal(ajustarAoPasso(0.1), 0.5);
+  assert.equal(ajustarAoPasso(0), 0.5);
+});
+
+test("opções vão de meia em meia hora até o que cabe", () => {
+  assert.deepEqual(opcoesDeHoras(2), [0.5, 1, 1.5, 2]);
+  assert.deepEqual(opcoesDeHoras(1.5), [0.5, 1, 1.5]);
+});
+
+test("um teto quebrado não gera opção quebrada", () => {
+  // Restam 2h40 no cartão: a última opção honesta é 2h30.
+  assert.deepEqual(opcoesDeHoras(2.67), [0.5, 1, 1.5, 2, 2.5]);
+});
+
+test("cartão cheio não oferece nada", () => {
+  assert.deepEqual(opcoesDeHoras(0), []);
+  assert.deepEqual(opcoesDeHoras(0.3), [], "nem meia hora cabe");
+  assert.deepEqual(opcoesDeHoras(-5), []);
+});
+
+test("o teto do dia limita a lista", () => {
+  const o = opcoesDeHoras(100);
+  assert.equal(o[o.length - 1], 12);
+  assert.equal(o.length, 24);
+});

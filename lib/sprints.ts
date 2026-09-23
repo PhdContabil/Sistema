@@ -12,7 +12,7 @@
 // sem precisar entrar em outra tela.
 
 import { ticketsDb, type Ticket } from "./tickets";
-import { diasUteis, datasUteis, type Folga } from "./sprints-calculo";
+import { diasUteis, datasUteis, horaValida, PASSO_HORAS, type Folga } from "./sprints-calculo";
 
 export * from "./sprints-calculo";
 
@@ -509,6 +509,10 @@ export async function lancarHoras(
   const db = ticketsDb();
   if (!db) return "Banco indisponível.";
 
+  if (!horaValida(campos.horas)) {
+    return `O apontamento vai de ${PASSO_HORAS * 60} em ${PASSO_HORAS * 60} minutos — `
+      + "use 0,5, 1, 1,5 e assim por diante.";
+  }
   const segundos = Math.max(0, Math.round(campos.horas * 3600));
   if (segundos === 0) return "Informe quantas horas foram gastas.";
 

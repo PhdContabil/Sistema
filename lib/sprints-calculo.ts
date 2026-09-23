@@ -513,3 +513,46 @@ export function analytics(
       : null,
   };
 }
+
+// ========================================================= passo das horas
+
+/**
+ * Apontamento vai de meia em meia hora.
+ *
+ * Ninguém cronometra o expediente: "3h18" é uma precisão que a pessoa não tem
+ * de verdade e que só atrapalha na hora de somar e comparar. Meia hora é o
+ * menor pedaço que alguém consegue afirmar com honestidade sobre o próprio dia.
+ */
+export const PASSO_HORAS = 0.5;
+
+/** Verdadeiro se `h` é um múltiplo exato do passo e maior que zero. */
+export function horaValida(h: number | null | undefined): boolean {
+  const n = Number(h);
+  if (!Number.isFinite(n) || n <= 0) return false;
+  // Em minutos, para não depender de comparação de ponto flutuante.
+  const minutos = Math.round(n * 60);
+  return Math.abs(minutos - n * 60) < 1e-6 && minutos % 30 === 0;
+}
+
+/** Arredonda para o passo mais próximo, nunca abaixo de meia hora. */
+export function ajustarAoPasso(h: number | null | undefined): number {
+  const n = Number(h);
+  if (!Number.isFinite(n) || n <= 0) return PASSO_HORAS;
+  return Math.max(PASSO_HORAS, Math.round(n / PASSO_HORAS) * PASSO_HORAS);
+}
+
+/**
+ * Opções de lançamento até `maximo` horas.
+ *
+ * O teto acompanha o que ainda cabe no cartão: oferecer um valor que a regra
+ * do estimate vai recusar seria convidar ao erro. Com o cartão cheio, devolve
+ * lista vazia — a tela já avisa que não cabe mais nada.
+ */
+export function opcoesDeHoras(maximo: number, teto = 12): number[] {
+  const limite = Math.min(teto, Math.floor(Math.max(0, maximo) / PASSO_HORAS) * PASSO_HORAS);
+  const opcoes: number[] = [];
+  for (let h = PASSO_HORAS; h <= limite + 1e-9; h += PASSO_HORAS) {
+    opcoes.push(Math.round(h * 100) / 100);
+  }
+  return opcoes;
+}

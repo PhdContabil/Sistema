@@ -8,7 +8,7 @@ import {
 } from "@/lib/tickets";
 import {
   diasUteis, resumoCapacidade, fimPadrao, restante, horasEmTexto,
-  burndown, analytics,
+  burndown, analytics, opcoesDeHoras,
   type LinhaCapacidade, type PontoBurndown, type Analytics,
 } from "@/lib/sprints-calculo";
 
@@ -978,6 +978,9 @@ function DetalheCartao({
   const bloqueado = r.estimate <= 0 || semSaldo;
   const pedido = Number((horas ?? "").replace(",", ".")) || 0;
   const passaDoTeto = pedido > r.falta + 0.001;
+  // As opções param no que ainda cabe: oferecer um valor que a regra do
+  // estimate vai recusar seria convidar ao erro.
+  const opcoes = opcoesDeHoras(r.falta);
 
   const porDia = useMemo(() => {
     const m = new Map<string, number>();
@@ -1119,10 +1122,16 @@ function DetalheCartao({
               </label>
               <label className="block">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Horas</span>
-                <input className={`${INPUT} w-20 mt-1`} inputMode="decimal"
-                       placeholder={r.falta > 0 ? String(r.falta) : "0"}
-                       disabled={bloqueado}
-                       value={horas} onChange={(e) => setHoras(e.target.value)} />
+                {/* Lista fechada em vez de campo livre: o apontamento vai de
+                    meia em meia hora, e um <select> deixa isso óbvio antes de
+                    a pessoa digitar algo que o servidor vai recusar. */}
+                <select className={`${INPUT} w-28 mt-1`} disabled={bloqueado}
+                        value={horas} onChange={(e) => setHoras(e.target.value)}>
+                  <option value="">Escolher…</option>
+                  {opcoes.map((h) => (
+                    <option key={h} value={String(h)}>{horasEmTexto(h)}</option>
+                  ))}
+                </select>
               </label>
               <label className="block flex-1 min-w-[180px]">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Comentário (opcional)</span>
@@ -1137,10 +1146,10 @@ function DetalheCartao({
               </button>
             </div>
 
-            {!bloqueado && passaDoTeto && (
-              <p className="text-xs text-red-700 dark:text-red-400 mt-2">
-                Cabem só {horasEmTexto(r.falta)} neste cartão. Lance até esse limite e abra outro
-                cartão para o excedente.
+            {!bloqueado && (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2">
+                De meia em meia hora. Cabem {horasEmTexto(r.falta)} neste cartão — para o que
+                passar disso, abra outro.
               </p>
             )}
           </div>
