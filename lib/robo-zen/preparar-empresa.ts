@@ -68,6 +68,32 @@ interface ResultadoExtracao {
   tocados: Set<string>;
 }
 
+// Orçamento de tempo (ms), a partir do início de `prepararDadosParaEnvio`,
+// pra tentar achar o CNPJ nos documentos elegíveis de UMA empresa.
+//
+// Existe porque `avancarProcessamento` processa uma empresa por chamada de
+// API (maxDuration=60s da função) — se a empresa não tiver nenhum
+// documento com nome de Certidão (`ordenarCandidatosParaExtrairDados` não
+// consegue priorizar nada) e a maioria dos elegíveis for digitalizada
+// (precisa de OCR, que é lento), tentar TODOS sequencialmente pode
+// facilmente estourar o tempo da função — e nesse caso a Vercel MATA o
+// processo sem dó, antes de salvar qualquer resultado pra essa empresa,
+// travando a simulação inteira (a mesma classe de problema do OOM da PR #7
+// e do timeout de listagem da PR #8 — só que agora na extração em si).
+// Visto travando de verdade em produção: empresa "Le-Telas Industria e
+// Comecio" (código 439) tem 17 documentos elegíveis em Contratos, nenhum
+// com nome de Certidão, e os primeiros (várias "Alteração Contratual"
+// digitalizadas, em partes) já bastam pra estourar os 60s antes da busca
+// sequencial chegar em "CONTRATO SOCIAL.pdf" (bem mais pro fim da lista).
+//
+// Em vez de deixar a função ser morta no meio, paramos de tentar MAIS
+// documentos perto desse orçamento e devolvemos o que já der pra apurar —
+// a empresa fica marcada como "não deu tempo" (registrado em `problemas`,
+// então aparece no motivo/status pra Júlia entender o que aconteceu) em
+// vez de simplesmente sumir sem deixar rastro; a simulação segue
+// normalmente pra próxima empresa na chamada seguinte.
+const ORCAMENTO_TEMPO_EXTRACAO_MS = 40_000;
+
 /**
  * Tenta extrair os dados (CNPJ etc.) tentando CADA documento elegível, na
  * ordem devolvida por `ordenarCandidatosParaExtrairDados` — não só o
@@ -88,12 +114,22 @@ interface ResultadoExtracao {
  */
 async function extrairDadosComFallback(
   ctx: ContextoGraph,
-  elegiveis: ArquivoContrato[]
+  elegiveis: ArquivoContrato[],
+  prazoFinal: number
 ): Promise<ResultadoExtracao> {
   const problemas: string[] = [];
   const escaneados: string[] = [];
   const tocados = new Set<string>();
-  for (const candidato of ordenarCandidatosParaExtrairDados(elegiveis)) {
+  const candidatos = ordenarCandidatosParaExtrairDados(elegiveis);
+  for (let i = 0; i < candidatos.length; i++) {
+    if (Date.now() >= prazoFinal) {
+      problemas.push(
+        `parou a busca por tempo (limite de segurança da função): tentei ${i} de ` +
+          `${candidatos.length} documento(s) elegível(is) — os demais não chegaram a ser lidos`
+      );
+      break;
+    }
+    const candidato = candidatos[i];
     tocados.add(candidato.id);
     let dados: DadosCertidao;
     try {
@@ -130,6 +166,7 @@ async function extrairDadosComFallback(
  * extraídos, sem precisar repetir OCR/extração no momento do envio.
  */
 export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empresa): Promise<ResultadoPreparo> {
+  const prazoFinal = Date.now() + ORCAMENTO_TEMPO_EXTRACAO_MS;
   const resultado = resultadoVazio(empresa);
 
   let contratos: ArquivoContrato[];
@@ -163,15 +200,22 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
   // Busca o CNPJ tentando os candidatos em ordem de prioridade — já
   // aproveita essa mesma extração pra marcar quem "parece escaneado"
   // (dados.pareceEscaneado), em vez de reprocessar tudo de novo abaixo.
-  const { dados, arquivoUsado, problemas, escaneados, tocados } = await extrairDadosComFallback(ctx, elegiveis);
+  const { dados, arquivoUsado, problemas, escaneados, tocados } = await extrairDadosComFallback(
+    ctx,
+    elegiveis,
+    prazoFinal
+  );
 
   // Só falta checar "parece escaneado" dos elegíveis que a busca acima
   // NÃO chegou a tocar (ela para assim que acha o CNPJ, então o que vier
   // depois do candidato vencedor na ordem pode ter ficado de fora) — só
   // pra esses vale a pena a checagem RÁPIDA (sem OCR, pdfPareceEscaneado),
-  // já que não precisam mais tentar achar CNPJ nenhum.
+  // já que não precisam mais tentar achar CNPJ nenhum. Mesmo orçamento de
+  // tempo de `extrairDadosComFallback`: se já estourou, nem vale a pena
+  // tentar mais downloads só pra essa checagem cosmética.
   for (const doc of elegiveis) {
     if (tocados.has(doc.id)) continue;
+    if (Date.now() >= prazoFinal) break;
     try {
       const bytes = await baixarConteudo(ctx, doc.id);
       if (await pdfPareceEscaneado(bytes)) escaneados.push(doc.nome);
