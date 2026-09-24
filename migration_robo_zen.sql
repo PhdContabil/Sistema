@@ -195,6 +195,30 @@ comment on table robo_zen_envios_pendentes is
   'Token de uso único (~15 min) do fluxo "preparar -> confirmar" do envio real de uma empresa por vez. Auto-contido (não depende de nenhuma simulação já ter rodado).';
 
 -- ---------------------------------------------------------------------
+-- 6) CNPJ informado manualmente (fallback, por empresa específica)
+-- ---------------------------------------------------------------------
+-- Algumas empresas não têm o CNPJ escrito em NENHUM documento elegível de
+-- Contratos (comum em requerimentos de empresário individual, que trazem
+-- só CPF/NIRE) — a busca no PDF já esgotou todas as tentativas e não achou
+-- nada. Pra esses casos específicos, a Júlia pode registrar aqui o CNPJ
+-- que ela já sabe de outra fonte (Questor, CRM etc.); `prepararDadosParaEnvio`
+-- só consulta essa tabela DEPOIS de `extrairDadosComFallback` não achar
+-- nada no PDF — nunca antes, e nunca em substituição à leitura do PDF (ver
+-- lib/robo-zen/preparar-empresa.ts). Aplicada via
+-- mcp__Supabase__apply_migration (migração "robo_zen_cnpj_manual").
+create table if not exists robo_zen_cnpj_manual (
+  codigo text primary key,           -- mesmo "código" usado no resto do Robô Zen
+  cnpj text not null,
+  observacao text,                   -- de onde veio, se quiser registrar (ex.: "Questor, CRM > Clientes")
+  criado_por text not null,
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+
+comment on table robo_zen_cnpj_manual is
+  'CNPJ informado manualmente por código de empresa — usado só como ÚLTIMO fallback em prepararDadosParaEnvio, depois que a busca no PDF não encontrar nada. Nunca substitui a leitura do PDF, só cobre os casos em que ela genuinamente não tem como funcionar.';
+
+-- ---------------------------------------------------------------------
 -- RLS — mesmo padrão do resto do Núcleo: só o servidor (service role)
 -- acessa essas tabelas; o navegador nunca fala direto com o Supabase
 -- aqui (tudo passa pelas rotas server-side em app/api/paralegal/robo-zen).
@@ -204,3 +228,4 @@ alter table robo_zen_simulacao_empresas enable row level security;
 alter table robo_zen_envios enable row level security;
 alter table robo_zen_lotes_envio enable row level security;
 alter table robo_zen_envios_pendentes enable row level security;
+alter table robo_zen_cnpj_manual enable row level security;
