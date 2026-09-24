@@ -49,11 +49,11 @@ export default function PainelRodaDiretoria({ inicial }: { inicial: Linha[] }) {
 
       {aberto && (
         inicial.length === 0 ? (
-          <p className="rv-nota-info">Ninguém fechou a roda ainda.</p>
+          <p className="rv-nota-info">Ninguém fechou a Roda da Vida ainda.</p>
         ) : (
           <>
             <p className="rv-nota-info">
-              Última roda fechada de cada pessoa. Rascunho não aparece aqui — roda pela
+              Última Roda da Vida fechada de cada pessoa. Rascunho não aparece aqui — uma Roda da Vida pela
               metade não é a opinião de ninguém.
             </p>
 

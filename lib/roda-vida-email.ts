@@ -1,6 +1,6 @@
 // Monta o e-mail da Roda da Vida.
 //
-// A roda vai como barras horizontais, não como o SVG da tela: cliente de
+// A Roda da Vida vai como barras horizontais, não como o SVG da tela: cliente de
 // e-mail (Outlook à frente) descarta SVG e a pessoa receberia um buraco no
 // lugar do resultado. Barra feita de <td> com largura em porcentagem funciona
 // em qualquer um deles, e diz a mesma coisa.
@@ -105,7 +105,7 @@ export function montarEmail(d: DadosEmail): string {
     </p>
 
     <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:8px">
-      Como ficou a sua roda
+      Como ficou a sua Roda da Vida
     </div>
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:8px">
       ${linhas}

@@ -262,7 +262,7 @@ export const ESCALA = {
   ancoras: { baixo: "Muito baixo", meio: "Neutro", alto: "Excelente" },
 };
 
-export const PERGUNTA_REFLEXAO = "Olhando para a minha roda, o que ela está me dizendo?";
+export const PERGUNTA_REFLEXAO = "Olhando para a minha Roda da Vida, o que ela está me dizendo?";
 
 export const FRASE_FINAL =
   "Cuidar de si não significa mudar tudo. Às vezes, significa perceber o que precisa de atenção e dar o primeiro passo.";

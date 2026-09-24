@@ -144,7 +144,7 @@ export default function RodaVida({
     }))) return;
     await recarregar();
     setEtapa("acoes");
-    setAviso("Roda fechada. Agora escolha o que quer cuidar.");
+    setAviso("Roda da Vida fechada. Agora escolha o que quer cuidar.");
   }
 
   /**
@@ -157,7 +157,7 @@ export default function RodaVida({
     if (!(await chamar("/api/roda-vida", { method: "POST" }))) return;
     await recarregar();
     setEtapa("notas");
-    setAviso("Roda nova aberta. A anterior continua no histórico.");
+    setAviso("Roda da Vida nova aberta. A anterior continua no histórico.");
   }
 
   async function guardarEmail() {
@@ -236,7 +236,7 @@ export default function RodaVida({
           <h2>Como está a sua vida hoje?</h2>
           <p>
             São {DIMENSOES.length} dimensões. Para cada uma, algumas perguntas para pensar e
-            uma nota de {ESCALA.min} a {ESCALA.max}. No fim, a sua roda aparece — e você
+            uma nota de {ESCALA.min} a {ESCALA.max}. No fim, a sua Roda da Vida aparece — e você
             escolhe o que quer cuidar primeiro.
           </p>
           <p className="rv-escala">
@@ -251,13 +251,13 @@ export default function RodaVida({
                      onBlur={guardarEmail} />
             </label>
             <p className="rv-nota-info">
-              No fim, você pode receber a sua roda e as ações que escolheu neste endereço.
+              No fim, você pode receber a sua Roda da Vida e as ações que escolheu neste endereço.
               Dá para cadastrar depois também.
             </p>
           </div>
 
           <button className="btn primary" disabled={salvando} onClick={comecar}>
-            Começar minha roda
+            Começar minha Roda da Vida
           </button>
           {erro && <p className="rv-erro">{erro}</p>}
         </div>
@@ -278,7 +278,7 @@ export default function RodaVida({
           1. Refletir e pontuar {quantas < DIMENSOES.length && `(${quantas}/${DIMENSOES.length})`}
         </button>
         <button className={`chip ${etapa === "roda" ? "on" : ""}`} onClick={() => setEtapa("roda")}>
-          2. Minha roda
+          2. Minha Roda da Vida
         </button>
         <button className={`chip ${etapa === "acoes" ? "on" : ""}`} onClick={() => setEtapa("acoes")}>
           3. Da reflexão à ação {roda.acoes.length > 0 && `(${roda.acoes.length})`}
@@ -298,7 +298,7 @@ export default function RodaVida({
 
         {concluida && (
           <button className="btn primary rv-nova" disabled={salvando} onClick={novaRoda}>
-            + Nova roda
+            + Nova Roda da Vida
           </button>
         )}
       </div>
@@ -308,8 +308,8 @@ export default function RodaVida({
         <div className="rv-notas">
           {concluida && (
             <p className="rv-nota-info">
-              Esta roda está fechada e não muda mais — é o que mantém a evolução confiável.
-              Para pontuar de novo, use <strong>+ Nova roda</strong> acima.
+              Esta Roda da Vida está fechada e não muda mais — é o que mantém a evolução confiável.
+              Para pontuar de novo, use <strong>+ Nova Roda da Vida</strong> acima.
             </p>
           )}
 
@@ -329,11 +329,11 @@ export default function RodaVida({
           <div className="rv-rodape">
             <span>
               {quantas} de {DIMENSOES.length} respondidas
-              {fechada ? " — pode fechar a roda." : "."}
+              {fechada ? " — pode fechar a Roda da Vida." : "."}
             </span>
             <button className="btn primary" disabled={!fechada || salvando || concluida}
                     onClick={() => setEtapa("roda")}>
-              Ver minha roda
+              Ver minha Roda da Vida
             </button>
           </div>
         </div>
@@ -345,7 +345,7 @@ export default function RodaVida({
           <div className="rv-grafico">
             <GraficoRoda pontos={pontos} mostrarAnterior={!!anterior} />
             <div className="rv-media">
-              <span className="k">Média da roda</span>
+              <span className="k">Média da Roda da Vida</span>
               <span className="v" style={{ color: corDaNota(media(notas, DIMENSOES)) }}>
                 {media(notas, DIMENSOES).toFixed(1)}
               </span>
@@ -353,10 +353,10 @@ export default function RodaVida({
                 <span className="rv-var">
                   {(() => {
                     const c = comparar(notas, anterior.notas, DIMENSOES);
-                    if (c.variacao === 0) return "igual à roda anterior";
+                    if (c.variacao === 0) return "igual à Roda da Vida anterior";
                     return c.variacao > 0
-                      ? `+${c.variacao.toFixed(1)} desde a roda anterior`
-                      : `${c.variacao.toFixed(1)} desde a roda anterior`;
+                      ? `+${c.variacao.toFixed(1)} desde a Roda da Vida anterior`
+                      : `${c.variacao.toFixed(1)} desde a Roda da Vida anterior`;
                   })()}
                 </span>
               )}
@@ -392,7 +392,7 @@ export default function RodaVida({
 
             {!concluida ? (
               <button className="btn primary" disabled={!fechada || salvando} onClick={concluir}>
-                Fechar a roda e escolher minhas ações
+                Fechar a Roda da Vida e escolher minhas ações
               </button>
             ) : (
               <button className="btn" disabled={salvando} onClick={() => setEtapa("acoes")}>
@@ -415,7 +415,7 @@ export default function RodaVida({
             <div className="card rv-envio">
               <h3>Receber por e-mail</h3>
               <p className="rv-nota-info">
-                Mandamos a sua roda e as ações que você escolheu para o seu e-mail pessoal,
+                Mandamos a sua Roda da Vida e as ações que você escolheu para o seu e-mail pessoal,
                 com algumas perguntas para transformar a intenção em compromisso.
               </p>
 
@@ -447,7 +447,7 @@ export default function RodaVida({
 
       {etapa !== "evolucao" && historico.length > 0 && (
         <div className="card rv-historico">
-          <h3>Minhas rodas anteriores</h3>
+          <h3>Minhas Rodas da Vida anteriores</h3>
           <ul>
             {historico.map((h) => (
               <li key={h.id}>
@@ -781,7 +781,7 @@ function PainelEvolucao({ rodas }: { rodas: Roda[] }) {
   if (ev.pontos.length === 0) {
     return (
       <div className="card rv-convite">
-        <p>Nenhuma roda fechada ainda — a evolução aparece a partir da primeira.</p>
+        <p>Nenhuma Roda da Vida fechada ainda — a evolução aparece a partir da primeira.</p>
       </div>
     );
   }
@@ -793,7 +793,7 @@ function PainelEvolucao({ rodas }: { rodas: Roda[] }) {
     <div className="rv-evolucao">
       <div className="rv-ev-topo">
         <div className="card">
-          <span className="k">Rodas fechadas</span>
+          <span className="k">Rodas da Vida fechadas</span>
           <span className="v">{ev.pontos.length}</span>
         </div>
         <div className="card">
@@ -814,7 +814,7 @@ function PainelEvolucao({ rodas }: { rodas: Roda[] }) {
 
       {umaSo && (
         <p className="rv-nota-info">
-          Só há uma roda até agora. Faça uma nova daqui a algumas semanas e esta tela passa a
+          Só há uma Roda da Vida até agora. Faça uma nova daqui a algumas semanas e esta tela passa a
           mostrar o que mudou.
         </p>
       )}
@@ -875,14 +875,14 @@ function PainelEvolucao({ rodas }: { rodas: Roda[] }) {
             <div className="card rv-ev-alta">
               <span className="k">Maior avanço</span>
               <span className="v">{ev.maiorAlta.emoji} {ev.maiorAlta.nome}</span>
-              <span className="rv-ev-obs">+{ev.maiorAlta.variacao} desde a primeira roda</span>
+              <span className="rv-ev-obs">+{ev.maiorAlta.variacao} desde a primeira Roda da Vida</span>
             </div>
           )}
           {ev.maiorQueda && (
             <div className="card rv-ev-queda">
               <span className="k">Mais pediu atenção</span>
               <span className="v">{ev.maiorQueda.emoji} {ev.maiorQueda.nome}</span>
-              <span className="rv-ev-obs">{ev.maiorQueda.variacao} desde a primeira roda</span>
+              <span className="rv-ev-obs">{ev.maiorQueda.variacao} desde a primeira Roda da Vida</span>
             </div>
           )}
         </div>
@@ -890,12 +890,12 @@ function PainelEvolucao({ rodas }: { rodas: Roda[] }) {
 
       {/* teste por teste */}
       <div className="card">
-        <h3>Roda por roda</h3>
+        <h3>Uma a uma</h3>
         <div className="table-wrap">
           <table className="grid">
             <thead>
               <tr>
-                <th className="col-empresa">Roda</th>
+                <th className="col-empresa">Roda da Vida</th>
                 <th className="num">Média</th>
                 <th className="num">Variação</th>
                 {DIMENSOES.map((d) => <th key={d.id} className="num" title={d.nome}>{d.emoji}</th>)}
