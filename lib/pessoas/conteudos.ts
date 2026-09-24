@@ -126,8 +126,6 @@ export const AREAS: AreaPessoas[] = [
       {
         id: "roda-vida", titulo: "Roda da Vida", resumo: "Retrato da sua vida em 9 dimensões e um plano de pequenas ações.",
         rota: "/m/pessoas/roda-vida",
-        // Em validação (22/09/2026). Tirar esta linha publica o card.
-        oculto: true,
       },
       {
         id: "mental", titulo: "Saúde mental — NR1", resumo: "Orientações, diagnóstico e ações.",

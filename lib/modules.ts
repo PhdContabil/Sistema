@@ -43,6 +43,7 @@ export const MODULES: ModuleDef[] = [
       { name: "Comunicação", desc: "Férias, ausências, reuniões e confraternizações.", href: "/m/pessoas/comunicacao" },
       { name: "Remuneração", desc: "Cargos e salários, PLR e benefícios.", href: "/m/pessoas/remuneracao" },
       { name: "Saúde e Bem-Estar", desc: "Escuta, exames, convênios e saúde mental.", href: "/m/pessoas/saude" },
+      { name: "Roda da Vida", desc: "Retrato pessoal em 9 dimensões — dentro de Saúde e Bem-Estar.", href: "/m/pessoas/roda-vida" },
       { name: "Normas e Procedimentos", desc: "Políticas internas da PHD.", href: "/m/pessoas/normas" },
       { name: "Avaliação de Desempenho", desc: "Experiência e avaliação semestral.", href: "/m/pessoas/avaliacao" },
     ],
