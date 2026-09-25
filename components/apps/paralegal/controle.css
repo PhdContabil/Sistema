@@ -31,7 +31,8 @@
   background: var(--pl-bg);
   padding: 20px;
   border-radius: var(--pl-radius);
-  margin-top: 14px;
+  margin: 14px auto 0;
+  max-width: 1180px;
 }
 
 .controle-app .pl-abas {
