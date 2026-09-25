@@ -320,3 +320,57 @@ export function montarGuia(
     impedimento: null,
   };
 }
+
+// ------------------------------------------------- competência e vencimento
+
+/** "MM/AAAA" → { ano, mes }. */
+export function lerCompetencia(competencia: string): { ano: number; mes: number } | null {
+  const m = /^(\d{2})\/(\d{4})$/.exec((competencia ?? "").trim());
+  if (!m) return null;
+  const mes = Number(m[1]);
+  const ano = Number(m[2]);
+  if (mes < 1 || mes > 12) return null;
+  return { ano, mes };
+}
+
+/** "MM/AAAA" → "AAAA-MM", que ordena e compara direito. */
+export function competenciaOrdenavel(competencia: string): string {
+  const c = lerCompetencia(competencia);
+  return c ? `${c.ano}-${String(c.mes).padStart(2, "0")}` : "";
+}
+
+/** Último dia do mês, como "AAAA-MM-DD". */
+export function ultimoDiaDoMes(ano: number, mes: number): string {
+  const d = new Date(Date.UTC(ano, mes, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Vencimento sugerido para o débito, a partir da competência.
+ *
+ * É uma SUGESTÃO, não a verdade: a Questor não devolve prazo de recolhimento,
+ * e no RPA o prazo varia por código de recolhimento do CNAE. O padrão abaixo
+ * cobre o caso mais comum do Simples (DIFAL e ST: último dia do segundo mês
+ * seguinte) e serve de ponto de partida — a tela deixa corrigir, e o que for
+ * corrigido fica marcado para a sincronização não desfazer.
+ */
+export function vencimentoSugerido(competencia: string, codigoImposto: string): string | null {
+  const c = lerCompetencia(competencia);
+  if (!c) return null;
+
+  // Simples: DIFAL (46-2) e ST (146-2, 146-3) — último dia do 2º mês seguinte.
+  // RPA (46-1) — sem prazo único; usamos o mesmo como ponto de partida.
+  const meses = 2;
+  let mes = c.mes + meses;
+  let ano = c.ano;
+  while (mes > 12) { mes -= 12; ano += 1; }
+  return ultimoDiaDoMes(ano, mes);
+}
+
+/** Rótulo curto do código de imposto, para a tabela. */
+export const NOME_IMPOSTO: Record<string, string> = {
+  "46-1": "Regime periódico",
+  "46-2": "DIFAL (Simples)",
+  "146-2": "ST (Simples)",
+  "146-3": "ST antecipado",
+};

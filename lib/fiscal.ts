@@ -125,3 +125,26 @@ export interface IcmsDifalResponse {
   total_valor: number;
   dados: IcmsDifalItem[];
 }
+
+// ------------------------------------------------- ICMS por competência
+
+/** Códigos que a view `vw_icms_competencia` devolve. */
+export const CODIGOS_ICMS_COMPETENCIA = ["46-1", "46-2", "146-2", "146-3"] as const;
+
+export interface IcmsCompetenciaItem {
+  codigoempresa: number;
+  codigoestab: number;
+  cnpj: string | null;
+  nome: string | null;
+  competencia: string;
+  codigoimposto: string;
+  valor: number;
+}
+
+export interface IcmsCompetenciaResponse {
+  meses?: number | null;
+  periodo?: string | null;
+  total: number;
+  total_valor?: number | null;
+  dados: IcmsCompetenciaItem[];
+}

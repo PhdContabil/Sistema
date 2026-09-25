@@ -1,7 +1,9 @@
 // Cliente server-side da API Questor. NUNCA importe isto em um componente client:
 // a chave X-API-Key só pode existir no servidor (LGPD / dados PII).
 import type { ConciliacaoResponse } from "./conciliacao";
-import type { AnaliseLimiteResponse, DctfwebResponse, IcmsDifalResponse } from "./fiscal";
+import type {
+  AnaliseLimiteResponse, DctfwebResponse, IcmsDifalResponse, IcmsCompetenciaResponse,
+} from "./fiscal";
 import type { ConsolidacaoResponse, SocioItem } from "./contabil";
 import type { PerfilResponse } from "./dissidio-tipos";
 import type { FuncionariosAtivosResponse } from "./trabalhista";
@@ -347,4 +349,39 @@ export async function criarCadastroEmpresa(
   opts: { dryRun: boolean; confirmar: boolean }
 ): Promise<{ ok: boolean; status: number; corpo: RespostaCadastroEmpresa }> {
   return post<RespostaCadastroEmpresa>("/cadastro-empresa", { dados, dry_run: opts.dryRun, confirmar: opts.confirmar });
+}
+
+/**
+ * ICMS por competência — DIFAL, substituição tributária e apuração.
+ *
+ * View `vw_icms_competencia`, com quatro códigos de imposto. NÃO é a mesma
+ * coisa que `/fiscal/icms-difal`: esta inclui substituição tributária e
+ * classifica por código de imposto; a outra, por texto derivado de CFOP. Os
+ * totais não batem entre as duas, e isso é correto.
+ *
+ * Precedência dos filtros de período, definida pela própria API:
+ * `competencia` > `ano` > `meses`.
+ */
+export async function getIcmsCompetencia(params: {
+  meses?: number;
+  ano?: number;
+  competencia?: string;
+  cnpj?: string;
+  codigoempresa?: number;
+  codigoestab?: number;
+  codigoimposto?: string;
+  incluir_zerados?: boolean;
+} = {}): Promise<IcmsCompetenciaResponse> {
+  const q = new URLSearchParams();
+  if (params.competencia) q.set("competencia", params.competencia);
+  else if (params.ano) q.set("ano", String(params.ano));
+  else if (params.meses) q.set("meses", String(params.meses));
+  if (params.cnpj) q.set("cnpj", params.cnpj);
+  if (params.codigoempresa) q.set("codigoempresa", String(params.codigoempresa));
+  if (params.codigoestab) q.set("codigoestab", String(params.codigoestab));
+  if (params.codigoimposto) q.set("codigoimposto", params.codigoimposto);
+  if (params.incluir_zerados) q.set("incluir_zerados", "true");
+
+  const qs = q.toString();
+  return get<IcmsCompetenciaResponse>(`/fiscal/icms-competencia${qs ? `?${qs}` : ""}`);
 }

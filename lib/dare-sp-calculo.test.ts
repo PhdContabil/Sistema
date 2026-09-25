@@ -194,3 +194,50 @@ test("data inválida não passa em silêncio", () => {
   assert.ok(montarGuia(1000, "20/06/2026", "2026-09-15", SELIC).impedimento);
   assert.ok(montarGuia(1000, "2026-06-20", "", SELIC).impedimento);
 });
+
+// ------------------------------------------ competência e vencimento
+
+import {
+  lerCompetencia, competenciaOrdenavel, ultimoDiaDoMes, vencimentoSugerido, NOME_IMPOSTO,
+} from "./dare-sp-calculo.ts";
+
+test("lê a competência MM/AAAA", () => {
+  assert.deepEqual(lerCompetencia("08/2026"), { ano: 2026, mes: 8 });
+});
+
+test("competência inválida não vira data", () => {
+  assert.equal(lerCompetencia("13/2026"), null, "mês 13");
+  assert.equal(lerCompetencia("2026-08"), null);
+  assert.equal(lerCompetencia(""), null);
+});
+
+test("competência ordenável inverte para AAAA-MM", () => {
+  assert.equal(competenciaOrdenavel("08/2026"), "2026-08");
+  // Sem isso, ordenar por texto colocaria 01/2027 antes de 08/2026.
+  assert.ok(competenciaOrdenavel("01/2027") > competenciaOrdenavel("08/2026"));
+});
+
+test("último dia do mês respeita fevereiro e bissexto", () => {
+  assert.equal(ultimoDiaDoMes(2026, 2), "2026-02-28");
+  assert.equal(ultimoDiaDoMes(2028, 2), "2028-02-29");
+  assert.equal(ultimoDiaDoMes(2026, 12), "2026-12-31");
+});
+
+test("vencimento sugerido cai no último dia do segundo mês seguinte", () => {
+  assert.equal(vencimentoSugerido("08/2026", "46-2"), "2026-10-31");
+});
+
+test("vencimento sugerido vira o ano", () => {
+  assert.equal(vencimentoSugerido("11/2026", "146-2"), "2027-01-31");
+  assert.equal(vencimentoSugerido("12/2026", "46-1"), "2027-02-28");
+});
+
+test("competência inválida não gera vencimento", () => {
+  assert.equal(vencimentoSugerido("", "46-2"), null);
+});
+
+test("todo código de imposto tem rótulo", () => {
+  for (const c of ["46-1", "46-2", "146-2", "146-3"]) {
+    assert.ok(NOME_IMPOSTO[c], `sem rótulo para ${c}`);
+  }
+});

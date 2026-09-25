@@ -41,6 +41,10 @@ export const ASSUNTO_FIXO = "Contrato Social";
 // (ex.: "Cadastrado via Robô Zen") antes de ligar os envios reais em produção.
 export const OBSERVACAO_FIXA = "teste";
 
+/** Categoria das guias fiscais estaduais no Edoc (DARE-SP). */
+export const CATEGORIA_PAI_TRIBUTARIO = "Tributário";
+export const CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS = "Tributos Estaduais";
+
 const TIMEOUT_PADRAO_MS = 30_000;
 // POST /documentos parece demorar mais que os outros endpoints em alguns
 // casos (o servidor faz uma checagem de permissão do cliente antes de
@@ -315,6 +319,15 @@ export interface ImportarDocumentoParams {
   titulo?: string;
   observacao?: string;
   dataPublicacao?: string;
+  /**
+   * Campos do bloco `Atributo`, que o Zen já tinha e o robô sempre mandou
+   * vazios. Uma guia fiscal precisa deles preenchidos — é o que faz o
+   * documento aparecer com vencimento e valor no Edoc, em vez de só um PDF
+   * solto. Sem os parâmetros, seguem "" como antes.
+   */
+  dataVencimento?: string;
+  dataCompetencia?: string;
+  valor?: string;
 }
 
 /**
@@ -333,10 +346,10 @@ export async function importarDocumento(params: ImportarDocumentoParams): Promis
     PostedByRobot: true,
     LogPadronizado: false,
     Atributo: {
-      DataVencimento: "",
-      DataCompetencia: "",
+      DataVencimento: params.dataVencimento ?? "",
+      DataCompetencia: params.dataCompetencia ?? "",
       Colaborador: "",
-      Valor: "",
+      Valor: params.valor ?? "",
       DataPublicacao: params.dataPublicacao ?? formatarDataPublicacao(),
       TipoCalculo: "",
     },
