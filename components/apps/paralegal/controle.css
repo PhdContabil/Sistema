@@ -245,6 +245,9 @@
   color: var(--pl-ink);
   font-weight: 400;
   background: var(--pl-card);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .controle-app .pl-form-grid input.pl-campo-erro,
