@@ -232,7 +232,11 @@ async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; stat
 }
 
 export interface LookupItem {
-  codigo: string;
+  // A API do Questor devolve codigo como numero pra algumas listas
+  // (naturezas juridicas, enquadramentos, etc.) e como string pra outras
+  // (estados, CNAEs) -- mantem solto e deixa o <select> (HTML) lidar com a
+  // conversao pra string.
+  codigo: string | number;
   descricao: string;
   [chave: string]: unknown;
 }
@@ -248,22 +252,26 @@ const LOOKUP_PATHS: Record<string, string> = {
 export type TipoLookupCadastro = keyof typeof LOOKUP_PATHS;
 
 /** Listas fixas usadas no formulário de Cadastro de Empresa (natureza jurídica, enquadramento, tabela de feriado, tipo de logradouro, estados). */
-export function getLookupCadastroEmpresa(tipo: TipoLookupCadastro): Promise<LookupItem[]> {
+export async function getLookupCadastroEmpresa(tipo: TipoLookupCadastro): Promise<LookupItem[]> {
   const path = LOOKUP_PATHS[tipo];
   if (!path) throw new QuestorError(`Lookup desconhecido: ${tipo}`, 400);
-  return get<LookupItem[]>(path);
+  // A API real do Questor envelopa toda lista em {total, dados: [...]},
+  // nunca devolve um array solto — confirmado testando /lookups/* direto.
+  const resp = await get<{ total?: number; dados?: LookupItem[] } | LookupItem[]>(path);
+  return Array.isArray(resp) ? resp : (resp.dados ?? []);
 }
 
 /** Municípios de uma UF — usado no formulário de Cadastro de Empresa. */
-export function getLookupMunicipios(uf: string): Promise<LookupItem[]> {
-  return get<LookupItem[]>(`/lookups/municipios?uf=${encodeURIComponent(uf)}`);
+export async function getLookupMunicipios(uf: string): Promise<LookupItem[]> {
+  const resp = await get<{ total?: number; dados?: LookupItem[] } | LookupItem[]>(`/lookups/municipios?uf=${encodeURIComponent(uf)}`);
+  return Array.isArray(resp) ? resp : (resp.dados ?? []);
 }
 
 /** Busca de CNAE por texto ou código — usado no formulário de Cadastro de Empresa. */
-export function buscarCnaes(q: string): Promise<LookupItem[]> {
-  return get<LookupItem[]>(`/lookups/cnaes?q=${encodeURIComponent(q)}`);
+export async function buscarCnaes(q: string): Promise<LookupItem[]> {
+  const resp = await get<{ total?: number; dados?: LookupItem[] } | LookupItem[]>(`/lookups/cnaes?q=${encodeURIComponent(q)}`);
+  return Array.isArray(resp) ? resp : (resp.dados ?? []);
 }
-
 /** Sugere o próximo código de empresa livre num intervalo (padrão 1–1999, igual ao Paralegal System antigo). */
 export async function proximoCodigoCadastroEmpresa(inicio = 1, fim = 1999): Promise<string | null> {
   const resp = await get<{ dados?: Array<{ codigo?: string | number }> } | Array<{ codigo?: string | number }>>(
