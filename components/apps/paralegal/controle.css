@@ -1,0 +1,349 @@
+/* Controle (Paralegal) — visual próprio, herdado do Paralegal System original.
+   Escopado dentro de .controle-app para não vazar para o resto do Núcleo,
+   mesmo padrão do Tailwind escopado em Societário/Tickets/Inventário.
+   Segue o tema claro/escuro do resto do Núcleo (html[data-theme="dark"]) —
+   ver bloco de overrides no fim do arquivo. */
+
+.controle-app {
+  --pl-primary: #12488c;
+  --pl-primary-dark: #0b2f66;
+  --pl-primary-light: #e9f0fb;
+  --pl-ink: #1e2430;
+  --pl-ink-soft: #5b6472;
+  --pl-border: #e2e5eb;
+  --pl-bg: #f6f7fb;
+  --pl-card: #ffffff;
+  --pl-row-alt: #fafbfd;
+  --pl-ok: #15803d;
+  --pl-erro: #b91c1c;
+  --pl-aviso-bg: #fff7e6;
+  --pl-aviso-border: #f0c36d;
+  --pl-aviso-ink: #7a5b00;
+  --pl-sucesso-bg: #f0fdf4;
+  --pl-sucesso-border: #86efac;
+  --pl-sucesso-ink: #15803d;
+  --pl-falha-bg: #fef2f2;
+  --pl-falha-border: #fca5a5;
+  --pl-radius: 12px;
+
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: var(--pl-ink);
+  background: var(--pl-bg);
+  padding: 20px;
+  border-radius: var(--pl-radius);
+  margin-top: 14px;
+}
+
+.controle-app .pl-abas {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.controle-app .pl-aba {
+  border: 1px solid var(--pl-border);
+  background: var(--pl-card);
+  color: var(--pl-ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.controle-app .pl-aba.ativa {
+  background: var(--pl-primary);
+  color: #fff;
+  border-color: var(--pl-primary);
+}
+
+.controle-app .pl-card {
+  background: var(--pl-card);
+  border: 1px solid var(--pl-border);
+  border-radius: var(--pl-radius);
+  padding: 20px 22px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.03);
+}
+
+.controle-app .pl-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.controle-app .pl-toolbar input[type="text"],
+.controle-app .pl-toolbar input:not([type]) {
+  flex: 1;
+  min-width: 220px;
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--pl-ink);
+  background: var(--pl-card);
+}
+
+.controle-app .pl-btn {
+  border: 1px solid var(--pl-border);
+  background: var(--pl-card);
+  color: var(--pl-ink);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.controle-app .pl-btn:hover { border-color: var(--pl-primary); color: var(--pl-primary); }
+
+.controle-app .pl-btn.primary {
+  background: var(--pl-primary);
+  border-color: var(--pl-primary);
+  color: #fff;
+}
+.controle-app .pl-btn.primary:hover { background: var(--pl-primary-dark); }
+
+.controle-app .pl-btn.danger {
+  background: var(--pl-card);
+  border-color: var(--pl-erro);
+  color: var(--pl-erro);
+}
+.controle-app .pl-btn.danger:hover { background: var(--pl-erro); color: #fff; }
+
+.controle-app .pl-btn:disabled { opacity: 0.6; cursor: default; }
+
+.controle-app .pl-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--pl-border);
+  border-radius: var(--pl-radius);
+  background: var(--pl-card);
+}
+
+.controle-app table.pl-grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+
+.controle-app table.pl-grid th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pl-ink-soft);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--pl-border);
+  background: var(--pl-primary-light);
+}
+
+.controle-app table.pl-grid td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--pl-border);
+  color: var(--pl-ink);
+  background: var(--pl-card);
+}
+
+.controle-app table.pl-grid tr:last-child td { border-bottom: none; }
+.controle-app table.pl-grid tr:hover td { background: var(--pl-row-alt); }
+
+.controle-app .pl-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  background: var(--pl-primary-light);
+  color: var(--pl-primary-dark);
+}
+.controle-app .pl-banner.error { background: var(--pl-falha-bg); color: var(--pl-erro); }
+
+.controle-app .pl-modal-bg {
+  position: fixed; inset: 0; background: rgba(16, 24, 40, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+}
+
+.controle-app .pl-modal {
+  background: var(--pl-card);
+  border-radius: var(--pl-radius);
+  padding: 26px 28px;
+  width: 100%; max-width: 480px;
+  max-height: 86vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.2);
+}
+
+.controle-app .pl-modal h3 {
+  margin: 0 0 18px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pl-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pl-border);
+}
+
+.controle-app .pl-modal label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pl-ink-soft);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.controle-app .pl-modal input {
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--pl-ink);
+  background: var(--pl-card);
+  font-weight: 400;
+}
+
+/* Cadastro de Empresa — migrado de index.html/cadastro-empresa.js do
+   Paralegal System. Página própria (não modal), com seções em cards. */
+
+.controle-app .pl-cadastro-empresa { display: flex; flex-direction: column; gap: 16px; max-width: 760px; margin: 0 auto; }
+
+.controle-app .pl-cadastro-empresa .pl-card h2 {
+  margin: 0 0 16px 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pl-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pl-border);
+}
+
+.controle-app .pl-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.controle-app .pl-form-grid label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--pl-ink-soft);
+  gap: 6px;
+}
+
+.controle-app .pl-form-grid label.full { grid-column: 1 / -1; }
+
+.controle-app .pl-form-grid input,
+.controle-app .pl-form-grid select {
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--pl-ink);
+  font-weight: 400;
+  background: var(--pl-card);
+}
+
+.controle-app .pl-form-grid input.pl-campo-erro,
+.controle-app .pl-form-grid select.pl-campo-erro {
+  border-color: var(--pl-erro) !important;
+  background: var(--pl-falha-bg);
+}
+
+.controle-app .pl-cnae-resultados {
+  border: 1px solid var(--pl-border);
+  border-radius: 8px;
+  max-height: 170px;
+  overflow-y: auto;
+  margin-top: 6px;
+  background: var(--pl-card);
+}
+.controle-app .pl-cnae-resultados div { padding: 7px 12px; font-size: 12.5px; cursor: pointer; }
+.controle-app .pl-cnae-resultados div:hover { background: var(--pl-primary-light); }
+
+.controle-app .pl-cnae-selecionado,
+.controle-app .pl-cnpj-status { font-size: 12.5px; color: var(--pl-ink-soft); margin-top: 6px; }
+.controle-app .pl-cnpj-status.ok { color: var(--pl-ok); }
+.controle-app .pl-cnpj-status.erro { color: var(--pl-erro); }
+
+.controle-app .pl-socio-card {
+  border: 1px solid var(--pl-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  position: relative;
+  background: var(--pl-row-alt);
+}
+.controle-app .pl-socio-card:last-child { margin-bottom: 0; }
+.controle-app .pl-socio-titulo { font-size: 13px; font-weight: 700; color: var(--pl-ink-soft); margin-bottom: 12px; }
+.controle-app .pl-btn-remover-socio {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; color: var(--pl-erro);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0;
+}
+
+.controle-app .pl-avisos-box {
+  background: var(--pl-aviso-bg); border: 1px solid var(--pl-aviso-border); color: var(--pl-aviso-ink);
+  border-radius: 10px; padding: 14px 18px; font-size: 12.5px;
+}
+.controle-app .pl-avisos-box ul { margin: 8px 0 0; padding-left: 18px; }
+
+.controle-app .pl-preview-box {
+  background: var(--pl-sucesso-bg); border: 1px solid var(--pl-sucesso-border); color: var(--pl-sucesso-ink);
+  border-radius: 10px; padding: 14px 18px; font-size: 13.5px; line-height: 1.7;
+}
+
+.controle-app .pl-resultado-box {
+  border-radius: 10px; padding: 16px 18px; font-size: 13.5px;
+}
+.controle-app .pl-resultado-box.sucesso { background: var(--pl-sucesso-bg); border: 1px solid var(--pl-sucesso-border); color: var(--pl-sucesso-ink); }
+.controle-app .pl-resultado-box.falha { background: var(--pl-falha-bg); border: 1px solid var(--pl-falha-border); color: var(--pl-erro); }
+.controle-app .pl-resultado-box ul { margin: 8px 0 0; padding-left: 18px; }
+
+@media (max-width: 720px) {
+  .controle-app .pl-form-grid { grid-template-columns: 1fr; }
+}
+
+/* A regra global do site (tbody tr:nth-child(even) td { background:
+   var(--row-alt) }) não é escopada e vazava pra cá, pintando linhas pares
+   por cima das cores próprias do pl-grid. Sobrescreve com prioridade maior,
+   usando a variável de zebra do próprio Controle (clara ou escura conforme
+   o tema abaixo). */
+.controle-app table.pl-grid tbody tr:nth-child(even) td {
+  background: var(--pl-row-alt);
+}
+
+/* ---- Tema escuro: segue html[data-theme="dark"] do resto do Núcleo ---- */
+html[data-theme="dark"] .controle-app {
+  --pl-primary: #7ea2e8;
+  --pl-primary-dark: #5b8def;
+  --pl-primary-light: #16233d;
+  --pl-ink: #eceff4;
+  --pl-ink-soft: #94a3b8;
+  --pl-border: #1f2a3e;
+  --pl-bg: #080d1a;
+  --pl-card: #101828;
+  --pl-row-alt: #161f33;
+  --pl-ok: #4ade80;
+  --pl-erro: #f87171;
+  --pl-aviso-bg: #3a3218;
+  --pl-aviso-border: #6b5a1f;
+  --pl-aviso-ink: #fcd34d;
+  --pl-sucesso-bg: #123524;
+  --pl-sucesso-border: #1f6b45;
+  --pl-sucesso-ink: #4ade80;
+  --pl-falha-bg: #3a1414;
+  --pl-falha-border: #7f1d1d;
+}
+
+/* .pl-aba ativa e os botões primary/danger usam texto branco fixo — no tema
+   escuro --pl-primary já fica claro (#7ea2e8), então o texto vira escuro
+   pra manter contraste. */
+html[data-theme="dark"] .controle-app .pl-aba.ativa,
+html[data-theme="dark"] .controle-app .pl-btn.primary {
+  color: #0b1220;
+}
+html[data-theme="dark"] .controle-app .pl-btn.primary:hover { background: var(--pl-primary); opacity: 0.85; }
+html[data-theme="dark"] .controle-app .pl-btn.danger:hover { color: #0b1220; }
