@@ -5,7 +5,19 @@
 //   • texto: string única (parágrafo). Use \n\n para separar parágrafos.
 //   • pendente: true  -> aparece o aviso "conteúdo em elaboração" na tela.
 //   • Ao colar o texto definitivo, troque pendente para false (ou remova).
+//
+// Marcação disponível dentro de `texto` (sempre no começo da linha):
+//   ## Título              título de seção
+//   ### Subtítulo          subtítulo
+//   @ 2011 | CHAMADA       marco da linha do tempo (a chamada é opcional)
+//   > Frase                citação em destaque
+//   - item                 item de lista (linhas seguidas viram uma lista só)
+//   ![legenda](/img.png)   uma figura
+//   :::galeria ... :::     várias figuras lado a lado
+// Linha sem marca nenhuma vira parágrafo. Ver lib/pessoas/conteudo-formato.ts.
 // ============================================================================
+
+import { TEXTO_HISTORIA, TEXTO_CULTURA, TEXTO_IDENTIDADE } from "./sobre-nos";
 
 export interface Secao {
   id: string;
@@ -34,6 +46,18 @@ export interface Secao {
   oculto?: boolean;
   /** Aviso de onde virá o dado (ex.: preenchido manualmente pelo JR). */
   nota?: string;
+  /** Arquivos para baixar, listados no fim da tela. */
+  anexos?: Anexo[];
+}
+
+export interface Anexo {
+  titulo: string;
+  /** Uma linha dizendo o que é e, quando pesa, quanto pesa. */
+  descricao?: string;
+  /** Caminho em /public ou URL externa. */
+  href: string;
+  /** Selo do cartão. Padrão: PDF. */
+  formato?: string;
 }
 
 export interface AreaPessoas {
@@ -48,12 +72,24 @@ export const PONTO_DIGITAL_URL = "https://gestor.coalize.com.br/login";
 
 export const AREAS: AreaPessoas[] = [
   {
-    id: "sobre-nos", titulo: "Sobre nós", resumo: "História, hierarquia e cultura da PHD.",
+    id: "sobre-nos", titulo: "Sobre nós", resumo: "História, hierarquia, cultura e identidade visual da PHD.",
     cor: "oklch(0.62 0.13 255)",
     secoes: [
-      { id: "historia", titulo: "História", resumo: "Como a PHD começou e chegou até aqui.", pendente: true, nota: "Texto a ser fornecido pelo Júnior." },
+      { id: "historia", titulo: "História", resumo: "Como a PHD começou e chegou até aqui.", texto: TEXTO_HISTORIA },
       { id: "hierarquia", titulo: "Hierarquia", resumo: "Organograma: gestores e setores.", especial: "hierarquia" },
-      { id: "cultura", titulo: "Cultura", resumo: "Missão, visão, valores e planejamento estratégico.", pendente: true, nota: "Texto a ser fornecido pelo Júnior." },
+      { id: "cultura", titulo: "Cultura e Estratégia", resumo: "Missão, visão, valores e planejamento estratégico.", texto: TEXTO_CULTURA },
+      {
+        id: "identidade-visual", titulo: "Identidade Visual",
+        resumo: "A história do nome, dos símbolos e das quatro marcas da PHD.",
+        texto: TEXTO_IDENTIDADE,
+        anexos: [
+          {
+            titulo: "Manual completo — Identidade Visual",
+            descricao: "Marca, aplicações, paleta, tipografia e usos proibidos. PDF de 20 MB.",
+            href: "/pessoas/manual-identidade-visual-phd.pdf",
+          },
+        ],
+      },
     ],
   },
   {

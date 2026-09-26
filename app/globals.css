@@ -1797,3 +1797,91 @@ html[data-theme="dark"] .rv-aviso-ok { background: rgba(6,95,70,.25); border-col
 .dare-guias li .nota { margin: 0; }
 
 .campo-inline.larga { flex: 2 1 320px; }
+
+/* ---------- Texto institucional de Pessoas (Sobre nós) ---------- */
+/* Largura de leitura igual à dos parágrafos (.conteudo p): textos longos
+   precisam da mesma coluna, senão título e corpo desalinham. */
+.ct-titulo, .ct-subtitulo, .ct-citacao, .ct-lista, .ct-marco { max-width: 760px; }
+
+.ct-titulo {
+  font-size: 19px; font-weight: 650; line-height: 1.3;
+  margin: 34px 0 12px; padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.conteudo > .ct-titulo:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.ct-subtitulo {
+  font-size: 14px; font-weight: 600; color: var(--muted);
+  letter-spacing: .01em; margin: 0 0 14px;
+}
+.ct-titulo + .ct-subtitulo { margin-top: -6px; }
+
+/* Marco da linha do tempo: o ano é a âncora visual de quem percorre o texto. */
+.ct-marco {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin: 30px 0 14px; padding-left: 14px;
+  border-left: 3px solid var(--accent);
+}
+.ct-marco-ano {
+  font-size: 13px; font-weight: 700; letter-spacing: .04em;
+  color: var(--accent); white-space: nowrap;
+}
+.ct-marco-chamada {
+  font-size: 13px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text);
+}
+
+.ct-citacao {
+  margin: 0 0 16px; padding: 14px 16px;
+  background: var(--accent-soft); border-radius: var(--r-md);
+  border-left: 3px solid var(--border);
+  font-size: 14.5px; line-height: 1.6; font-style: italic;
+}
+
+.ct-lista { margin: 0 0 14px; padding-left: 20px; }
+.ct-lista li { font-size: 14.5px; line-height: 1.65; margin-bottom: 6px; }
+
+/* Galeria: as logomarcas têm proporções diferentes entre si, então o que se
+   iguala é a ALTURA — alinhar pela largura deixaria a de 2012 gigante ao lado
+   da de 2026. */
+.ct-galeria {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+  margin: 0 0 20px; max-width: 760px;
+}
+.ct-galeria figure {
+  flex: 0 1 auto; margin: 0; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); text-align: center;
+}
+.ct-galeria img { display: block; height: 52px; width: auto; max-width: 100%; margin: 0 auto; }
+.ct-galeria figcaption {
+  font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.4;
+}
+/* Foto não é logomarca: cresce para ocupar a coluna em vez de ser alinhada
+   pela altura. A classe vem do componente, que olha a extensão do arquivo. */
+.ct-galeria.unica img { height: auto; max-height: 340px; }
+.ct-galeria figure.foto { flex: 1 1 280px; padding: 10px; }
+.ct-galeria figure.foto img { height: auto; width: 100%; border-radius: 8px; }
+
+.ct-anexos { margin-top: 32px; max-width: 760px; }
+.ct-anexo {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; margin-bottom: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); text-decoration: none; color: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+.ct-anexo:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+.ct-anexo-ic {
+  flex: none; width: 44px; height: 44px; border-radius: 10px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent); letter-spacing: .04em;
+}
+.ct-anexo-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ct-anexo-txt strong { font-size: 14px; font-weight: 600; }
+.ct-anexo-txt .desc { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.ct-anexo-seta { margin-left: auto; color: var(--muted); font-size: 15px; }
+
+@media (max-width: 640px) {
+  .ct-galeria img { height: 40px; }
+  .ct-marco { padding-left: 11px; }
+}
