@@ -17,7 +17,7 @@
 // Linha sem marca nenhuma vira parágrafo. Ver lib/pessoas/conteudo-formato.ts.
 // ============================================================================
 
-import { TEXTO_HISTORIA, TEXTO_CULTURA, TEXTO_IDENTIDADE } from "./sobre-nos";
+import { TEXTO_IDENTIDADE } from "./sobre-nos";
 
 export interface Secao {
   id: string;
@@ -33,7 +33,7 @@ export interface Secao {
   /** Link externo (abre em nova aba). */
   externo?: string;
   /** Tela especial (renderização própria). */
-  especial?: "hierarquia" | "pessoas" | "agenda";
+  especial?: "hierarquia" | "pessoas" | "agenda" | "livro" | "cultura";
   /** Link interno direto (o card abre esta rota em vez da tela de conteúdo). */
   rota?: string;
   /**
@@ -75,9 +75,9 @@ export const AREAS: AreaPessoas[] = [
     id: "sobre-nos", titulo: "Sobre nós", resumo: "História, hierarquia, cultura e identidade visual da PHD.",
     cor: "oklch(0.62 0.13 255)",
     secoes: [
-      { id: "historia", titulo: "História", resumo: "Como a PHD começou e chegou até aqui.", texto: TEXTO_HISTORIA },
+      { id: "historia", titulo: "História", resumo: "Como a PHD começou e chegou até aqui — para folhear como um livro.", especial: "livro" },
       { id: "hierarquia", titulo: "Hierarquia", resumo: "Organograma: gestores e setores.", especial: "hierarquia" },
-      { id: "cultura", titulo: "Cultura e Estratégia", resumo: "Missão, visão, valores e planejamento estratégico.", texto: TEXTO_CULTURA },
+      { id: "cultura", titulo: "Cultura e Estratégia", resumo: "Missão, visão, valores e planejamento estratégico.", especial: "cultura" },
       {
         id: "identidade-visual", titulo: "Identidade Visual",
         resumo: "A história do nome, dos símbolos e das quatro marcas da PHD.",

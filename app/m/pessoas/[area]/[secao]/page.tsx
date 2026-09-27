@@ -3,6 +3,8 @@ import Workspace from "@/components/Workspace";
 import Conteudo from "@/components/pessoas/Conteudo";
 import Hierarquia from "@/components/pessoas/Hierarquia";
 import Equipe from "@/components/pessoas/Equipe";
+import LivroHistoria from "@/components/pessoas/LivroHistoria";
+import CulturaEstrategia from "@/components/pessoas/CulturaEstrategia";
 import { getArea, getSecao } from "@/lib/pessoas/conteudos";
 import { appInitials } from "@/lib/modules";
 
@@ -23,6 +25,8 @@ export default function SecaoPage({ params }: { params: { area: string; secao: s
 
       {s.especial === "hierarquia" && <Hierarquia />}
       {s.especial === "pessoas" && <Equipe />}
+      {s.especial === "livro" && <LivroHistoria />}
+      {s.especial === "cultura" && <CulturaEstrategia />}
 
       {/* Terceiro nível: sub-itens */}
       {s.itens?.length ? (
