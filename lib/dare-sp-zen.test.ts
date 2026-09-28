@@ -80,3 +80,13 @@ test("lista as categorias existentes para o erro", () => {
   assert.deepEqual(listarCategorias(ARVORE), ["Societário › Contratos", "TRIBUTARIO  › Tributos  Federais", "TRIBUTARIO  › tributos estaduais"]);
   assert.equal(normalizar("  Tributário  X "), "tributario x");
 });
+
+import { tituloDoZen } from "./dare-sp-zen-formato.ts";
+
+test("título do Edoc no padrão do Fiscal", () => {
+  assert.equal(tituloDoZen("46-2", "08/2026"), "ICMS Diferencial de aliquota 046-2 SP 08/2026");
+  assert.equal(tituloDoZen("146-6", "08/2026"), "ICMS ST 146-6 SP 08/2026");
+  assert.equal(tituloDoZen("146-3", "08/2026"), "ICMS ST 146-3 SP 08/2026");
+  assert.equal(tituloDoZen("46-1", "08/2026"), "ICMS Operações Próprias SP 08/2026");
+  assert.equal(tituloDoZen("046-2", "09/2026"), "ICMS Diferencial de aliquota 046-2 SP 09/2026");
+});

@@ -31,6 +31,23 @@ export function nomeDoArquivo(cnpj: string, referencia: string): string {
   return `DARE-SP ${comp} ${doc}.pdf`;
 }
 
+/**
+ * Título do documento no Edoc, no padrão pedido pelo Fiscal:
+ *   046-2 -> "ICMS Diferencial de aliquota 046-2 SP 08/2026"
+ *   146-x -> "ICMS ST 146-x SP 08/2026"
+ *   046-1 -> "ICMS Operações Próprias SP 08/2026"
+ * Código fora desses: "ICMS <código> SP <competência>".
+ */
+export function tituloDoZen(codigoImposto: string, referencia: string): string {
+  const m = /^(\d{1,3})-(\d)$/.exec((codigoImposto ?? "").trim());
+  const cod = m ? `${m[1].padStart(3, "0")}-${m[2]}` : (codigoImposto ?? "").trim();
+  const comp = (referencia ?? "").trim();
+  if (cod === "046-2") return `ICMS Diferencial de aliquota 046-2 SP ${comp}`;
+  if (cod === "046-1") return `ICMS Operações Próprias SP ${comp}`;
+  if (cod.startsWith("146-")) return `ICMS ST ${cod} SP ${comp}`;
+  return `ICMS ${cod} SP ${comp}`.replace(/\s+/g, " ").trim();
+}
+
 // ------------------------------------------------------------- categorias
 
 export interface NoCategoria {

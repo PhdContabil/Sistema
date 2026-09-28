@@ -2310,3 +2310,5 @@ html[data-theme="dark"] .estr-escolha.on { background: #1c2f63; }
 .lv-capa-logo { filter: none; height: min(14cqi, 64px); }
 .lv-texto { overflow-wrap: break-word; }
 .livro.uma .lv-abre-ano { font-size: min(24cqi, 72px); }
+.dare-excluir { color: var(--div); }
+.dare-excluir:hover:not(:disabled) { border-color: var(--div); }

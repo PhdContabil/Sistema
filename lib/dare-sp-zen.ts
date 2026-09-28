@@ -11,7 +11,7 @@ import {
   hasQuestorZenToken, ClienteNaoEncontradoError, QuestorZenError,
   CATEGORIA_PAI_TRIBUTARIO, CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS,
 } from "./questor-zen";
-import { dataBR, valorBR, nomeDoArquivo, acharCategoria, listarCategorias, type NoCategoria } from "./dare-sp-zen-formato";
+import { dataBR, valorBR, nomeDoArquivo, tituloDoZen, acharCategoria, listarCategorias, type NoCategoria } from "./dare-sp-zen-formato";
 
 export { dataBR, valorBR, nomeDoArquivo };
 
@@ -25,6 +25,8 @@ export interface GuiaParaZen {
   total: number;
   /** PDF oficial devolvido pela Sefaz, em base64. */
   pdfBase64: string;
+  /** Código do imposto da view (46-2, 146-3...): decide o título no Edoc. */
+  codigoImposto: string;
   /** Nome da empresa, só para compor o nome do arquivo. */
   nomeEmpresa?: string | null;
 }
@@ -80,7 +82,7 @@ export async function enviarGuiaAoZen(g: GuiaParaZen): Promise<ResultadoZen> {
     codigoCategoria,
     codigoCliente,
     codigoArquivo,
-    titulo: `DARE-SP ${g.referencia}`,
+    titulo: tituloDoZen(g.codigoImposto, g.referencia),
     observacao: "Guia gerada pelo Núcleo Contábil",
   };
 

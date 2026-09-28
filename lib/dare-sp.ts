@@ -198,6 +198,7 @@ export async function listarDebitos(competencia?: string): Promise<Debito[]> {
     .from("dare_sp_guias")
     .select("id,codigoempresa,codigoestab,competencia,codigoimposto,total,data_pagamento,numero_controle,linha_digitavel,zen_documento_id,zen_enviado_em,zen_erro,emitida_em,emitida_por")
     .in("competencia", comps)
+    .is("excluida_em", null)
     .order("emitida_em", { ascending: false });
 
   const porDebito = new Map<string, GuiaResumo[]>();
@@ -362,6 +363,25 @@ export async function registrarFalhaZen(guiaId: string, motivo: string): Promise
     .from("dare_sp_guias")
     .update({ zen_erro: motivo.slice(0, 2000), zen_tentativa_em: new Date().toISOString() })
     .eq("id", guiaId);
+}
+
+/**
+ * Exclui a guia da lista. Exclusão lógica: o registro e o PDF ficam, com quem
+ * excluiu e quando — a guia pode já ter sido paga ou enviada ao cliente, e
+ * sumir sem rastro com ela é pior que mantê-la escondida.
+ *
+ * Não cancela nada na Sefaz (DARE não pago simplesmente vence) nem apaga o
+ * documento do Zen — a API do Edoc que usamos não tem exclusão.
+ */
+export async function excluirGuia(id: string, por: string): Promise<string | null> {
+  const sb = db();
+  if (!sb) return "Banco indisponível.";
+  const { error } = await sb
+    .from("dare_sp_guias")
+    .update({ excluida_em: new Date().toISOString(), excluida_por: por })
+    .eq("id", id)
+    .is("excluida_em", null);
+  return error?.message ?? null;
 }
 
 export async function obterGuia(id: string): Promise<GuiaGravada | null> {

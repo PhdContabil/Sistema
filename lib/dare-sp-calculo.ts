@@ -237,24 +237,29 @@ export interface Receita {
  * errada, que é bem pior de desfazer. Por isso a tela mostra a sugestão e
  * deixa trocar.
  */
-export function receitaSugerida(codigoImposto: string, regime: Regime): Receita | null {
-  const c = (codigoImposto ?? "").trim();
-
-  if (c === "46-1") {
-    return { codigo: "046-1", codigoServico: 4601, nome: "ICMS — operações próprias (RPA)" };
-  }
-  if (c === "46-2") {
-    return regime === "simples"
-      ? { codigo: "046-2", codigoServico: 4602, nome: "ICMS — diferencial de alíquota (Simples)" }
-      : { codigo: "046-1", codigoServico: 4601, nome: "ICMS — operações próprias (RPA)" };
-  }
-  if (c === "146-2" || c === "146-3") {
-    return regime === "simples"
-      ? { codigo: "146-2", codigoServico: 14602, nome: "ICMS — substituição tributária (Simples)" }
-      : { codigo: "146-1", codigoServico: 14601, nome: "ICMS — substituição tributária (RPA)" };
-  }
-  return null;
+export function receitaSugerida(codigoImposto: string, _regime?: Regime): Receita | null {
+  // O código da view da Questor JÁ É a receita do DARE: "146-3" é a receita
+  // 146-3 (serviço 14603), "46-2" é a 046-2 (04602). Antes esta função
+  // remapeava por regime e mandava 146-3 para 146-2 — guia na receita errada.
+  // O regime não entra mais: quem classifica o débito é a apuração.
+  const m = /^(\d{1,3})-(\d)$/.exec((codigoImposto ?? "").trim());
+  if (!m) return null;
+  const base = m[1].padStart(3, "0");
+  const codigo = `${base}-${m[2]}`;
+  return {
+    codigo,
+    // Serviço = número da receita + dígito em duas casas: 46-2 -> 4602, 146-3 -> 14603.
+    codigoServico: Number(`${Number(m[1])}${m[2].padStart(2, "0")}`),
+    nome: NOME_RECEITA[codigo] ?? `ICMS — receita ${codigo}`,
+  };
 }
+
+const NOME_RECEITA: Record<string, string> = {
+  "046-1": "ICMS — operações próprias (RPA)",
+  "046-2": "ICMS — diferencial de alíquota (Simples)",
+  "146-2": "ICMS — substituição tributária (Simples)",
+  "146-3": "ICMS — substituição tributária, antecipação (Simples)",
+};
 
 // ------------------------------------------------------------------- guia
 

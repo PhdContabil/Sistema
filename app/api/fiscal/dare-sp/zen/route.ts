@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     const r = await enviarGuiaAoZen({
       cnpj: g.cnpj,
       referencia: g.competencia,
+      codigoImposto: g.codigoimposto,
       vencimento: g.data_pagamento,
       total: Number(g.total),
       pdfBase64: g.pdf_base64,

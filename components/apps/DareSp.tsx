@@ -676,6 +676,19 @@ function ModalGuia({
                       <span className="dare-zen-erro">Zen recusou: {g.zen_erro}</span>
                     )}
                     <a className="btn" href={`/api/fiscal/dare-sp/pdf?id=${g.id}`} target="_blank" rel="noopener noreferrer">PDF</a>
+                    <button className="btn dare-excluir" disabled={reenviando === g.id} onClick={async () => {
+                      const aviso = g.zen_documento_id
+                        ? "\n\nEla já está no Zen: o documento de lá NÃO é apagado, exclua no Edoc também."
+                        : "";
+                      if (!window.confirm(`Excluir a guia de R$ ${formatBRL(g.total)} emitida em ${formatDataHora(g.emitida_em)}?${aviso}\n\nA guia não é cancelada na Sefaz: se não for paga, só vence.`)) return;
+                      setReenviando(g.id);
+                      const r = await fetch(`/api/fiscal/dare-sp/guia?id=${g.id}`, { method: "DELETE" });
+                      const j = await r.json().catch(() => ({}));
+                      setReenviando(null);
+                      if (r.ok) onAviso("Guia excluída.");
+                      else setAvisosEmissao([`Não excluiu: ${j.error ?? `HTTP ${r.status}`}`]);
+                      onMudou();
+                    }}>Excluir</button>
                   </li>
                 ))}
               </ul>

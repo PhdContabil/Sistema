@@ -138,25 +138,30 @@ test("arredondar valor inválido não quebra", () => {
 
 // ------------------------------------------------------------ receita
 
-test("46-2 muda de receita conforme o regime", () => {
+test("a receita é o próprio código da view", () => {
   assert.equal(receitaSugerida("46-2", "simples")!.codigoServico, 4602);
-  assert.equal(receitaSugerida("46-2", "rpa")!.codigoServico, 4601);
-});
-
-test("substituição tributária tem receita própria", () => {
-  assert.equal(receitaSugerida("146-2", "simples")!.codigoServico, 14602);
-  assert.equal(receitaSugerida("146-3", "simples")!.codigoServico, 14602);
-  assert.equal(receitaSugerida("146-2", "rpa")!.codigoServico, 14601);
-});
-
-test("46-1 é sempre operações próprias", () => {
   assert.equal(receitaSugerida("46-1", "rpa")!.codigoServico, 4601);
-  assert.equal(receitaSugerida("46-1", "simples")!.codigoServico, 4601);
+  assert.equal(receitaSugerida("146-2", "simples")!.codigoServico, 14602);
 });
 
-test("código desconhecido não inventa receita", () => {
-  assert.equal(receitaSugerida("99-9", "simples"), null);
+test("146-3 é 146-3, não 146-2", () => {
+  // Bug real: a PLX Light saiu na 146-2 com a view dizendo 146-3.
+  const r = receitaSugerida("146-3", "simples")!;
+  assert.equal(r.codigo, "146-3");
+  assert.equal(r.codigoServico, 14603);
+});
+
+test("o regime não troca a receita", () => {
+  assert.equal(receitaSugerida("46-2", "rpa")!.codigoServico, 4602);
+  assert.equal(receitaSugerida("146-3", "rpa")!.codigoServico, 14603);
+});
+
+test("código fora do formato não vira receita", () => {
+  // Código no formato certo mas fora do catálogo passa aqui e é barrado na
+  // emissão, que confere contra o GET /receitas da Sefaz.
+  assert.equal(receitaSugerida("abc", "simples"), null);
   assert.equal(receitaSugerida("", "rpa"), null);
+  assert.equal(receitaSugerida("1462", "rpa"), null);
 });
 
 // --------------------------------------------------------------- guia
