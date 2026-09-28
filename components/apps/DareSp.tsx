@@ -46,6 +46,12 @@ function chaveDe(d: Debito): string {
   return `${d.codigoempresa}|${d.codigoestab}|${d.competencia}|${d.codigoimposto}`;
 }
 
+/** Data de pagamento sugerida: o vencimento, se ainda não passou; senão, hoje. */
+function pagamentoPadrao(vencimento: string | null): string {
+  const h = hoje();
+  return vencimento && /^\d{4}-\d{2}-\d{2}$/.test(vencimento) && vencimento > h ? vencimento : h;
+}
+
 function hoje(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -362,7 +368,10 @@ function ModalGuia({
   onAviso: (m: string) => void;
 }) {
   const [vencimento, setVencimento] = useState(debito.vencimento ?? "");
-  const [pagamento, setPagamento] = useState(hoje());
+  // Débito que ainda não venceu é pago no vencimento, não hoje: a data de
+  // pagamento vira o vencimento da guia na Sefaz, e antecipar sem motivo só
+  // encurta o prazo do cliente.
+  const [pagamento, setPagamento] = useState(() => pagamentoPadrao(debito.vencimento));
   const [regime, setRegime] = useState<Regime>("simples");
 
   const [calculo, setCalculo] = useState<Calculo | null>(null);
@@ -505,7 +514,11 @@ function ModalGuia({
             <label className="campo-inline">
               <span>Vencimento do débito</span>
               <input type="date" value={vencimento}
-                     onChange={(e) => setVencimento(e.target.value)} onBlur={guardarVencimento} />
+                     onChange={(e) => {
+                       const v = e.target.value;
+                       setVencimento(v);
+                       if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v > pagamento) setPagamento(v);
+                     }} onBlur={guardarVencimento} />
             </label>
             <label className="campo-inline">
               <span>Data de pagamento</span>

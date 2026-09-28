@@ -122,8 +122,17 @@ export async function enviarGuiaAoZen(g: GuiaParaZen): Promise<ResultadoZen> {
  * `QUESTOR_ZEN_CATEGORIA_DARE`, se definida, é usada direto (código da
  * categoria), sem consultar a árvore.
  */
+/**
+ * Código de Tributário › Tributos Estaduais no Edoc, passado pela equipe.
+ *
+ * Vai fixo porque a busca pelo nome não achou a categoria na árvore do Zen.
+ * A variável de ambiente, se existir, tem precedência; a busca por nome fica
+ * só como reserva, caso este código seja esvaziado.
+ */
+const CODIGO_CATEGORIA_DARE = "5a293cc14b541610084cad83";
+
 async function categoriaDoDare(): Promise<string> {
-  const fixa = process.env.QUESTOR_ZEN_CATEGORIA_DARE?.trim();
+  const fixa = process.env.QUESTOR_ZEN_CATEGORIA_DARE?.trim() || CODIGO_CATEGORIA_DARE;
   if (fixa) return fixa;
 
   const arvore = (await consultarCategorias()) as unknown as NoCategoria[];
