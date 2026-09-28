@@ -7,11 +7,11 @@
 // documento aparecer no Edoc com data e valor em vez de virar um PDF solto.
 
 import {
-  buscarCodigoCategoria, consultarCliente, uploadArquivo, importarDocumento,
-  hasQuestorZenToken, ClienteNaoEncontradoError, CategoriaNaoEncontradaError, QuestorZenError,
+  consultarCategorias, consultarCliente, uploadArquivo, importarDocumento,
+  hasQuestorZenToken, ClienteNaoEncontradoError, QuestorZenError,
   CATEGORIA_PAI_TRIBUTARIO, CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS,
 } from "./questor-zen";
-import { dataBR, valorBR, nomeDoArquivo } from "./dare-sp-zen-formato";
+import { dataBR, valorBR, nomeDoArquivo, acharCategoria, listarCategorias } from "./dare-sp-zen-formato";
 
 export { dataBR, valorBR, nomeDoArquivo };
 
@@ -57,21 +57,7 @@ export async function enviarGuiaAoZen(g: GuiaParaZen): Promise<ResultadoZen> {
   const bytes = Buffer.from(g.pdfBase64, "base64");
   if (bytes.length === 0) throw new Error("A guia veio sem PDF — nada a enviar.");
 
-  let codigoCategoria: string;
-  try {
-    codigoCategoria = await buscarCodigoCategoria(
-      CATEGORIA_PAI_TRIBUTARIO,
-      CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS
-    );
-  } catch (e) {
-    if (e instanceof CategoriaNaoEncontradaError) {
-      throw new Error(
-        `Categoria "${CATEGORIA_PAI_TRIBUTARIO} › ${CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS}" não existe no Zen. ` +
-        "Crie-a em Edoc > Categorias ou confira o nome exato."
-      );
-    }
-    throw e;
-  }
+  const codigoCategoria = await categoriaDoDare();
 
   let codigoCliente: string;
   try {
@@ -122,4 +108,30 @@ export async function enviarGuiaAoZen(g: GuiaParaZen): Promise<ResultadoZen> {
   }
 
   return { documentoId, codigoCliente, codigoCategoria, nomeArquivo, semAtributos };
+}
+
+/**
+ * Código da categoria Tributário › Tributos Estaduais no Edoc.
+ *
+ * A busca exata do Robô Zen ("Societário" > "Contratos") falhou aqui: o nome
+ * no Zen não bate letra por letra com o que a equipe usa no dia a dia. A busca
+ * agora ignora acento, maiúscula e espaço sobrando, e procura a filha em
+ * qualquer nível da árvore. Se mesmo assim não achar, o erro lista as
+ * categorias que existem — para acertar o nome sem precisar abrir o Zen.
+ *
+ * `QUESTOR_ZEN_CATEGORIA_DARE`, se definida, é usada direto (código da
+ * categoria), sem consultar a árvore.
+ */
+async function categoriaDoDare(): Promise<string> {
+  const fixa = process.env.QUESTOR_ZEN_CATEGORIA_DARE?.trim();
+  if (fixa) return fixa;
+
+  const arvore = await consultarCategorias();
+  const codigo = acharCategoria(arvore, CATEGORIA_PAI_TRIBUTARIO, CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS);
+  if (codigo) return codigo;
+
+  throw new Error(
+    `Categoria "${CATEGORIA_PAI_TRIBUTARIO} › ${CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS}" não encontrada no Zen. ` +
+    `Categorias que existem: ${listarCategorias(arvore).join("; ") || "(nenhuma)"}`
+  );
 }

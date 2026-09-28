@@ -43,3 +43,40 @@ test("entrada vazia ainda produz um nome válido", () => {
   assert.ok(n.endsWith(".pdf"));
   assert.ok(!n.includes("/"));
 });
+
+import { acharCategoria, listarCategorias, normalizar } from "./dare-sp-zen-formato.ts";
+
+const ARVORE = [
+  { Codigo: "1", Descricao: "Societário", Categorias: [{ Codigo: "11", Descricao: "Contratos" }] },
+  { Codigo: "2", Descricao: "TRIBUTARIO ", Categorias: [
+    { Codigo: "21", Descricao: "Tributos  Federais" },
+    { Codigo: "22", Descricao: "tributos estaduais" },
+  ] },
+];
+
+test("categoria é achada sem ligar para acento, caixa e espaço", () => {
+  assert.equal(acharCategoria(ARVORE, "Tributário", "Tributos Estaduais"), "22");
+});
+
+test("categoria em nível mais fundo também é achada", () => {
+  const a = [{ Codigo: "9", Descricao: "Fiscal", Categorias: [{ Codigo: "90", Descricao: "Tributário", Categorias: [{ Codigo: "901", Descricao: "Tributos Estaduais" }] }] }];
+  assert.equal(acharCategoria(a, "Tributário", "Tributos Estaduais"), "901");
+});
+
+test("pai com outro nome: filha única na árvore serve", () => {
+  const a = [{ Codigo: "3", Descricao: "Impostos", Categorias: [{ Codigo: "31", Descricao: "Tributos Estaduais" }] }];
+  assert.equal(acharCategoria(a, "Tributário", "Tributos Estaduais"), "31");
+});
+
+test("filha repetida sem o pai certo: não chuta", () => {
+  const a = [
+    { Codigo: "3", Descricao: "A", Categorias: [{ Codigo: "31", Descricao: "Tributos Estaduais" }] },
+    { Codigo: "4", Descricao: "B", Categorias: [{ Codigo: "41", Descricao: "Tributos Estaduais" }] },
+  ];
+  assert.equal(acharCategoria(a, "Tributário", "Tributos Estaduais"), null);
+});
+
+test("lista as categorias existentes para o erro", () => {
+  assert.deepEqual(listarCategorias(ARVORE), ["Societário › Contratos", "TRIBUTARIO  › Tributos  Federais", "TRIBUTARIO  › tributos estaduais"]);
+  assert.equal(normalizar("  Tributário  X "), "tributario x");
+});

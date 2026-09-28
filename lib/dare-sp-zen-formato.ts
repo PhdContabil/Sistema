@@ -30,3 +30,77 @@ export function nomeDoArquivo(cnpj: string, referencia: string): string {
   const comp = (referencia ?? "").replace("/", "-");
   return `DARE-SP ${comp} ${doc}.pdf`;
 }
+
+// ------------------------------------------------------------- categorias
+
+export interface NoCategoria {
+  Codigo?: string;
+  Descricao?: string;
+  Categorias?: NoCategoria[];
+  [k: string]: unknown;
+}
+
+/** "  Tributário " -> "tributario": o que importa é o nome, não a grafia. */
+export function normalizar(t: string): string {
+  return (t ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Acha o código da categoria `filha` dentro de `pai`, em qualquer nível.
+ *
+ * Preferência: filha dentro do pai. Se o pai não existir com esse nome, mas
+ * houver UMA só categoria chamada `filha` na árvore inteira, ela serve —
+ * nome específico o bastante para não ser ambíguo. Havendo mais de uma, não
+ * chuta: devolve null.
+ */
+export function acharCategoria(arvore: NoCategoria[], pai: string, filha: string): string | null {
+  const np = normalizar(pai);
+  const nf = normalizar(filha);
+
+  const dentro = (nos: NoCategoria[] | undefined): string | null => {
+    for (const n of nos ?? []) {
+      if (normalizar(n.Descricao ?? "") === nf && n.Codigo) return String(n.Codigo);
+      const r = dentro(n.Categorias);
+      if (r) return r;
+    }
+    return null;
+  };
+
+  const visitarPais = (nos: NoCategoria[] | undefined): string | null => {
+    for (const n of nos ?? []) {
+      if (normalizar(n.Descricao ?? "") === np) {
+        const r = dentro(n.Categorias);
+        if (r) return r;
+      }
+      const r = visitarPais(n.Categorias);
+      if (r) return r;
+    }
+    return null;
+  };
+
+  const r = visitarPais(arvore);
+  if (r) return r;
+
+  const achados: string[] = [];
+  const todos = (nos: NoCategoria[] | undefined) => {
+    for (const n of nos ?? []) {
+      if (normalizar(n.Descricao ?? "") === nf && n.Codigo) achados.push(String(n.Codigo));
+      todos(n.Categorias);
+    }
+  };
+  todos(arvore);
+  return achados.length === 1 ? achados[0] : null;
+}
+
+/** "Pai › Filha" de cada folha, para a mensagem de erro dizer o que existe. */
+export function listarCategorias(arvore: NoCategoria[], prefixo = ""): string[] {
+  const out: string[] = [];
+  for (const n of arvore ?? []) {
+    const nome = `${prefixo}${n.Descricao ?? "?"}`;
+    if (n.Categorias?.length) out.push(...listarCategorias(n.Categorias, `${nome} › `));
+    else out.push(nome);
+  }
+  return out;
+}
