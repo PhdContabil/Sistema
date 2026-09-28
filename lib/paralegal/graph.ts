@@ -21,7 +21,20 @@ export class GraphErro extends Error {
   }
 }
 
-function amigavel(status: number, corpo: string): string {
+function amigavel(status: number, corpo: string, contexto: "sharepoint" | "email" = "sharepoint"): string {
+  if (contexto === "email") {
+    if (status === 401) return "Credencial do Microsoft 365 (Paralegal) inválida ou expirada.";
+    if (status === 403) {
+      return "O aplicativo do Paralegal não tem permissão de enviar e-mail (Mail.Send) pela caixa configurada. "
+        + "Falta a permissão Mail.Send (tipo Aplicação) e o consentimento do administrador no Azure.";
+    }
+    if (status === 404) {
+      return "A caixa de e-mail remetente configurada (PARALEGAL_EMAIL_REMETENTE) não existe nesse Microsoft 365 "
+        + "ou o endereço está errado.";
+    }
+    if (status === 429) return "Muitas consultas em pouco tempo. Tente de novo em instantes.";
+    return `Erro ${status} ao enviar e-mail pelo Microsoft 365: ${corpo.slice(0, 200)}`;
+  }
   if (status === 401) return "Credencial do Microsoft 365 (Paralegal) inválida ou expirada.";
   if (status === 403) {
     return "O aplicativo do Paralegal não tem permissão de escrita no SharePoint. "
@@ -150,6 +163,45 @@ export async function enviarEmail(opts: {
   });
   if (!r.ok) {
     const corpo = await r.text().catch(() => "");
-    throw new GraphErro(amigavel(r.status, corpo), r.status);
+    throw new GraphErro(amigavel(r.status, corpo, "email"), r.status);
   }
+}
+
+/**
+ * Monta um arquivo .eml (RFC 5322 / MIME) pronto para abrir no Outlook (ou
+ * qualquer cliente de e-mail) com o assunto, corpo e anexo já preenchidos.
+ * 
+ * Usado como plano B quando o envio automático pelo Graph (Mail.Send) falha
+ * por falta de permissão/configuração no Azure: em vez de deixar o usuário sem nada,
+ * devolvemos esse arquivo pronto pra baixar e abrir -- o usuário só clica em "Enviar".
+ */
+export function construirEml(opts: {
+  para: string[];
+  assunto: string;
+  corpoHtml: string;
+  anexos?: { nome: string; conteudoBase64: string; tipoMime?: string }[];
+}): string {
+  const boundary = "nucleo-os-" + Date.now().toString(36);
+  const quebrarLinhas = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
+  const linhas: string[] = [];
+  linhas.push(`To: ${opts.para.join(", ")}`);
+  linhas.push(`Subject: ${opts.assunto}`);
+  linhas.push("MIME-Version: 1.0");
+  linhas.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  linhas.push("");
+  linhas.push(`--${boundary}`);
+  linhas.push("Content-Type: text/html; charset=UTF-8");
+  linhas.push("Content-Transfer-Encoding: 8bit");
+  linhas.push("");
+  linhas.push(opts.corpoHtml);
+  for (const a of opts.anexos ?? []) {
+    linhas.push(`--${boundary}`);
+    linhas.push(`Content-Type: ${a.tipoMime ?? "application/pdf"}; name="${a.nome}"`);
+    linhas.push("Content-Transfer-Encoding: base64");
+    linhas.push(`Content-Disposition: attachment; filename="${a.nome}"`);
+    linhas.push("");
+    linhas.push(quebrarLinhas(a.conteudoBase64));
+  }
+  linhas.push(`--${boundary}--`);
+  return linhas.join("\r\n");
 }

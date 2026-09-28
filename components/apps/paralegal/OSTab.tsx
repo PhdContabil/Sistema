@@ -86,6 +86,8 @@ export default function OSTab() {
   const [salvando, setSalvando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [destinatario, setDestinatario] = useState<"geral" | "financeiro">("geral");
+  // Mostra o convite "Enviar por e-mail agora?" logo depois de criar uma OS nova.
+  const [sugerirEnvio, setSugerirEnvio] = useState(false);
 
   // Busca de empresa (Questor) dentro do modal — mesmo padrão do "_buscaEmpresa"
   // do formulário original: digita, aparece uma lista, clica e autopreenche.
@@ -225,6 +227,7 @@ export default function OSTab() {
 
   async function abrirNovo() {
     setModal({ editando: null, dados: { ...VAZIO, data: hoje(), codigo: proximoCodigo() } });
+    setSugerirEnvio(false);
     setBuscaEmpresa(""); setBuscaIndicacao(""); setServicoManual([false, false, false, false]); setQtdServicos(1);
     cnpjJaBuscadoRef.current = null;
     garantirEmpresasCarregadas(); garantirIndicacoesCarregadas();
@@ -243,6 +246,7 @@ export default function OSTab() {
   function abrirEdicao(o: OS) {
     const { id: _id, ...dados } = o;
     setModal({ editando: o, dados });
+    setSugerirEnvio(false);
     setBuscaEmpresa(""); setBuscaIndicacao("");
     // Já tem CNPJ salvo — não precisa (nem deve) disparar a busca automática de novo.
     cnpjJaBuscadoRef.current = somenteDigitos(dados.cnpj) || null;
@@ -371,7 +375,16 @@ export default function OSTab() {
       });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao salvar."); return; }
+      if (!editando && j.item) {
+        // Acabou de criar: mantém o modal aberto, já em modo de edição da OS
+        // recém criada, com o convite pra enviar por e-mail na hora.
+        setModal((m) => (m ? { ...m, editando: j.item } : m));
+        setSugerirEnvio(true);
+        await carregar();
+        return;
+      }
       setModal(null);
+      setSugerirEnvio(false);
       await carregar();
     } catch {
       setErro("Falha de rede ao salvar.");
@@ -383,6 +396,21 @@ export default function OSTab() {
   function baixarPdf(o: OS) {
     const doc = gerarDocPdfOS(o);
     doc.save(nomeArquivoPdfOS(o));
+  }
+
+  function baixarArquivoBase64(base64: string, nomeArquivo: string, tipoMime: string) {
+    const bytes = atob(base64);
+    const buffer = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+    const blob = new Blob([buffer], { type: tipoMime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function enviarPorEmail(o: OS) {
@@ -397,7 +425,18 @@ export default function OSTab() {
         body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o) }),
       });
       const j = await r.json();
-      if (!r.ok) { setErro(j.error ?? "Falha ao enviar e-mail."); return; }
+      if (!r.ok) {
+        if (j.emlBase64) {
+          // Envio automático falhou (normalmente falta de permissão Mail.Send no Azure) --
+          // baixa um rascunho .eml pronto (assunto + corpo + PDF anexado) pra abrir no Outlook.
+          baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS-${o.codigo || o.id}.eml`, "message/rfc822");
+          setErro((j.error ?? "Falha ao enviar e-mail.") + " Baixei um rascunho (.eml) pronto -- abra-o no Outlook e clique em Enviar.");
+        } else {
+          setErro(j.error ?? "Falha ao enviar e-mail.");
+        }
+        return;
+      }
+      setSugerirEnvio(false);
       alert(`E-mail enviado para ${j.enviadoPara}.`);
     } catch {
       setErro("Falha de rede ao enviar e-mail.");
@@ -667,6 +706,11 @@ export default function OSTab() {
             <label><span>Observações gerais</span><textarea rows={2} value={modal.dados.obsGerais} onChange={(e) => setCampo("obsGerais", e.target.value)} /></label>
             <label><span>Observações</span><textarea rows={2} value={modal.dados.obs} onChange={(e) => setCampo("obs", e.target.value)} /></label>
 
+            {sugerirEnvio && modal.editando && (
+              <div className="pl-banner" style={{ marginTop: 8, marginBottom: 4 }}>
+                OS criada! Enviar por e-mail agora?
+              </div>
+            )}
             {modal.editando && (
               <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, marginBottom: 4 }}>
                 <select value={destinatario} onChange={(e) => setDestinatario(e.target.value as "geral" | "financeiro")} style={{ border: "1px solid var(--pl-border)", borderRadius: 8, padding: "9px 12px", fontSize: 13.5 }}>
