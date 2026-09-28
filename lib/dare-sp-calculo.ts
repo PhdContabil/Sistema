@@ -379,3 +379,46 @@ export const NOME_IMPOSTO: Record<string, string> = {
   "146-2": "ST (Simples)",
   "146-3": "ST antecipado",
 };
+
+// ------------------------------------------------ calendário de vencimento
+
+/** "046-2" e "46-2" são o mesmo imposto: a chave ignora zero à esquerda. */
+export function chaveImposto(codigo: string, competencia: string): string {
+  const m = /^0*(\d+)-(\d+)$/.exec((codigo ?? "").trim());
+  const cod = m ? `${m[1]}-${m[2]}` : (codigo ?? "").trim();
+  return `${cod}|${(competencia ?? "").trim()}`;
+}
+
+/**
+ * Índice imposto+competência -> vencimento, a partir das linhas do
+ * `/fiscal/impostos-calendario`. Usa a quota 1: o ICMS não é parcelado.
+ * Data que não é AAAA-MM-DD fica de fora, em vez de virar vencimento torto.
+ */
+export function indiceCalendario(
+  linhas: { imposto?: unknown; competencia?: unknown; vencimentoquota1?: unknown }[]
+): Map<string, string> {
+  const idx = new Map<string, string>();
+  for (const l of linhas ?? []) {
+    const v = typeof l.vencimentoquota1 === "string" ? l.vencimentoquota1.slice(0, 10) : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
+    idx.set(chaveImposto(String(l.imposto ?? ""), String(l.competencia ?? "")), v);
+  }
+  return idx;
+}
+
+export type OrigemVencimento = "manual" | "calendario" | "regra";
+
+/**
+ * Vencimento do débito, na ordem combinada com o Fiscal: correção manual,
+ * calendário do Questor e, só se o calendário não tiver aquela competência,
+ * a regra fixa — com a origem junto, para a tela avisar quando for a regra.
+ */
+export function escolherVencimento(
+  competencia: string, codigoImposto: string,
+  manual: string | null | undefined, calendario: Map<string, string>
+): { vencimento: string | null; origem: OrigemVencimento } {
+  if (manual) return { vencimento: manual, origem: "manual" };
+  const doCal = calendario.get(chaveImposto(codigoImposto, competencia));
+  if (doCal) return { vencimento: doCal, origem: "calendario" };
+  return { vencimento: vencimentoSugerido(competencia, codigoImposto), origem: "regra" };
+}

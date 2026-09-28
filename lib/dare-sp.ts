@@ -5,8 +5,8 @@
 // guia emitida, envio ao Zen — e estado não cabe numa view de leitura.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { getIcmsCompetencia } from "./questor";
-import { vencimentoSugerido, competenciaOrdenavel } from "./dare-sp-calculo";
+import { getIcmsCompetencia, getImpostosCalendario } from "./questor";
+import { competenciaOrdenavel, indiceCalendario, escolherVencimento, type OrigemVencimento } from "./dare-sp-calculo";
 
 export * from "./dare-sp-calculo";
 
@@ -31,6 +31,8 @@ export interface Debito {
   valor: number;
   vencimento: string | null;
   vencimento_manual: boolean;
+  /** De onde veio o vencimento: correção manual, calendário do Questor ou regra fixa. */
+  vencimento_origem: OrigemVencimento | null;
   sincronizado_em: string;
   /** Guias já emitidas para este débito, da mais recente para a mais antiga. */
   guias: GuiaResumo[];
@@ -70,6 +72,10 @@ export interface ResultadoSync {
    * mudar — melhor aparecer aqui do que virar coluna vazia na tela.
    */
   camposDesconhecidos: string[];
+  /** Débitos que ficaram na regra fixa porque o calendário não tinha a competência. */
+  semCalendario: { imposto: string; competencia: string; quantidade: number }[];
+  /** O calendário não respondeu: tudo que não é manual ficou na regra fixa. */
+  calendarioIndisponivel?: string;
 }
 
 const CAMPOS_ESPERADOS = new Set([
@@ -110,7 +116,7 @@ export async function sincronizar(params: {
   }
 
   if (linhas.length === 0) {
-    return { lidos: 0, gravados: 0, competencias: [], camposDesconhecidos: [...desconhecidos] };
+    return { lidos: 0, gravados: 0, competencias: [], camposDesconhecidos: [...desconhecidos], semCalendario: [] };
   }
 
   // O que já está gravado com vencimento corrigido à mão, para não sobrescrever.
@@ -137,6 +143,24 @@ export async function sincronizar(params: {
     }
   }
 
+  // Calendário do Questor, uma chamada por competência (todas as linhas de
+  // todos os impostos daquele mês). Se a API cair, a sincronização não para:
+  // o vencimento cai na regra fixa e o motivo volta na resposta.
+  const calendario = new Map<string, string>();
+  let calendarioIndisponivel: string | undefined;
+  try {
+    for (const comp of comps) {
+      for (let offset = 0; ; offset += 5000) {
+        const r = await getImpostosCalendario({ competencia: comp, limit: 5000, offset });
+        for (const [k, v] of indiceCalendario(r?.dados ?? [])) calendario.set(k, v);
+        if (!r?.tem_mais) break;
+      }
+    }
+  } catch (e) {
+    calendarioIndisponivel = e instanceof Error ? e.message : "calendário indisponível";
+  }
+
+  const semCal = new Map<string, number>();
   const agora = new Date().toISOString();
   const lote = linhas.map((l) => {
     const competencia = String(l.competencia ?? "");
@@ -145,6 +169,11 @@ export async function sincronizar(params: {
     const codigoestab = num(l.codigoestab);
     const chave = `${codigoempresa}|${codigoestab}|${competencia}|${codigoimposto}`;
     const manual = manuais.get(chave);
+    const venc = escolherVencimento(competencia, codigoimposto, manual, calendario);
+    if (venc.origem === "regra") {
+      const k = `${codigoimposto}|${competencia}`;
+      semCal.set(k, (semCal.get(k) ?? 0) + 1);
+    }
 
     return {
       codigoempresa,
@@ -154,8 +183,9 @@ export async function sincronizar(params: {
       cnpj: texto(l.cnpj)?.replace(/\D/g, "") ?? null,
       nome: texto(l.nome),
       valor: num(l.valor),
-      vencimento: manual ?? vencimentoSugerido(competencia, codigoimposto),
-      vencimento_manual: manual !== undefined,
+      vencimento: venc.vencimento,
+      vencimento_manual: venc.origem === "manual",
+      vencimento_origem: venc.origem,
       sincronizado_em: agora,
     };
   });
@@ -177,6 +207,11 @@ export async function sincronizar(params: {
     gravados,
     competencias: comps.sort(),
     camposDesconhecidos: [...desconhecidos],
+    semCalendario: [...semCal].map(([k, quantidade]) => {
+      const [imposto, competencia] = k.split("|");
+      return { imposto, competencia, quantidade };
+    }),
+    calendarioIndisponivel,
   };
 }
 
@@ -250,7 +285,7 @@ export async function definirVencimento(
   if (!sb) return "Banco indisponível.";
   const { error } = await sb
     .from("dare_sp_debitos")
-    .update({ vencimento, vencimento_manual: true })
+    .update({ vencimento, vencimento_manual: true, vencimento_origem: "manual" })
     .eq("codigoempresa", codigoempresa).eq("codigoestab", codigoestab)
     .eq("competencia", competencia).eq("codigoimposto", codigoimposto);
   return error?.message ?? null;

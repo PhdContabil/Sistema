@@ -28,6 +28,7 @@ interface Debito {
   valor: number;
   vencimento: string | null;
   vencimento_manual: boolean;
+  vencimento_origem?: "manual" | "calendario" | "regra" | null;
   sincronizado_em: string;
   guias: GuiaResumo[];
 }
@@ -132,6 +133,13 @@ export default function DareSp({
       if (!r.ok) { setErro(j.error ?? "Falha ao sincronizar."); return; }
 
       let msg = `${j.gravados} débito(s) sincronizado(s).`;
+      if (j.calendarioIndisponivel) {
+        msg += ` Calendário do Questor fora do ar (${j.calendarioIndisponivel}): vencimentos na regra fixa.`;
+      } else if (j.semCalendario?.length > 0) {
+        const lista = j.semCalendario.map((x: { imposto: string; competencia: string; quantidade: number }) =>
+          `${x.imposto} ${x.competencia} (${x.quantidade})`).join(", ");
+        msg += ` Sem calendário no Questor, na regra fixa: ${lista}.`;
+      }
       if (j.camposDesconhecidos?.length > 0) {
         // Contrato da API mudou: melhor aparecer aqui do que virar coluna vazia.
         msg += ` Campos novos na API: ${j.camposDesconhecidos.join(", ")}.`;
@@ -321,6 +329,9 @@ export default function DareSp({
                   <td className={`c-res ${venceu(d.vencimento) ? "res-div" : ""}`}>
                     {dataBR(d.vencimento)}
                     {d.vencimento_manual && <span className="dare-manual" title="Vencimento ajustado à mão">·</span>}
+                    {d.vencimento_origem === "regra" && (
+                      <span className="dare-sem-cal" title="O calendário do Questor não tem esta competência para este imposto: o vencimento é a regra fixa (último dia do 2º mês seguinte). Confira antes de emitir.">!</span>
+                    )}
                   </td>
                   <td className="c-res">
                     {ultima ? (

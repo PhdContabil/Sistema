@@ -404,3 +404,42 @@ export async function getIcmsCompetencia(params: {
   const qs = q.toString();
   return get<IcmsCompetenciaResponse>(`/fiscal/icms-competencia${qs ? `?${qs}` : ""}`);
 }
+
+export interface CalendarioImpostoLinha {
+  imposto: string;
+  competencia: string;
+  vencimentoquota1: string | null;
+  vencimentoquota2?: string | null;
+  vencimentoquota3?: string | null;
+  quotas?: number;
+  [chave: string]: unknown;
+}
+
+export interface CalendarioImpostoResponse {
+  total: number;
+  tem_mais?: boolean;
+  dados: CalendarioImpostoLinha[];
+  alertas?: { imposto: string; termina_em: string; [chave: string]: unknown }[];
+  [chave: string]: unknown;
+}
+
+/**
+ * Calendário de vencimento dos impostos (`vw_imposto_calendario`): o prazo que
+ * o próprio Questor calculou, competência por competência, já com dia útil.
+ * Par de `/fiscal/impostos-apurados` — aquele diz quanto, este diz quando.
+ * Precedência dos filtros de período, definida pela API: `competencia` >
+ * `ano` > `meses`.
+ */
+export function getImpostosCalendario(params: {
+  competencia?: string; ano?: number; meses?: number; imposto?: string; limit?: number; offset?: number;
+} = {}): Promise<CalendarioImpostoResponse> {
+  const q = new URLSearchParams();
+  if (params.competencia) q.set("competencia", params.competencia);
+  else if (params.ano) q.set("ano", String(params.ano));
+  else if (params.meses) q.set("meses", String(params.meses));
+  if (params.imposto) q.set("imposto", params.imposto);
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.offset) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  return get<CalendarioImpostoResponse>(`/fiscal/impostos-calendario${qs ? `?${qs}` : ""}`);
+}

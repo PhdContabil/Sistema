@@ -246,3 +246,37 @@ test("todo código de imposto tem rótulo", () => {
     assert.ok(NOME_IMPOSTO[c], `sem rótulo para ${c}`);
   }
 });
+
+import { chaveImposto, indiceCalendario, escolherVencimento } from "./dare-sp-calculo.ts";
+
+// Linhas reais do /fiscal/impostos-calendario, competência 08/2026.
+const CAL = indiceCalendario([
+  { imposto: "46-1", competencia: "08/2026", vencimentoquota1: "2026-09-21" },
+  { imposto: "46-2", competencia: "08/2026", vencimentoquota1: "2026-10-30" },
+  { imposto: "146-3", competencia: "08/2026", vencimentoquota1: "2026-11-03" },
+  { imposto: "146-2", competencia: "08/2026", vencimentoquota1: null },
+  { imposto: "146-6", competencia: "08/2026", vencimentoquota1: "30/10/2026" },
+]);
+
+test("o calendário manda sobre a regra fixa", () => {
+  assert.deepEqual(escolherVencimento("08/2026", "46-1", undefined, CAL), { vencimento: "2026-09-21", origem: "calendario" });
+  assert.deepEqual(escolherVencimento("08/2026", "146-3", undefined, CAL), { vencimento: "2026-11-03", origem: "calendario" });
+});
+
+test("a correção manual manda sobre o calendário", () => {
+  assert.deepEqual(escolherVencimento("08/2026", "46-2", "2026-10-15", CAL), { vencimento: "2026-10-15", origem: "manual" });
+});
+
+test("sem calendário cai na regra, e diz que caiu", () => {
+  // 146-3 real: calendário do Questor acaba em 08/2026.
+  assert.deepEqual(escolherVencimento("09/2026", "146-3", undefined, CAL), { vencimento: "2026-11-30", origem: "regra" });
+});
+
+test("quota vazia ou data fora do formato não entra no índice", () => {
+  assert.equal(CAL.has(chaveImposto("146-2", "08/2026")), false);
+  assert.equal(CAL.has(chaveImposto("146-6", "08/2026")), false);
+});
+
+test("zero à esquerda não separa o mesmo imposto", () => {
+  assert.equal(chaveImposto("046-2", "08/2026"), chaveImposto("46-2", "08/2026"));
+});

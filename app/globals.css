@@ -2312,3 +2312,8 @@ html[data-theme="dark"] .estr-escolha.on { background: #1c2f63; }
 .livro.uma .lv-abre-ano { font-size: min(24cqi, 72px); }
 .dare-excluir { color: var(--div); }
 .dare-excluir:hover:not(:disabled) { border-color: var(--div); }
+/* DARE SP: vencimento que não veio do calendário do Questor. */
+.dare-sem-cal {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 5px;
+  border-radius: 50%; background: #f59e0b; color: #fff; font-size: 11px; font-weight: 800; cursor: help;
+}
