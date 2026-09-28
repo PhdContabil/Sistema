@@ -52,6 +52,11 @@ function pagamentoPadrao(vencimento: string | null): string {
   return vencimento && /^\d{4}-\d{2}-\d{2}$/.test(vencimento) && vencimento > h ? vencimento : h;
 }
 
+/** Minúsculas e sem acento: "Comércio" acha "COMERCIO". */
+function semAcento(t: string): string {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 function hoje(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -143,16 +148,18 @@ export default function DareSp({
   const aberto = abertoChave ? debitos.find((d) => chaveDe(d) === abertoChave) ?? null : null;
 
   const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = semAcento(busca.trim());
+    // Só os dígitos da busca, para achar CNPJ digitado com ou sem máscara.
+    // Vazio quando a busca é texto — e aí NÃO pode entrar no teste: "".includes("")
+    // é verdadeiro para qualquer CNPJ, e a lista inteira passava no filtro.
+    const digitos = q.replace(/\D/g, "");
     return debitos.filter((d) => {
       if (imposto && d.codigoimposto !== imposto) return false;
       if (soPendentes && d.guias.length > 0) return false;
       if (!q) return true;
-      return (
-        (d.nome ?? "").toLowerCase().includes(q) ||
-        (d.cnpj ?? "").includes(q.replace(/\D/g, "")) ||
-        String(d.codigoempresa).includes(q)
-      );
+      if (semAcento(d.nome ?? "").includes(q)) return true;
+      if (digitos && (d.cnpj ?? "").includes(digitos)) return true;
+      return digitos !== "" && String(d.codigoempresa) === digitos;
     });
   }, [debitos, busca, imposto, soPendentes]);
 
