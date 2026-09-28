@@ -48,6 +48,8 @@ export interface GuiaResumo {
   zen_enviado_em: string | null;
   /** Motivo da última falha no envio ao Zen; limpo quando o envio dá certo. */
   zen_erro: string | null;
+  tareffa_documento_id?: string | null;
+  tareffa_erro?: string | null;
   emitida_em: string;
   emitida_por: string | null;
 }
@@ -231,7 +233,7 @@ export async function listarDebitos(competencia?: string): Promise<Debito[]> {
   const comps = [...new Set(debitos.map((d) => d.competencia))];
   const { data: guias } = await sb
     .from("dare_sp_guias")
-    .select("id,codigoempresa,codigoestab,competencia,codigoimposto,total,data_pagamento,numero_controle,linha_digitavel,zen_documento_id,zen_enviado_em,zen_erro,emitida_em,emitida_por")
+    .select("id,codigoempresa,codigoestab,competencia,codigoimposto,total,data_pagamento,numero_controle,linha_digitavel,zen_documento_id,zen_enviado_em,zen_erro,tareffa_documento_id,tareffa_erro,emitida_em,emitida_por")
     .in("competencia", comps)
     .is("excluida_em", null)
     .order("emitida_em", { ascending: false });
@@ -417,6 +419,19 @@ export async function excluirGuia(id: string, por: string): Promise<string | nul
     .eq("id", id)
     .is("excluida_em", null);
   return error?.message ?? null;
+}
+
+/** Grava o resultado da publicação no Tareffa: id do documento, ou o motivo da falha. */
+export async function marcarTareffa(
+  guiaId: string, r: { documentoId: string } | { erro: string }
+): Promise<void> {
+  const sb = db();
+  if (!sb) return;
+  await sb.from("dare_sp_guias").update(
+    "erro" in r
+      ? { tareffa_erro: r.erro.slice(0, 2000) }
+      : { tareffa_documento_id: r.documentoId, tareffa_enviado_em: new Date().toISOString(), tareffa_erro: null }
+  ).eq("id", guiaId);
 }
 
 export async function obterGuia(id: string): Promise<GuiaGravada | null> {

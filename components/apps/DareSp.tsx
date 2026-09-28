@@ -14,6 +14,8 @@ interface GuiaResumo {
   zen_documento_id: string | null;
   zen_enviado_em: string | null;
   zen_erro?: string | null;
+  tareffa_documento_id?: string | null;
+  tareffa_erro?: string | null;
   emitida_em: string;
   emitida_por: string | null;
 }
@@ -497,7 +499,7 @@ function ModalGuia({
       // falha do Zen sumia, coberta pela mensagem "Guia emitida." logo depois.
       const avs: string[] = j.avisos ?? [];
       setAvisosEmissao(avs);
-      if (comZen && j.zen && avs.length === 0) onAviso("Guia emitida e publicada no Zen.");
+      if (comZen && j.zen && avs.length === 0) onAviso("Guia emitida e publicada no Zen e no Tareffa.");
       else if (!comZen) onAviso("Guia emitida.");
       onMudou();
     } catch {
@@ -536,6 +538,23 @@ function ModalGuia({
                     <span>{formatDataHora(g.emitida_em)}</span>
                     <strong>R$ {formatBRL(g.total)}</strong>
                     <span className="nota">pagamento {dataBR(g.data_pagamento)}</span>
+                    {g.zen_documento_id && (g.tareffa_documento_id
+                      ? <span className="badge badge-soft">no Tareffa</span>
+                      : <button className="btn" disabled={reenviando === g.id} onClick={async () => {
+                          setReenviando(g.id);
+                          const r = await fetch("/api/fiscal/dare-sp/tareffa", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ guia_id: g.id }),
+                          });
+                          const j = await r.json().catch(() => ({}));
+                          setReenviando(null);
+                          if (r.ok) onAviso("Publicada no Tareffa.");
+                          else setAvisosEmissao([`Não foi para o Tareffa: ${j.error ?? `HTTP ${r.status}`}`]);
+                          onMudou();
+                        }}>{reenviando === g.id ? "Enviando…" : "Enviar ao Tareffa"}</button>)}
+                    {g.zen_documento_id && !g.tareffa_documento_id && g.tareffa_erro && (
+                      <span className="dare-zen-erro">Tareffa: {g.tareffa_erro}</span>
+                    )}
                     {g.zen_documento_id
                       ? <span className="badge badge-soft">no Zen</span>
                       : temTokenZen
@@ -547,7 +566,8 @@ function ModalGuia({
                               body: JSON.stringify({ guia_id: g.id }),
                             });
                             const j = await r.json().catch(() => ({}));
-                            if (r.ok) onAviso(j.semAtributos ? "Publicada no Zen, sem vencimento e valor." : "Publicada no Zen.");
+                            if (r.ok && j.falhaTareffa) setAvisosEmissao([`Publicada no Zen, mas não foi para o Tareffa: ${j.falhaTareffa}`]);
+                            else if (r.ok) onAviso(j.semAtributos ? "Publicada no Zen e no Tareffa, sem vencimento e valor no Zen." : "Publicada no Zen e no Tareffa.");
                             else setAvisosEmissao([`Não subiu para o Zen: ${j.error ?? `HTTP ${r.status}`}`]);
                             setReenviando(null);
                             onMudou();

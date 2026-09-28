@@ -9,6 +9,7 @@ import {
 } from "@/lib/dare-sp-sefaz";
 import { linhaFormatada } from "@/lib/dare-sp-linha";
 import { enviarGuiaAoZen, temTokenZen } from "@/lib/dare-sp-zen";
+import { enviarGuiaAoTareffa } from "@/lib/dare-sp-tareffa";
 import { exigirFiscal } from "../_auth";
 
 export const dynamic = "force-dynamic";
@@ -204,6 +205,14 @@ export async function POST(req: Request) {
         });
         zen = { documentoId: r.documentoId };
         if (id) await marcarEnvioZen(id, r.documentoId);
+        // Zen deu certo: o mesmo PDF segue para o Tareffa dar a baixa.
+        if (id) {
+          const falhaT = await enviarGuiaAoTareffa({
+            id, codigoImposto: debito.codigoimposto, competencia: debito.competencia,
+            cnpj: debito.cnpj, pdfBase64: emitida.documentoImpressao,
+          });
+          if (falhaT) avisos.push(`Publicada no Zen, mas não foi para o Tareffa: ${falhaT}`);
+        }
         if (r.semAtributos) {
           avisos.push("Publicada no Zen, mas sem vencimento e valor: o Zen recusou esses campos. Confira no Edoc.");
         }

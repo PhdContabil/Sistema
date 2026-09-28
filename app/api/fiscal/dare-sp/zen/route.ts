@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { obterGuia, marcarEnvioZen, registrarFalhaZen } from "@/lib/dare-sp";
 import { enviarGuiaAoZen, temTokenZen } from "@/lib/dare-sp-zen";
+import { enviarGuiaAoTareffa } from "@/lib/dare-sp-tareffa";
 import { exigirFiscal } from "../_auth";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,12 @@ export async function POST(req: Request) {
       nomeEmpresa: g.nome,
     });
     await marcarEnvioZen(g.id, r.documentoId);
+    const falhaTareffa = await enviarGuiaAoTareffa({
+      id: g.id, codigoImposto: g.codigoimposto, competencia: g.competencia,
+      cnpj: g.cnpj, pdfBase64: g.pdf_base64,
+    });
     return NextResponse.json({
+      falhaTareffa,
       ok: true, documentoId: r.documentoId, arquivo: r.nomeArquivo, semAtributos: r.semAtributos,
     });
   } catch (e) {
