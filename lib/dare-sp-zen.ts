@@ -11,7 +11,7 @@ import {
   hasQuestorZenToken, ClienteNaoEncontradoError, QuestorZenError,
   CATEGORIA_PAI_TRIBUTARIO, CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS,
 } from "./questor-zen";
-import { dataBR, valorBR, nomeDoArquivo, acharCategoria, listarCategorias } from "./dare-sp-zen-formato";
+import { dataBR, valorBR, nomeDoArquivo, acharCategoria, listarCategorias, type NoCategoria } from "./dare-sp-zen-formato";
 
 export { dataBR, valorBR, nomeDoArquivo };
 
@@ -126,7 +126,7 @@ async function categoriaDoDare(): Promise<string> {
   const fixa = process.env.QUESTOR_ZEN_CATEGORIA_DARE?.trim();
   if (fixa) return fixa;
 
-  const arvore = await consultarCategorias();
+  const arvore = (await consultarCategorias()) as unknown as NoCategoria[];
   const codigo = acharCategoria(arvore, CATEGORIA_PAI_TRIBUTARIO, CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS);
   if (codigo) return codigo;
 
