@@ -301,9 +301,20 @@ export interface SocioCadastroEmpresa {
   declarafisicaescrit?: string;
   quantcotas?: string;
   percentcotas?: string;
-  dddfone?: string;
-  numerofone?: string;
+  dddfone?: number;
+  numerofone?: number;
   email?: string;
+  // Endereco proprio do socio -- codigotipolograd/siglaestado/codigomunic
+  // reaproveitam os mesmos nomes de campo (e valores) do endereco da
+  // empresa; as colunas de texto sao sufixadas "socio".
+  codigotipolograd?: string;
+  siglaestado?: string;
+  codigomunic?: string;
+  enderecosocio?: string;
+  numendersocio?: string;
+  bairroendersocio?: string;
+  cependersocio?: string;
+  datainiciosocio?: string;
 }
 
 export interface DadosCadastroEmpresa {
@@ -324,8 +335,8 @@ export interface DadosCadastroEmpresa {
   siglaestado: string;
   codigomunic: string;
   cependerestab?: string;
-  dddfone?: string;
-  numerofone?: string;
+  dddfone?: number;
+  numerofone?: number;
   email?: string;
   socios: SocioCadastroEmpresa[];
 }

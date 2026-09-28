@@ -399,6 +399,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
   function montarDados() {
     return {
       ...dados,
+      dddfone: dados.dddfone.trim() ? Number(dados.dddfone) : undefined,
+      numerofone: dados.numerofone.trim() ? Number(dados.numerofone) : undefined,
       codigoativfederal: cnaeSelecionado?.codigo ?? "",
       socios: socios.map((s) => ({
         nomesocio: s.nomesocio.trim(),
@@ -414,9 +416,22 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
         declarafisicaescrit: s.declarafisicaescrit,
         quantcotas: s.quantcotas.trim(),
         percentcotas: s.percentcotas.trim(),
-        dddfone: s.dddfone.trim(),
-        numerofone: s.numerofone.trim(),
+        dddfone: s.dddfone.trim() ? Number(s.dddfone) : undefined,
+        numerofone: s.numerofone.trim() ? Number(s.numerofone) : undefined,
         email: s.email.trim(),
+        // Endereco do socio: a API exige um endereco proprio por socio (mesmos
+        // nomes de campo de lookup do endereco da empresa -- codigotipolograd/
+        // siglaestado/codigomunic sao reaproveitados -- mas colunas de texto
+        // proprias, sufixadas "socio"). Por padrao usa o endereco da empresa,
+        // como o proprio formulario avisa ao usuario.
+        codigotipolograd: dados.codigotipolograd,
+        siglaestado: dados.siglaestado,
+        codigomunic: dados.codigomunic,
+        enderecosocio: dados.enderecoestab,
+        numendersocio: dados.numenderestab,
+        bairroendersocio: dados.bairroenderestab,
+        cependersocio: dados.cependerestab,
+        datainiciosocio: s.datainicial,
       })),
     };
   }
