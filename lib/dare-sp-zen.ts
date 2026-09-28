@@ -8,7 +8,7 @@
 
 import {
   buscarCodigoCategoria, consultarCliente, uploadArquivo, importarDocumento,
-  hasQuestorZenToken, ClienteNaoEncontradoError, CategoriaNaoEncontradaError,
+  hasQuestorZenToken, ClienteNaoEncontradoError, CategoriaNaoEncontradaError, QuestorZenError,
   CATEGORIA_PAI_TRIBUTARIO, CATEGORIA_FILHA_TRIBUTOS_ESTADUAIS,
 } from "./questor-zen";
 import { dataBR, valorBR, nomeDoArquivo } from "./dare-sp-zen-formato";
@@ -34,6 +34,8 @@ export interface ResultadoZen {
   codigoCliente: string;
   codigoCategoria: string;
   nomeArquivo: string;
+  /** true quando o Zen recusou vencimento/competência/valor e o documento foi sem eles. */
+  semAtributos: boolean;
 }
 
 export function temTokenZen(): boolean {
@@ -88,16 +90,36 @@ export async function enviarGuiaAoZen(g: GuiaParaZen): Promise<ResultadoZen> {
   const nomeArquivo = nomeDoArquivo(g.cnpj, g.referencia);
   const codigoArquivo = await uploadArquivo(nomeArquivo, bytes);
 
-  const documentoId = await importarDocumento({
+  const base = {
     codigoCategoria,
     codigoCliente,
     codigoArquivo,
     titulo: `DARE-SP ${g.referencia}`,
     observacao: "Guia gerada pelo Núcleo Contábil",
-    dataVencimento: dataBR(g.vencimento),
-    dataCompetencia: g.referencia,
-    valor: valorBR(g.total),
-  });
+  };
 
-  return { documentoId, codigoCliente, codigoCategoria, nomeArquivo };
+  let documentoId: string;
+  let semAtributos = false;
+  try {
+    documentoId = await importarDocumento({
+      ...base,
+      dataVencimento: dataBR(g.vencimento),
+      dataCompetencia: g.referencia,
+      valor: valorBR(g.total),
+    });
+  } catch (e) {
+    // O Robô Zen, que funciona, sempre mandou vencimento, competência e valor
+    // em branco — o DARE é o primeiro a preenchê-los. Se o Zen recusar o
+    // formato de algum deles, publica sem os atributos em vez de perder o
+    // envio: o arquivo já subiu, e documento sem valor no Edoc é melhor que
+    // guia fora do Edoc. Timeout e falha de rede não entram aqui — repetir
+    // no escuro poderia gravar o documento duas vezes.
+    const recusa = e instanceof QuestorZenError && e.status >= 400 && e.status < 500;
+    if (!recusa) throw e;
+    console.error("[dare-sp/zen] Zen recusou os atributos; reenviando sem eles:", e.message);
+    documentoId = await importarDocumento(base);
+    semAtributos = true;
+  }
+
+  return { documentoId, codigoCliente, codigoCategoria, nomeArquivo, semAtributos };
 }

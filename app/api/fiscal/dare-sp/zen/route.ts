@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { obterGuia, marcarEnvioZen } from "@/lib/dare-sp";
+import { obterGuia, marcarEnvioZen, registrarFalhaZen } from "@/lib/dare-sp";
 import { enviarGuiaAoZen, temTokenZen } from "@/lib/dare-sp-zen";
 import { exigirFiscal } from "../_auth";
 
@@ -34,11 +34,13 @@ export async function POST(req: Request) {
       nomeEmpresa: g.nome,
     });
     await marcarEnvioZen(g.id, r.documentoId);
-    return NextResponse.json({ ok: true, documentoId: r.documentoId, arquivo: r.nomeArquivo });
+    return NextResponse.json({
+      ok: true, documentoId: r.documentoId, arquivo: r.nomeArquivo, semAtributos: r.semAtributos,
+    });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Falha ao enviar ao Zen." },
-      { status: 502 }
-    );
+    const motivo = e instanceof Error ? e.message : "Falha ao enviar ao Zen.";
+    console.error("[dare-sp/zen] falha no reenvio:", motivo);
+    await registrarFalhaZen(g.id, motivo);
+    return NextResponse.json({ error: motivo }, { status: 502 });
   }
 }

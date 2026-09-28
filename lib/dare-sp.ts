@@ -44,6 +44,8 @@ export interface GuiaResumo {
   linha_digitavel: string | null;
   zen_documento_id: string | null;
   zen_enviado_em: string | null;
+  /** Motivo da última falha no envio ao Zen; limpo quando o envio dá certo. */
+  zen_erro: string | null;
   emitida_em: string;
   emitida_por: string | null;
 }
@@ -194,7 +196,7 @@ export async function listarDebitos(competencia?: string): Promise<Debito[]> {
   const comps = [...new Set(debitos.map((d) => d.competencia))];
   const { data: guias } = await sb
     .from("dare_sp_guias")
-    .select("id,codigoempresa,codigoestab,competencia,codigoimposto,total,data_pagamento,numero_controle,linha_digitavel,zen_documento_id,zen_enviado_em,emitida_em,emitida_por")
+    .select("id,codigoempresa,codigoestab,competencia,codigoimposto,total,data_pagamento,numero_controle,linha_digitavel,zen_documento_id,zen_enviado_em,zen_erro,emitida_em,emitida_por")
     .in("competencia", comps)
     .order("emitida_em", { ascending: false });
 
@@ -336,9 +338,30 @@ export async function marcarEnvioZen(
   if (!sb) return "Banco indisponível.";
   const { error } = await sb
     .from("dare_sp_guias")
-    .update({ zen_documento_id: documentoId, zen_enviado_em: new Date().toISOString() })
+    .update({
+      zen_documento_id: documentoId,
+      zen_enviado_em: new Date().toISOString(),
+      zen_erro: null,
+      zen_tentativa_em: new Date().toISOString(),
+    })
     .eq("id", guiaId);
   return error?.message ?? null;
+}
+
+/**
+ * Guarda por que o envio ao Zen falhou.
+ *
+ * Antes o motivo só existia na resposta da requisição — e a tela o apagava
+ * com a mensagem de sucesso da emissão. Gravado, ele aparece na lista de
+ * guias até alguém reenviar, e dá para investigar depois.
+ */
+export async function registrarFalhaZen(guiaId: string, motivo: string): Promise<void> {
+  const sb = db();
+  if (!sb) return;
+  await sb
+    .from("dare_sp_guias")
+    .update({ zen_erro: motivo.slice(0, 2000), zen_tentativa_em: new Date().toISOString() })
+    .eq("id", guiaId);
 }
 
 export async function obterGuia(id: string): Promise<GuiaGravada | null> {

@@ -13,6 +13,7 @@ interface GuiaResumo {
   linha_digitavel: string | null;
   zen_documento_id: string | null;
   zen_enviado_em: string | null;
+  zen_erro?: string | null;
   emitida_em: string;
   emitida_por: string | null;
 }
@@ -39,6 +40,10 @@ interface Calculo {
   total: number;
   incompleta: boolean;
   impedimento: string | null;
+}
+
+function chaveDe(d: Debito): string {
+  return `${d.codigoempresa}|${d.codigoestab}|${d.competencia}|${d.codigoimposto}`;
 }
 
 function hoje(): string {
@@ -77,7 +82,9 @@ export default function DareSp({
   const [sincronizando, setSincronizando] = useState(false);
   const [erro, setErro] = useState<string | null>(erroServidor);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [aberto, setAberto] = useState<Debito | null>(null);
+  // Guarda a chave, não o objeto: depois de emitir, a lista recarrega e o
+  // modal precisa mostrar a guia nova e o estado do Zen, não a foto do clique.
+  const [abertoChave, setAbertoChave] = useState<string | null>(null);
 
   useEffect(() => {
     if (!aviso) return;
@@ -126,6 +133,8 @@ export default function DareSp({
       setSincronizando(false);
     }
   }
+
+  const aberto = abertoChave ? debitos.find((d) => chaveDe(d) === abertoChave) ?? null : null;
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -309,7 +318,7 @@ export default function DareSp({
                     ) : <span className="dash">—</span>}
                   </td>
                   <td>
-                    <button className="btn" onClick={() => setAberto(d)}>
+                    <button className="btn" onClick={() => setAbertoChave(chaveDe(d))}>
                       {ultima ? "Ver / nova guia" : "Gerar guia"}
                     </button>
                   </td>
@@ -331,7 +340,7 @@ export default function DareSp({
           debito={aberto}
           temChaveSefaz={temChaveSefaz}
           temTokenZen={temTokenZen}
-          onFechar={() => setAberto(null)}
+          onFechar={() => setAbertoChave(null)}
           onMudou={() => carregar(competencia)}
           onAviso={setAviso}
         />
@@ -361,6 +370,8 @@ function ModalGuia({
   const [previa, setPrevia] = useState(false);
   const [emitindo, setEmitindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [avisosEmissao, setAvisosEmissao] = useState<string[]>([]);
+  const [reenviando, setReenviando] = useState<string | null>(null);
 
   const [precisaEndereco, setPrecisaEndereco] = useState(false);
   const [endereco, setEndereco] = useState("");
@@ -455,8 +466,12 @@ function ModalGuia({
         return;
       }
       setResultado({ ...j.guia, id: j.id });
-      (j.avisos ?? []).forEach((a: string) => onAviso(a));
-      onAviso(comZen && j.zen ? "Guia emitida e enviada ao Zen." : "Guia emitida.");
+      // Os avisos ficam no modal, e não no banner de 5 segundos: era ali que a
+      // falha do Zen sumia, coberta pela mensagem "Guia emitida." logo depois.
+      const avs: string[] = j.avisos ?? [];
+      setAvisosEmissao(avs);
+      if (comZen && j.zen && avs.length === 0) onAviso("Guia emitida e publicada no Zen.");
+      else if (!comZen) onAviso("Guia emitida.");
       onMudou();
     } catch {
       setErro("Falha de rede ao emitir.");
@@ -484,6 +499,7 @@ function ModalGuia({
 
         <div className="modal-body">
           {erro && <div className="banner error">{erro}</div>}
+          {avisosEmissao.map((m, i) => <div key={i} className="banner error">{m}</div>)}
 
           <div className="form-linha">
             <label className="campo-inline">
@@ -621,16 +637,24 @@ function ModalGuia({
                       ? <span className="badge badge-soft">no Zen</span>
                       : temTokenZen
                         ? <button className="btn" onClick={async () => {
+                            setReenviando(g.id);
                             const r = await fetch("/api/fiscal/dare-sp/zen", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ guia_id: g.id }),
                             });
-                            const j = await r.json();
-                            onAviso(r.ok ? "Enviada ao Zen." : (j.error ?? "Falha ao enviar."));
+                            const j = await r.json().catch(() => ({}));
+                            if (r.ok) onAviso(j.semAtributos ? "Publicada no Zen, sem vencimento e valor." : "Publicada no Zen.");
+                            else setAvisosEmissao([`Não subiu para o Zen: ${j.error ?? `HTTP ${r.status}`}`]);
+                            setReenviando(null);
                             onMudou();
-                          }}>Enviar ao Zen</button>
+                          }} disabled={reenviando === g.id}>
+                            {reenviando === g.id ? "Enviando…" : g.zen_erro ? "Tentar de novo no Zen" : "Enviar ao Zen"}
+                          </button>
                         : null}
+                    {!g.zen_documento_id && g.zen_erro && (
+                      <span className="dare-zen-erro">Zen recusou: {g.zen_erro}</span>
+                    )}
                     <a className="btn" href={`/api/fiscal/dare-sp/pdf?id=${g.id}`} target="_blank" rel="noopener noreferrer">PDF</a>
                   </li>
                 ))}

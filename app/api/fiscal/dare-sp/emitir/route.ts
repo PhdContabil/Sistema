@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  obterDebito, obterContribuinte, salvarContribuinte, gravarGuia, marcarEnvioZen,
+  obterDebito, obterContribuinte, salvarContribuinte, gravarGuia, marcarEnvioZen, registrarFalhaZen,
 } from "@/lib/dare-sp";
 import { montarGuia, receitaSugerida, type Regime } from "@/lib/dare-sp-calculo";
 import { obterSelic, SelicError } from "@/lib/selic";
@@ -203,10 +203,14 @@ export async function POST(req: Request) {
         });
         zen = { documentoId: r.documentoId };
         if (id) await marcarEnvioZen(id, r.documentoId);
+        if (r.semAtributos) {
+          avisos.push("Publicada no Zen, mas sem vencimento e valor: o Zen recusou esses campos. Confira no Edoc.");
+        }
       } catch (e) {
-        avisos.push(
-          `Guia emitida, mas não subiu para o Zen: ${e instanceof Error ? e.message : "erro desconhecido"}`
-        );
+        const motivo = e instanceof Error ? e.message : "erro desconhecido";
+        console.error("[dare-sp/emitir] falha no envio ao Zen:", motivo);
+        if (id) await registrarFalhaZen(id, motivo);
+        avisos.push(`Guia emitida, mas não subiu para o Zen: ${motivo}`);
       }
     }
   }
