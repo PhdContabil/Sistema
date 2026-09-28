@@ -215,13 +215,15 @@ export function hasApiKey(): boolean {
 // abaixo — o resto (validação, tipos, dry-run) não muda.
 // ---------------------------------------------------------------------------
 
-async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; status: number; corpo: T }> {
+async function post<T>(path: string, body: unknown, opts?: { idempotencyKey?: string }): Promise<{ ok: boolean; status: number; corpo: T }> {
   if (!WRITE_KEY) {
     throw new QuestorError("QUESTOR_WRITE_KEY não configurada no servidor. Defina a variável de ambiente (chave de escrita, separada da QUESTOR_API_KEY de leitura).", 500);
   }
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Write-Key": WRITE_KEY },
+    headers: opts?.idempotencyKey
+      ? { "Content-Type": "application/json", "X-Write-Key": WRITE_KEY, "Idempotency-Key": opts.idempotencyKey }
+      : { "Content-Type": "application/json", "X-Write-Key": WRITE_KEY },
     body: JSON.stringify(body),
     cache: "no-store",
   });
@@ -330,6 +332,10 @@ export interface DadosCadastroEmpresa {
 
 export interface RespostaCadastroEmpresa {
   ok?: boolean;
+  dry_run?: boolean;
+  inscrfederal?: string;
+  log_id?: string | number | null;
+  reaproveitado?: boolean;
   codigoempresa?: string | number;
   codigocliente?: string | number;
   tabelas?: string[];
@@ -347,9 +353,10 @@ export interface RespostaCadastroEmpresa {
  */
 export async function criarCadastroEmpresa(
   dados: DadosCadastroEmpresa,
-  opts: { dryRun: boolean; confirmar: boolean }
+  opts: { dryRun: boolean; confirmar: boolean; idempotencyKey?: string }
 ): Promise<{ ok: boolean; status: number; corpo: RespostaCadastroEmpresa }> {
-  return post<RespostaCadastroEmpresa>("/cadastro/empresa", { dados, dry_run: opts.dryRun, confirmar: opts.confirmar });
+  const query = new URLSearchParams({ dry_run: String(opts.dryRun) });
+  return post<RespostaCadastroEmpresa>(`/cadastro/empresa?${query.toString()}`, { dados, dry_run: opts.dryRun, confirmar: opts.confirmar }, { idempotencyKey: opts.idempotencyKey });
 }
 
 /**

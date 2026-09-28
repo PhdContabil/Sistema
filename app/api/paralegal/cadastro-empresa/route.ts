@@ -7,16 +7,15 @@ import { criarCadastroEmpresa, QuestorError, type DadosCadastroEmpresa } from "@
 // migrado de /api/cadastro-empresa do Paralegal System (index.html antigo).
 //
 // IMPORTANTE: isto ESCREVE dados novos no Questor (diferente do resto do
-// Paralegal, que só lê). A QUESTOR_API_KEY hoje está documentada no projeto
-// como "somente-leitura" — pode ser que a API recuse a escrita com a chave
-// atual, ou que o endpoint real seja outro. Ver lib/questor.ts
-// (criarCadastroEmpresa) para ajustar o caminho se necessário.
+// Paralegal, que só lê). Usa QUESTOR_WRITE_KEY (header X-Write-Key),
+// separada da QUESTOR_API_KEY de leitura — ver lib/questor.ts.
 export const dynamic = "force-dynamic";
 
 interface CorpoRequisicao {
   dados: DadosCadastroEmpresa;
   dry_run: boolean;
   confirmar: boolean;
+  idempotency_key?: string;
 }
 
 export async function POST(req: Request) {
@@ -64,6 +63,7 @@ export async function POST(req: Request) {
     const { ok, status, corpo } = await criarCadastroEmpresa(d, {
       dryRun: Boolean(body.dry_run),
       confirmar: Boolean(body.confirmar),
+      idempotencyKey: typeof body.idempotency_key === "string" ? body.idempotency_key : undefined,
     });
     return NextResponse.json(corpo, { status: ok ? 200 : status || 502 });
   } catch (e) {

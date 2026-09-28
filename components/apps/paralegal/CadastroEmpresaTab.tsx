@@ -176,6 +176,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
   const [resultado, setResultado] = useState<{ tipo: "sucesso" | "falha"; titulo: string; linhas: string[] } | null>(null);
   const [enviando, setEnviando] = useState<"preview" | "confirmar" | null>(null);
   const dadosUltimoEnvioRef = useRef<typeof DADOS_VAZIO | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   function campo<K extends keyof typeof DADOS_VAZIO>(chave: K, valor: string) {
     setDados((d) => ({ ...d, [chave]: valor }));
@@ -375,9 +376,10 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
       return { linhas: [erro], chaves: [] };
     }
 
-    if (erro && typeof erro === "object" && Array.isArray((erro as { detail?: unknown[] }).detail)) {
+    const listaDetail = Array.isArray(erro) ? erro : (erro && typeof erro === "object" && Array.isArray((erro as { detail?: unknown[] }).detail) ? (erro as { detail: unknown[] }).detail : null);
+    if (listaDetail) {
       const chaves: string[] = [];
-      const linhas = ((erro as { detail: Array<{ loc?: string[]; msg?: string }> }).detail).map((d) => {
+      const linhas = (listaDetail as Array<{ loc?: string[]; msg?: string }>).map((d) => {
         const campo2 = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "";
         if (campo2) chaves.push(campo2);
         return (CAMPO_LABEL[campo2 as string] || campo2 || "Campo") + ": " + (d.msg || "valor inválido");
@@ -437,7 +439,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
     const r = await fetch("/api/paralegal/cadastro-empresa", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dados: dadosMontados, dry_run: dryRun, confirmar }),
+      body: JSON.stringify({ dados: dadosMontados, dry_run: dryRun, confirmar, idempotency_key: dryRun ? undefined : idempotencyKeyRef.current }),
     });
     const corpo = await r.json();
     return { ok: r.ok, corpo };
@@ -464,6 +466,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
         setResultado({ tipo: "falha", titulo: "Não foi possível criar a empresa.", linhas });
         return;
       }
+      idempotencyKeyRef.current = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setPreview({ codigoempresa: corpo.codigoempresa, codigocliente: corpo.codigocliente, tabelas: corpo.tabelas ?? [] });
       const avisosFiltrados = (corpo.avisos ?? []).filter((a: string) => !a.toLowerCase().includes("dry_run"));
       setAvisos(avisosFiltrados.length ? avisosFiltrados : null);
@@ -488,6 +491,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
           linhas: corpo.codigocliente ? [`Código do cliente (financeiro): ${corpo.codigocliente}`] : [],
         });
         setPreview(null);
+        idempotencyKeyRef.current = null;
         setAvisos(null);
         setDados({ ...DADOS_VAZIO });
         setSocios([novoSocio(++socioIdRef.current)]);
