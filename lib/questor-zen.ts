@@ -34,12 +34,12 @@ const QUESTOR_ZEN_DOMINIO = process.env.QUESTOR_ZEN_DOMINIO?.trim() || "phd.app.
 export const CATEGORIA_PAI = "Societário";
 export const CATEGORIA_FILHA = "Contratos";
 export const ASSUNTO_FIXO = "Contrato Social";
-// ATENÇÃO: no Python original esse valor era "teste" — literalmente o
-// texto do campo "Observação" de cada documento cadastrado no Questor Zen,
-// inclusive nos envios reais. Mantido aqui para portar com fidelidade, mas
-// vale confirmar com a Júlia se isso deveria virar algo mais descritivo
-// (ex.: "Cadastrado via Robô Zen") antes de ligar os envios reais em produção.
-export const OBSERVACAO_FIXA = "teste";
+// No Python original esse valor era "teste" — literalmente o texto do campo
+// "Observação" de cada documento cadastrado no Questor Zen, inclusive nos
+// envios reais. Mantido assim durante a fase de simulação/testes; a Júlia
+// pediu pra trocar agora que os envios reais em produção vão rodar de
+// verdade, pra não ficar "teste" nos documentos de cliente de fato.
+export const OBSERVACAO_FIXA = "Cadastrado via Robô Zen";
 
 /** Categoria das guias fiscais estaduais no Edoc (DARE-SP). */
 export const CATEGORIA_PAI_TRIBUTARIO = "Tributário";
