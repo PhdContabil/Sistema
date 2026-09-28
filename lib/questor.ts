@@ -356,7 +356,7 @@ export async function criarCadastroEmpresa(
   opts: { dryRun: boolean; confirmar: boolean; idempotencyKey?: string }
 ): Promise<{ ok: boolean; status: number; corpo: RespostaCadastroEmpresa }> {
   const query = new URLSearchParams({ dry_run: String(opts.dryRun) });
-  return post<RespostaCadastroEmpresa>(`/cadastro/empresa?${query.toString()}`, { dados, dry_run: opts.dryRun, confirmar: opts.confirmar }, { idempotencyKey: opts.idempotencyKey });
+  return post<RespostaCadastroEmpresa>(`/cadastro/empresa?${query.toString()}`, dados, { idempotencyKey: opts.idempotencyKey });
 }
 
 /**
