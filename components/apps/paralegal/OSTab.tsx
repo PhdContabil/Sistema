@@ -534,6 +534,7 @@ export default function OSTab() {
             </div>
 
             <h3 style={{ fontSize: 12 }}>Dados da OS</h3>
+            <label><span>Título</span><input value={modal.dados.titulo} onChange={(e) => setCampo("titulo", e.target.value)} placeholder="Descrição curta da OS" /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 4 }}>
               <label style={{ marginBottom: 0 }}>
                 <span>Código</span>
