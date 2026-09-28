@@ -257,7 +257,7 @@ function FaceEsquerda({ p, i, capitulos }: { p: Pagina; i: number; capitulos: nu
     return (
       <div className="lv-capa">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="lv-capa-logo" src="/pessoas/identidade/logo-2026-contabil.png" alt="PHD Contábil" />
+        <img className="lv-capa-logo" src="/pessoas/identidade/logo-2026-branco.png" alt="PHD Contábil" />
         <h2 className="lv-capa-titulo">{p.titulo}</h2>
         <p className="lv-capa-sub">Uma história construída por pessoas</p>
         <div className="lv-capa-rodape mono">Taboão da Serra · desde 30 de novembro de 2009</div>
@@ -270,7 +270,7 @@ function FaceEsquerda({ p, i, capitulos }: { p: Pagina; i: number; capitulos: nu
     return (
       <div className="lv-abre">
         <div className="lv-abre-cap mono">Capítulo {n} de {capitulos}</div>
-        <div className="lv-abre-ano">{p.ano}</div>
+        <AnoGrande ano={p.ano} />
         <div className="lv-abre-fio" />
         <h2 className="lv-abre-titulo">{p.titulo}</h2>
         <div className="lv-numero mono">{i * 2}</div>
@@ -307,5 +307,26 @@ function FaceDireita({ p, i }: { p: Pagina; i: number }) {
       <Blocos blocos={p.blocos} alt={p.titulo} />
       <div className="lv-numero mono">{i * 2 + 1}</div>
     </div>
+  );
+}
+
+/**
+ * O ano em destaque, sem estourar a página.
+ *
+ * "2011" cabe grande; "30 de novembro de 2009" e "2013 e 2014" não. Só o
+ * primeiro ano vai no tamanho grande — o que vem antes (a data) e depois
+ * (o segundo ano) sai em linha menor, acima e abaixo.
+ */
+function AnoGrande({ ano }: { ano: string }) {
+  const m = /(\d{4})/.exec(ano);
+  if (!m || m.index === undefined) return <div className="lv-abre-ano">{ano}</div>;
+  const antes = ano.slice(0, m.index).trim();
+  const depois = ano.slice(m.index + 4).trim();
+  return (
+    <>
+      {antes && <div className="lv-abre-data">{antes}</div>}
+      <div className="lv-abre-ano">{m[1]}</div>
+      {depois && <div className="lv-abre-data depois">{depois}</div>}
+    </>
   );
 }
