@@ -10,6 +10,7 @@ import type { FuncionariosAtivosResponse } from "./trabalhista";
 
 const BASE = process.env.QUESTOR_API_URL ?? "https://phdfibra.dyndns.org";
 const KEY = process.env.QUESTOR_API_KEY;
+const WRITE_KEY = process.env.QUESTOR_WRITE_KEY;
 
 export class QuestorError extends Error {
   status: number;
@@ -215,12 +216,12 @@ export function hasApiKey(): boolean {
 // ---------------------------------------------------------------------------
 
 async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; status: number; corpo: T }> {
-  if (!KEY) {
-    throw new QuestorError("QUESTOR_API_KEY não configurada no servidor. Defina a variável de ambiente.", 500);
+  if (!WRITE_KEY) {
+    throw new QuestorError("QUESTOR_WRITE_KEY não configurada no servidor. Defina a variável de ambiente (chave de escrita, separada da QUESTOR_API_KEY de leitura).", 500);
   }
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": KEY },
+    headers: { "Content-Type": "application/json", "X-Write-Key": WRITE_KEY },
     body: JSON.stringify(body),
     cache: "no-store",
   });
@@ -348,7 +349,7 @@ export async function criarCadastroEmpresa(
   dados: DadosCadastroEmpresa,
   opts: { dryRun: boolean; confirmar: boolean }
 ): Promise<{ ok: boolean; status: number; corpo: RespostaCadastroEmpresa }> {
-  return post<RespostaCadastroEmpresa>("/cadastro-empresa", { dados, dry_run: opts.dryRun, confirmar: opts.confirmar });
+  return post<RespostaCadastroEmpresa>("/cadastro/empresa", { dados, dry_run: opts.dryRun, confirmar: opts.confirmar });
 }
 
 /**
