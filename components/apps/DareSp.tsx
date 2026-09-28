@@ -516,6 +516,56 @@ function ModalGuia({
         <div className="modal-body">
           {erro && <div className="banner error">{erro}</div>}
           {avisosEmissao.map((m, i) => <div key={i} className="banner error">{m}</div>)}
+          {debito.guias.length > 0 && (
+            <>
+              <h3>Guias já emitidas ({debito.guias.length})</h3>
+              <ul className="dare-guias">
+                {debito.guias.map((g) => (
+                  <li key={g.id}>
+                    <span>{formatDataHora(g.emitida_em)}</span>
+                    <strong>R$ {formatBRL(g.total)}</strong>
+                    <span className="nota">pagamento {dataBR(g.data_pagamento)}</span>
+                    {g.zen_documento_id
+                      ? <span className="badge badge-soft">no Zen</span>
+                      : temTokenZen
+                        ? <button className="btn" onClick={async () => {
+                            setReenviando(g.id);
+                            const r = await fetch("/api/fiscal/dare-sp/zen", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ guia_id: g.id }),
+                            });
+                            const j = await r.json().catch(() => ({}));
+                            if (r.ok) onAviso(j.semAtributos ? "Publicada no Zen, sem vencimento e valor." : "Publicada no Zen.");
+                            else setAvisosEmissao([`Não subiu para o Zen: ${j.error ?? `HTTP ${r.status}`}`]);
+                            setReenviando(null);
+                            onMudou();
+                          }} disabled={reenviando === g.id}>
+                            {reenviando === g.id ? "Enviando…" : g.zen_erro ? "Tentar de novo no Zen" : "Enviar ao Zen"}
+                          </button>
+                        : null}
+                    {!g.zen_documento_id && g.zen_erro && (
+                      <span className="dare-zen-erro">Zen recusou: {g.zen_erro}</span>
+                    )}
+                    <a className="btn" href={`/api/fiscal/dare-sp/pdf?id=${g.id}`} target="_blank" rel="noopener noreferrer">PDF</a>
+                    <button className="btn dare-excluir" disabled={reenviando === g.id} onClick={async () => {
+                      const aviso = g.zen_documento_id
+                        ? "\n\nEla já está no Zen: o documento de lá NÃO é apagado, exclua no Edoc também."
+                        : "";
+                      if (!window.confirm(`Excluir a guia de R$ ${formatBRL(g.total)} emitida em ${formatDataHora(g.emitida_em)}?${aviso}\n\nA guia não é cancelada na Sefaz: se não for paga, só vence.`)) return;
+                      setReenviando(g.id);
+                      const r = await fetch(`/api/fiscal/dare-sp/guia?id=${g.id}`, { method: "DELETE" });
+                      const j = await r.json().catch(() => ({}));
+                      setReenviando(null);
+                      if (r.ok) onAviso("Guia excluída.");
+                      else setAvisosEmissao([`Não excluiu: ${j.error ?? `HTTP ${r.status}`}`]);
+                      onMudou();
+                    }}>Excluir</button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           <div className="form-linha">
             <label className="campo-inline">
@@ -644,56 +694,6 @@ function ModalGuia({
             </>
           )}
 
-          {debito.guias.length > 0 && (
-            <>
-              <h3>Guias já emitidas</h3>
-              <ul className="dare-guias">
-                {debito.guias.map((g) => (
-                  <li key={g.id}>
-                    <span>{formatDataHora(g.emitida_em)}</span>
-                    <strong>R$ {formatBRL(g.total)}</strong>
-                    <span className="nota">pagamento {dataBR(g.data_pagamento)}</span>
-                    {g.zen_documento_id
-                      ? <span className="badge badge-soft">no Zen</span>
-                      : temTokenZen
-                        ? <button className="btn" onClick={async () => {
-                            setReenviando(g.id);
-                            const r = await fetch("/api/fiscal/dare-sp/zen", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ guia_id: g.id }),
-                            });
-                            const j = await r.json().catch(() => ({}));
-                            if (r.ok) onAviso(j.semAtributos ? "Publicada no Zen, sem vencimento e valor." : "Publicada no Zen.");
-                            else setAvisosEmissao([`Não subiu para o Zen: ${j.error ?? `HTTP ${r.status}`}`]);
-                            setReenviando(null);
-                            onMudou();
-                          }} disabled={reenviando === g.id}>
-                            {reenviando === g.id ? "Enviando…" : g.zen_erro ? "Tentar de novo no Zen" : "Enviar ao Zen"}
-                          </button>
-                        : null}
-                    {!g.zen_documento_id && g.zen_erro && (
-                      <span className="dare-zen-erro">Zen recusou: {g.zen_erro}</span>
-                    )}
-                    <a className="btn" href={`/api/fiscal/dare-sp/pdf?id=${g.id}`} target="_blank" rel="noopener noreferrer">PDF</a>
-                    <button className="btn dare-excluir" disabled={reenviando === g.id} onClick={async () => {
-                      const aviso = g.zen_documento_id
-                        ? "\n\nEla já está no Zen: o documento de lá NÃO é apagado, exclua no Edoc também."
-                        : "";
-                      if (!window.confirm(`Excluir a guia de R$ ${formatBRL(g.total)} emitida em ${formatDataHora(g.emitida_em)}?${aviso}\n\nA guia não é cancelada na Sefaz: se não for paga, só vence.`)) return;
-                      setReenviando(g.id);
-                      const r = await fetch(`/api/fiscal/dare-sp/guia?id=${g.id}`, { method: "DELETE" });
-                      const j = await r.json().catch(() => ({}));
-                      setReenviando(null);
-                      if (r.ok) onAviso("Guia excluída.");
-                      else setAvisosEmissao([`Não excluiu: ${j.error ?? `HTTP ${r.status}`}`]);
-                      onMudou();
-                    }}>Excluir</button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
         </div>
 
         <div className="modal-foot">
