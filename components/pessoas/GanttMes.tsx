@@ -21,6 +21,7 @@ const CORES: Record<string, { cor: string; rotulo: string }> = {
   reuniao:         { cor: "#0f766e", rotulo: "Reunião" },
   aniversario:     { cor: "#8b5cf6", rotulo: "Aniversário" },
   confraternizacao:{ cor: "#ec4899", rotulo: "Confraternização" },
+  bem_estar:       { cor: "#d6336c", rotulo: "Bem-Estar" },
   outro:           { cor: "#64748b", rotulo: "Outro" },
 };
 

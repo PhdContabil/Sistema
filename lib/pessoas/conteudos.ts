@@ -33,7 +33,7 @@ export interface Secao {
   /** Link externo (abre em nova aba). */
   externo?: string;
   /** Tela especial (renderização própria). */
-  especial?: "hierarquia" | "pessoas" | "agenda" | "livro" | "cultura";
+  especial?: "hierarquia" | "pessoas" | "agenda" | "livro" | "cultura" | "evento";
   /** Link interno direto (o card abre esta rota em vez da tela de conteúdo). */
   rota?: string;
   /**
@@ -173,7 +173,7 @@ export const AREAS: AreaPessoas[] = [
       },
       { id: "seguranca-trabalho", titulo: "Segurança do trabalho", resumo: "Laudos e normas de segurança da PHD.", pendente: true, nota: "Explicação dos laudos existentes." },
       { id: "seguro-vida", titulo: "Seguro de vida", resumo: "Regras da apólice, para quando precisar.", pendente: true, nota: "Regras da apólice a serem descritas." },
-      { id: "programacao-eventos", titulo: "Programação - Eventos", resumo: "Calendário de eventos e ações de bem-estar da PHD.", pendente: true, nota: "Programação dos próximos eventos a ser publicada." },
+      { id: "programacao-eventos", titulo: "Programação - Eventos", resumo: "1º Circuito PHD Viva com Saúde — 07/11, Parque Villa-Lobos. Inscreva-se!", especial: "evento" },
     ],
   },
   {

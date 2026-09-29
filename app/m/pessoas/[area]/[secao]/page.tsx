@@ -5,6 +5,7 @@ import Hierarquia from "@/components/pessoas/Hierarquia";
 import Equipe from "@/components/pessoas/Equipe";
 import LivroHistoria from "@/components/pessoas/LivroHistoria";
 import CulturaEstrategia from "@/components/pessoas/CulturaEstrategia";
+import EventoCircuito from "@/components/pessoas/EventoCircuito";
 import { getArea, getSecao } from "@/lib/pessoas/conteudos";
 import { appInitials } from "@/lib/modules";
 
@@ -27,6 +28,7 @@ export default function SecaoPage({ params }: { params: { area: string; secao: s
       {s.especial === "pessoas" && <Equipe />}
       {s.especial === "livro" && <LivroHistoria />}
       {s.especial === "cultura" && <CulturaEstrategia />}
+      {s.especial === "evento" && <EventoCircuito />}
 
       {/* Terceiro nível: sub-itens */}
       {s.itens?.length ? (
