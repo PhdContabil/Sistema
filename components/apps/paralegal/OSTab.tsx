@@ -426,13 +426,19 @@ export default function OSTab() {
       });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao preparar o e-mail."); return; }
-      // Não manda nada pelo servidor: baixa um .eml com destinatário, assunto, corpo e o
+      setSugerirEnvio(false);
+      setErro(null);
+      if (j.modo === "graph") {
+        // Enviado de verdade pelo Microsoft Graph (Mail.Send), igual ao Paralegal System antigo --
+        // não precisa abrir nada no cliente.
+        alert(`E-mail enviado para ${j.enviadoPara}.`);
+        return;
+      }
+      // Plano B: o envio pelo Graph falhou, então baixa um .eml com destinatário, assunto, corpo e o
       // PDF já anexados -- ao abrir esse arquivo o Outlook do próprio usuário assume como remetente,
       // e ele só revisa e clica em Enviar.
       baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS-${o.codigo || o.id}.eml`, "message/rfc822");
-      setSugerirEnvio(false);
-      setErro(null);
-      alert(`Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
+      alert(`Não consegui enviar automaticamente (${j.avisoGraph || "erro no envio"}). Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
     } catch {
       setErro("Falha de rede ao preparar o e-mail.");
     } finally {
