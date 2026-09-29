@@ -26,6 +26,7 @@ const PUBLIC_PATHS = [
   "/m/societario/auth/debug",
   // Tarefas agendadas (executadas pela Vercel, sem sessão de usuário)
   "/api/societario/cron",
+  "/api/pessoas/cron",
 ];
 
 /** Domínio corporativo autorizado a entrar no hub. */
