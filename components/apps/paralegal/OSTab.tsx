@@ -413,7 +413,7 @@ export default function OSTab() {
     URL.revokeObjectURL(url);
   }
 
-  async function enviarPorEmail(o: OS) {
+  async function enviarPorEmail(o: OS, rascunho = false) {
     setEnviando(true);
     setErro(null);
     try {
@@ -422,12 +422,26 @@ export default function OSTab() {
       const r = await fetch("/api/paralegal/os/enviar-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o) }),
+        body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o), rascunho }),
       });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao preparar o e-mail."); return; }
       setSugerirEnvio(false);
       setErro(null);
+      if (rascunho && j.modo === "mailto") {
+        baixarArquivoBase64(pdfBase64, nomeArquivoPdfOS(o), "application/pdf");
+        const mailtoUrl =
+          `mailto:${j.destino}` +
+          `?subject=${encodeURIComponent(j.assunto)}` +
+          `&body=${encodeURIComponent(j.corpoTexto)}`;
+        const a = document.createElement("a");
+        a.href = mailtoUrl;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        alert(`Abri o Outlook com a mensagem pronta pra ${j.destino}. Baixei o PDF (${j.nomeArquivo}) -- anexe ele antes de enviar.`);
+        return;
+      }
       if (j.modo === "graph") {
         // Enviado de verdade pelo Microsoft Graph (Mail.Send), igual ao Paralegal System antigo --
         // não precisa abrir nada no cliente.
@@ -719,7 +733,10 @@ export default function OSTab() {
                   <option value="financeiro">Enviar para Financeiro</option>
                 </select>
                 <button className="pl-btn" onClick={() => enviarPorEmail(modal.editando as OS)} disabled={enviando}>
-                  {enviando ? "Preparando..." : "✉ Enviar por e-mail (Outlook)"}
+                  {enviando ? "Preparando..." : "✉ Enviar por e-mail"}
+                </button>
+                <button className="pl-btn" onClick={() => enviarPorEmail(modal.editando as OS, true)} disabled={enviando} title="Abre o Outlook com a mensagem pronta pra editar (o PDF baixa separado, pra anexar antes de enviar)">
+                  {enviando ? "Preparando..." : "Editar antes de enviar"}
                 </button>
               </div>
             )}

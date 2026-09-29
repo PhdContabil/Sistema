@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const remetente = user?.email;
   if (!remetente) return NextResponse.json({ error: "Não consegui identificar seu e-mail de login pra usar como remetente." }, { status: 401 });
 
-  let body: { id?: string; destinatario?: string; pdfBase64?: string; nomeArquivo?: string };
+  let body: { id?: string; destinatario?: string; pdfBase64?: string; nomeArquivo?: string; rascunho?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -40,13 +40,22 @@ export async function POST(req: Request) {
   const os = await obterOS(body.id).catch(() => null);
   if (!os) return NextResponse.json({ error: "OS não encontrada." }, { status: 404 });
 
-  const assunto = `Ordem de Serviço — ${os.razao || os.codigo || os.id}`;
+  const assunto = `${os.tipo || "OS"} - ${os.razao || os.codigo || os.id} - O.S. nº: ${os.codigo || os.questor || os.id}`;
   const corpoHtml = `
-    <p>Segue em anexo a Ordem de Serviço${os.razao ? ` referente a <strong>${os.razao}</strong>` : ""}.</p>
-    <p>Código: ${os.codigo || os.questor || "-"}<br/>CNPJ: ${os.cnpj || "-"}</p>
+    <p>Prezados(as),</p>
+    <p>Segue em anexo a O.S. com todas as informações.</p>
+    <p>Fico à disposição.<br/>Atenciosamente,</p>
   `;
   const nomeArquivo = body.nomeArquivo || `OS-${os.codigo || os.id}.pdf`;
   const anexos = [{ nome: nomeArquivo, conteudoBase64: body.pdfBase64, tipoMime: "application/pdf" }];
+
+  // Botão "Editar antes de enviar": não baixa nem manda nada -- devolve o
+  // destinatário/assunto/corpo em texto puro pro cliente abrir o Outlook direto (mailto:),
+  // já com a mensagem pronta pra editar; o PDF a pessoa anexa na mão (mailto não suporta anexo).
+  if (body.rascunho) {
+    const corpoTexto = `Prezados(as),\n\nSegue em anexo a O.S. com todas as informações.\n\n\nFico à disposição.\nAtenciosamente,`;
+    return NextResponse.json({ ok: true, modo: "mailto", destino, assunto, corpoTexto, nomeArquivo });
+  }
 
   try {
     await enviarEmail({ remetente, para: [destino], assunto, corpoHtml, anexos });
