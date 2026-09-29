@@ -185,16 +185,9 @@ export async function avisarTeamsPorEmail(
   const caixa = (await config("TEAMS_RELAY_EMAIL")) || "tecnologia@phdcontabil.com.br";
 
   const assunto = `[NC-TEAMS] para=${paraEmail} | ${titulo}`;
-  const corpo = `
-    <p><strong>DESTINATARIO:</strong> ${paraEmail}</p>
-    <p><strong>TITULO:</strong> ${titulo}</p>
-    <p><strong>MENSAGEM:</strong> ${mensagem}</p>
-    <p><strong>LINK:</strong> ${link}</p>
-    <hr>
-    <p style="font-size:12px;color:#68717e">
-      E-mail de controle do Núcleo Contábil. Um fluxo do Power Automate lê esta
-      mensagem e a entrega no Teams do destinatário. Não é necessário responder.
-    </p>`;
+  // O fluxo "NC - Relay Teams (Núcleo Contábil)" (conta tecnologia@) posta
+  // este corpo, como está, no chat da pessoa. O destinatário sai do assunto.
+  const corpo = `<p><strong>${titulo}</strong></p><p>${mensagem}</p>${link ? `<p><a href="${link}">Abrir no Núcleo</a></p>` : ""}`;
 
   const ok = await enviarEmail(caixa, assunto, corpo);
   await registrar(paraEmail, "teams", `relay: ${titulo}`, ok, ok ? `via caixa ${caixa}` : "falha no relay");

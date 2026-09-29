@@ -59,7 +59,8 @@ export async function enviarPreviaBemEstar(eventoId: number, para: string) {
   const { titulo, mensagem, html } = montarAviso(ev as EventoAviso);
   const [email, teams] = await Promise.all([
     enviarEmail(para, `[Prévia] ${titulo}`, html),
-    COM_TEAMS ? notificarTeams(para, `[Prévia] ${titulo}`, mensagem, LINK) : Promise.resolve(false),
+    // A prévia sempre testa o Teams (vai só para quem pediu).
+    notificarTeams(para, `[Prévia] ${titulo}`, mensagem, LINK),
   ]);
   return { email, teams, para, evento: ev.titulo };
 }
