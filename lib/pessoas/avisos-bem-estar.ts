@@ -65,6 +65,28 @@ export async function enviarPreviaBemEstar(eventoId: number, para: string) {
   return { email, teams, para, evento: ev.titulo };
 }
 
+/**
+ * Reenvia o aviso de um evento só para quem ficou sem o e-mail (falha no
+ * notificacoes_log e nenhum sucesso depois). Não repete para quem recebeu.
+ */
+export async function reenviarFalhasBemEstar(eventoId: number) {
+  const sb = admin();
+  if (!sb) throw new Error("Banco indisponível.");
+  const { data: ev } = await sb.from("eventos_agenda")
+    .select("id,titulo,inicio,fim,detalhe,aviso_enviado_em").eq("id", eventoId).eq("tipo", "bem_estar").maybeSingle();
+  if (!ev?.aviso_enviado_em) throw new Error("Este evento ainda não foi avisado.");
+  const { titulo, html } = montarAviso(ev as EventoAviso);
+  const { data: log } = await sb.from("notificacoes_log")
+    .select("destino,sucesso,criado_em").eq("canal", "email").eq("assunto", titulo)
+    .gte("criado_em", ev.aviso_enviado_em).order("criado_em");
+  const ultimo = new Map<string, boolean>();
+  for (const l of log ?? []) ultimo.set(String(l.destino).toLowerCase(), l.sucesso || ultimo.get(String(l.destino).toLowerCase()) === true);
+  const pendentes = [...ultimo.entries()].filter(([, ok]) => !ok).map(([d]) => d);
+  const reenviados: string[] = [], falharam: string[] = [];
+  for (const d of pendentes) (await enviarEmail(d, titulo, html) ? reenviados : falharam).push(d);
+  return { evento: ev.titulo, reenviados, falharam };
+}
+
 export interface ResultadoAvisos {
   eventos: { id: number; titulo: string; emails: number; teams: number; canal: boolean; falhas: number }[];
 }
@@ -102,16 +124,13 @@ export async function avisarEventosBemEstar(soEvento?: number): Promise<Resultad
     const { quando, titulo, mensagem, html } = montarAviso(ev);
 
     let emails = 0, teams = 0, falhas = 0;
-    // Lotes de 5 pessoas em paralelo: cabe no tempo da função sem estourar o Graph.
-    for (let i = 0; i < destinos.length; i += 5) {
-      const lote = await Promise.all(destinos.slice(i, i + 5).map(([email]) => Promise.all([
-        enviarEmail(email, titulo, html),
-        COM_TEAMS ? notificarTeams(email, titulo, mensagem, LINK) : Promise.resolve(false),
-      ])));
-      for (const [e, t] of lote) {
-        if (e) emails++; else falhas++;
-        if (t) teams++;
-      }
+    // Uma pessoa por vez: com 5 em paralelo o Graph devolveu 429
+    // (MailboxConcurrency) para 6 de 33 no envio de 29/09.
+    for (const [email] of destinos) {
+      const e = await enviarEmail(email, titulo, html);
+      const t = COM_TEAMS ? await notificarTeams(email, titulo, mensagem, LINK) : false;
+      if (e) emails++; else falhas++;
+      if (t) teams++;
     }
     const canal = COM_TEAMS ? await avisarCanal(`📅 ${titulo} — ${quando}. ${LINK}`) : false;
 

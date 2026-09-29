@@ -36,22 +36,31 @@ export async function enviarEmail(para: string, assunto: string, html: string): 
   const token = await tokenGraph(c);
   if (!token) { await registrar(para, "email", assunto, false, "sem token"); return false; }
 
+  const corpo = JSON.stringify({
+    message: {
+      subject: assunto,
+      body: { contentType: "HTML", content: html },
+      toRecipients: [{ emailAddress: { address: para } }],
+    },
+    saveToSentItems: true,
+  });
   try {
-    const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(REMETENTE)}/sendMail`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          subject: assunto,
-          body: { contentType: "HTML", content: html },
-          toRecipients: [{ emailAddress: { address: para } }],
-        },
-        saveToSentItems: true,
-      }),
-      cache: "no-store",
-    });
-    const ok = r.ok;
-    await registrar(para, "email", assunto, ok, ok ? undefined : `HTTP ${r.status} ${(await r.text()).slice(0, 300)}`);
+    // O Graph limita envios simultâneos pela mesma caixa (429
+    // MailboxConcurrency): espera o Retry-After e tenta de novo, até 4 vezes.
+    let r: Response | null = null;
+    for (let tentativa = 1; tentativa <= 4; tentativa++) {
+      r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(REMETENTE)}/sendMail`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: corpo,
+        cache: "no-store",
+      });
+      if (r.status !== 429 && r.status !== 503) break;
+      const espera = Math.min(10, Number(r.headers.get("retry-after")) || tentativa * 2);
+      await new Promise((ok) => setTimeout(ok, espera * 1000));
+    }
+    const ok = !!r?.ok;
+    await registrar(para, "email", assunto, ok, ok ? undefined : `HTTP ${r?.status} ${(await r!.text()).slice(0, 300)}`);
     return ok;
   } catch (e) {
     await registrar(para, "email", assunto, false, e instanceof Error ? e.message : "erro");
