@@ -13,6 +13,10 @@ import { enviarEmail, notificarTeams, avisarCanal, layoutEmail } from "./notific
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
 const LINK = `${BASE}/m/pessoas/agenda`;
 
+// Teams DESLIGADO por enquanto (decisão de 28/09/2026): o relay pelo Power
+// Automate não está entregando. Só e-mail. Para religar: AVISO_BEM_ESTAR_TEAMS=1.
+const COM_TEAMS = process.env.AVISO_BEM_ESTAR_TEAMS === "1";
+
 function dataBR(iso: string) {
   const [a, m, d] = iso.split("-");
   return `${d}/${m}/${a}`;
@@ -55,7 +59,7 @@ export async function enviarPreviaBemEstar(eventoId: number, para: string) {
   const { titulo, mensagem, html } = montarAviso(ev as EventoAviso);
   const [email, teams] = await Promise.all([
     enviarEmail(para, `[Prévia] ${titulo}`, html),
-    notificarTeams(para, `[Prévia] ${titulo}`, mensagem, LINK),
+    COM_TEAMS ? notificarTeams(para, `[Prévia] ${titulo}`, mensagem, LINK) : Promise.resolve(false),
   ]);
   return { email, teams, para, evento: ev.titulo };
 }
@@ -101,17 +105,19 @@ export async function avisarEventosBemEstar(soEvento?: number): Promise<Resultad
     for (let i = 0; i < destinos.length; i += 5) {
       const lote = await Promise.all(destinos.slice(i, i + 5).map(([email]) => Promise.all([
         enviarEmail(email, titulo, html),
-        notificarTeams(email, titulo, mensagem, LINK),
+        COM_TEAMS ? notificarTeams(email, titulo, mensagem, LINK) : Promise.resolve(false),
       ])));
       for (const [e, t] of lote) {
         if (e) emails++; else falhas++;
         if (t) teams++;
       }
     }
-    const canal = await avisarCanal(`📅 ${titulo} — ${quando}. ${LINK}`);
+    const canal = COM_TEAMS ? await avisarCanal(`📅 ${titulo} — ${quando}. ${LINK}`) : false;
 
     await sb.from("eventos_agenda").update({
-      aviso_resultado: `${emails}/${destinos.length} e-mails, ${teams} Teams, canal ${canal ? "ok" : "não"}`,
+      aviso_resultado: COM_TEAMS
+        ? `${emails}/${destinos.length} e-mails, ${teams} Teams, canal ${canal ? "ok" : "não"}`
+        : `${emails}/${destinos.length} e-mails (Teams desligado)`,
     }).eq("id", ev.id);
     resultado.eventos.push({ id: ev.id, titulo: ev.titulo, emails, teams, canal, falhas });
   }
