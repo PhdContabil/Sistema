@@ -425,21 +425,16 @@ export default function OSTab() {
         body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o) }),
       });
       const j = await r.json();
-      if (!r.ok) {
-        if (j.emlBase64) {
-          // Envio automático falhou (normalmente falta de permissão Mail.Send no Azure) --
-          // baixa um rascunho .eml pronto (assunto + corpo + PDF anexado) pra abrir no Outlook.
-          baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS-${o.codigo || o.id}.eml`, "message/rfc822");
-          setErro((j.error ?? "Falha ao enviar e-mail.") + " Baixei um rascunho (.eml) pronto -- abra-o no Outlook e clique em Enviar.");
-        } else {
-          setErro(j.error ?? "Falha ao enviar e-mail.");
-        }
-        return;
-      }
+      if (!r.ok) { setErro(j.error ?? "Falha ao preparar o e-mail."); return; }
+      // Não manda nada pelo servidor: baixa um .eml com destinatário, assunto, corpo e o
+      // PDF já anexados -- ao abrir esse arquivo o Outlook do próprio usuário assume como remetente,
+      // e ele só revisa e clica em Enviar.
+      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS-${o.codigo || o.id}.eml`, "message/rfc822");
       setSugerirEnvio(false);
-      alert(`E-mail enviado para ${j.enviadoPara}.`);
+      setErro(null);
+      alert(`Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
     } catch {
-      setErro("Falha de rede ao enviar e-mail.");
+      setErro("Falha de rede ao preparar o e-mail.");
     } finally {
       setEnviando(false);
     }
@@ -708,7 +703,7 @@ export default function OSTab() {
 
             {sugerirEnvio && modal.editando && (
               <div className="pl-banner" style={{ marginTop: 8, marginBottom: 4 }}>
-                OS criada! Enviar por e-mail agora?
+                OS criada! Enviar por e-mail agora? (abre o Outlook com a mensagem e o PDF prontos)
               </div>
             )}
             {modal.editando && (
@@ -718,7 +713,7 @@ export default function OSTab() {
                   <option value="financeiro">Enviar para Financeiro</option>
                 </select>
                 <button className="pl-btn" onClick={() => enviarPorEmail(modal.editando as OS)} disabled={enviando}>
-                  {enviando ? "Enviando…" : "✉ Enviar por e-mail"}
+                  {enviando ? "Preparando..." : "✉ Enviar por e-mail (Outlook)"}
                 </button>
               </div>
             )}
