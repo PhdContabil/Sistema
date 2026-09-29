@@ -470,7 +470,7 @@ function ModalGuia({
     onMudou();
   }
 
-  async function emitir(comZen: boolean) {
+  async function emitir(comZen: boolean, comTareffa: boolean) {
     setEmitindo(true);
     setErro(null);
     try {
@@ -486,6 +486,7 @@ function ModalGuia({
             ? { endereco, cidade, uf: "SP", telefone }
             : undefined,
           enviarZen: comZen,
+          enviarTareffa: comTareffa,
         }),
       });
       const j = await r.json();
@@ -499,13 +500,46 @@ function ModalGuia({
       // falha do Zen sumia, coberta pela mensagem "Guia emitida." logo depois.
       const avs: string[] = j.avisos ?? [];
       setAvisosEmissao(avs);
-      if (comZen && j.zen && avs.length === 0) onAviso("Guia emitida e publicada no Zen e no Tareffa.");
-      else if (!comZen) onAviso("Guia emitida.");
+      if (avs.length === 0) {
+        const onde = [comZen && j.zen ? "no Zen" : null, comTareffa && j.tareffa ? "no Tareffa" : null]
+          .filter(Boolean).join(" e ");
+        onAviso(onde ? `Guia emitida e publicada ${onde}.` : "Guia emitida.");
+      }
       onMudou();
     } catch {
       setErro("Falha de rede ao emitir.");
     } finally {
       setEmitindo(false);
+    }
+  }
+
+  /** Envia uma guia já emitida: só Zen, só Tareffa, ou os dois (Zen primeiro). */
+  async function enviarGuia(id: string, zen: boolean, tareffa: boolean) {
+    setReenviando(id);
+    const post = (url: string, body: object) => fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(async (r) => ({ ok: r.ok, status: r.status, j: await r.json().catch(() => ({})) }));
+    try {
+      if (zen) {
+        const r = await post("/api/fiscal/dare-sp/zen", { guia_id: id, comTareffa: tareffa });
+        if (!r.ok) {
+          setAvisosEmissao([`Não subiu para o Zen: ${r.j.error ?? `HTTP ${r.status}`}`]);
+        } else if (r.j.falhaTareffa) {
+          setAvisosEmissao([`Publicada no Zen, mas não foi para o Tareffa: ${r.j.falhaTareffa}`]);
+        } else {
+          const onde = tareffa ? "no Zen e no Tareffa" : "no Zen";
+          onAviso(r.j.semAtributos ? `Publicada ${onde}, sem vencimento e valor no Zen.` : `Publicada ${onde}.`);
+        }
+      } else if (tareffa) {
+        const r = await post("/api/fiscal/dare-sp/tareffa", { guia_id: id });
+        if (r.ok) onAviso("Publicada no Tareffa.");
+        else setAvisosEmissao([`Não foi para o Tareffa: ${r.j.error ?? `HTTP ${r.status}`}`]);
+      }
+    } catch {
+      setAvisosEmissao(["Falha de rede ao enviar."]);
+    } finally {
+      setReenviando(null);
+      onMudou();
     }
   }
 
@@ -538,43 +572,26 @@ function ModalGuia({
                     <span>{formatDataHora(g.emitida_em)}</span>
                     <strong>R$ {formatBRL(g.total)}</strong>
                     <span className="nota">pagamento {dataBR(g.data_pagamento)}</span>
-                    {g.zen_documento_id && (g.tareffa_documento_id
-                      ? <span className="badge badge-soft">no Tareffa</span>
-                      : <button className="btn" disabled={reenviando === g.id} onClick={async () => {
-                          setReenviando(g.id);
-                          const r = await fetch("/api/fiscal/dare-sp/tareffa", {
-                            method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ guia_id: g.id }),
-                          });
-                          const j = await r.json().catch(() => ({}));
-                          setReenviando(null);
-                          if (r.ok) onAviso("Publicada no Tareffa.");
-                          else setAvisosEmissao([`Não foi para o Tareffa: ${j.error ?? `HTTP ${r.status}`}`]);
-                          onMudou();
-                        }}>{reenviando === g.id ? "Enviando…" : "Enviar ao Tareffa"}</button>)}
-                    {g.zen_documento_id && !g.tareffa_documento_id && g.tareffa_erro && (
+                    {g.zen_documento_id && <span className="badge badge-soft">no Zen</span>}
+                    {g.tareffa_documento_id && <span className="badge badge-soft">no Tareffa</span>}
+                    {reenviando === g.id && <span className="nota">Enviando…</span>}
+                    {reenviando !== g.id && !g.zen_documento_id && !g.tareffa_documento_id && temTokenZen && (
+                      <button className="btn primary" onClick={() => enviarGuia(g.id, true, true)}
+                              title="Sobe para o Zen e publica no Tareffa">Zen + Tareffa</button>
+                    )}
+                    {reenviando !== g.id && !g.zen_documento_id && temTokenZen && (
+                      <button className="btn" onClick={() => enviarGuia(g.id, true, false)}>
+                        {g.zen_erro ? "Tentar de novo só no Zen" : "Só Zen"}
+                      </button>
+                    )}
+                    {reenviando !== g.id && !g.tareffa_documento_id && (
+                      <button className="btn" onClick={() => enviarGuia(g.id, false, true)}>
+                        {g.tareffa_erro ? "Tentar de novo só no Tareffa" : "Só Tareffa"}
+                      </button>
+                    )}
+                    {!g.tareffa_documento_id && g.tareffa_erro && (
                       <span className="dare-zen-erro">Tareffa: {g.tareffa_erro}</span>
                     )}
-                    {g.zen_documento_id
-                      ? <span className="badge badge-soft">no Zen</span>
-                      : temTokenZen
-                        ? <button className="btn" onClick={async () => {
-                            setReenviando(g.id);
-                            const r = await fetch("/api/fiscal/dare-sp/zen", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ guia_id: g.id }),
-                            });
-                            const j = await r.json().catch(() => ({}));
-                            if (r.ok && j.falhaTareffa) setAvisosEmissao([`Publicada no Zen, mas não foi para o Tareffa: ${j.falhaTareffa}`]);
-                            else if (r.ok) onAviso(j.semAtributos ? "Publicada no Zen e no Tareffa, sem vencimento e valor no Zen." : "Publicada no Zen e no Tareffa.");
-                            else setAvisosEmissao([`Não subiu para o Zen: ${j.error ?? `HTTP ${r.status}`}`]);
-                            setReenviando(null);
-                            onMudou();
-                          }} disabled={reenviando === g.id}>
-                            {reenviando === g.id ? "Enviando…" : g.zen_erro ? "Tentar de novo no Zen" : "Enviar ao Zen"}
-                          </button>
-                        : null}
                     {!g.zen_documento_id && g.zen_erro && (
                       <span className="dare-zen-erro">Zen recusou: {g.zen_erro}</span>
                     )}
@@ -729,12 +746,21 @@ function ModalGuia({
 
         <div className="modal-foot">
           <button className="btn" onClick={onFechar}>Fechar</button>
-          <button className="btn" disabled={!podeEmitir} onClick={() => emitir(false)}>
-            {emitindo ? "Emitindo…" : "Gerar guia"}
+          <button className="btn" disabled={!podeEmitir} onClick={() => emitir(false, false)}
+                  title="Só emite na Sefaz, sem enviar a lugar nenhum">
+            {emitindo ? "Emitindo…" : "Só gerar"}
           </button>
-          <button className="btn primary" disabled={!podeEmitir || !temTokenZen} onClick={() => emitir(true)}
-                  title={temTokenZen ? "Emite e sobe o PDF para o Edoc" : "Token do Questor Zen não configurado"}>
-            Gerar guia e enviar ao Zen
+          <button className="btn" disabled={!podeEmitir || !temTokenZen} onClick={() => emitir(true, false)}
+                  title={temTokenZen ? "Emite e sobe o PDF só para o Edoc do Zen" : "Token do Questor Zen não configurado"}>
+            Gerar + só Zen
+          </button>
+          <button className="btn" disabled={!podeEmitir} onClick={() => emitir(false, true)}
+                  title="Emite e publica só no Tareffa">
+            Gerar + só Tareffa
+          </button>
+          <button className="btn primary" disabled={!podeEmitir || !temTokenZen} onClick={() => emitir(true, true)}
+                  title={temTokenZen ? "Emite, sobe para o Zen e publica no Tareffa (baixa em tudo)" : "Token do Questor Zen não configurado"}>
+            Gerar, enviar ao Zen e ao Tareffa
           </button>
         </div>
       </div>

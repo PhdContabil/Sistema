@@ -15,7 +15,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Token do Questor Zen não configurado." }, { status: 412 });
   }
 
-  let body: { guia_id?: string };
+  // comTareffa: true = depois do Zen publica também no Tareffa; padrão é só Zen.
+  let body: { guia_id?: string; comTareffa?: boolean };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
   if (!body.guia_id) return NextResponse.json({ error: "Guia não informada." }, { status: 400 });
 
@@ -36,10 +37,12 @@ export async function POST(req: Request) {
       nomeEmpresa: g.nome,
     });
     await marcarEnvioZen(g.id, r.documentoId);
-    const falhaTareffa = await enviarGuiaAoTareffa({
-      id: g.id, codigoImposto: g.codigoimposto, competencia: g.competencia,
-      cnpj: g.cnpj, pdfBase64: g.pdf_base64,
-    });
+    const falhaTareffa = body.comTareffa
+      ? await enviarGuiaAoTareffa({
+          id: g.id, codigoImposto: g.codigoimposto, competencia: g.competencia,
+          cnpj: g.cnpj, pdfBase64: g.pdf_base64,
+        })
+      : null;
     return NextResponse.json({
       falhaTareffa,
       ok: true, documentoId: r.documentoId, arquivo: r.nomeArquivo, semAtributos: r.semAtributos,

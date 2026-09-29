@@ -28,6 +28,8 @@ interface Corpo {
   endereco?: { endereco: string; cidade: string; uf?: string; telefone?: string };
   /** true = emitir e já subir para o Edoc do Zen. */
   enviarZen?: boolean;
+  /** true = publicar no Tareffa. Se omitido, segue `enviarZen` (compatível). */
+  enviarTareffa?: boolean;
 }
 
 /**
@@ -205,14 +207,6 @@ export async function POST(req: Request) {
         });
         zen = { documentoId: r.documentoId };
         if (id) await marcarEnvioZen(id, r.documentoId);
-        // Zen deu certo: o mesmo PDF segue para o Tareffa dar a baixa.
-        if (id) {
-          const falhaT = await enviarGuiaAoTareffa({
-            id, codigoImposto: debito.codigoimposto, competencia: debito.competencia,
-            cnpj: debito.cnpj, pdfBase64: emitida.documentoImpressao,
-          });
-          if (falhaT) avisos.push(`Publicada no Zen, mas não foi para o Tareffa: ${falhaT}`);
-        }
         if (r.semAtributos) {
           avisos.push("Publicada no Zen, mas sem vencimento e valor: o Zen recusou esses campos. Confira no Edoc.");
         }
@@ -223,6 +217,17 @@ export async function POST(req: Request) {
         avisos.push(`Guia emitida, mas não subiu para o Zen: ${motivo}`);
       }
     }
+  }
+
+  // ---- Tareffa, quando pedido (independente do Zen: o usuário escolhe)
+  let tareffa = false;
+  if ((b.enviarTareffa ?? b.enviarZen) && id) {
+    const falhaT = await enviarGuiaAoTareffa({
+      id, codigoImposto: debito.codigoimposto, competencia: debito.competencia,
+      cnpj: debito.cnpj, pdfBase64: emitida.documentoImpressao,
+    });
+    if (falhaT) avisos.push(`Guia emitida, mas não foi para o Tareffa: ${falhaT}`);
+    else tareffa = true;
   }
 
   return NextResponse.json({
@@ -237,6 +242,7 @@ export async function POST(req: Request) {
       totalSefaz: emitida.valorTotal,
     },
     zen,
+    tareffa,
     avisos,
   });
 }

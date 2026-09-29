@@ -6,7 +6,7 @@ import { exigirFiscal } from "../_auth";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Reenvia ao Tareffa uma guia que já está no Zen. */
+/** Publica no Tareffa uma guia já emitida (esteja ou não no Zen). */
 export async function POST(req: Request) {
   const email = await exigirFiscal();
   if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
