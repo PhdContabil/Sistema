@@ -26,6 +26,40 @@ function esc(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+interface EventoAviso { id: number; titulo: string; inicio: string; fim: string; detalhe: string | null }
+
+/** Assunto, texto do Teams e HTML do e-mail de um evento. */
+function montarAviso(ev: EventoAviso) {
+  const quando = periodo(ev.inicio, ev.fim);
+  const titulo = `Bem-Estar: ${ev.titulo}`;
+  const mensagem = `${ev.titulo} — ${quando}.${ev.detalhe ? ` ${ev.detalhe}` : ""}`;
+  const html = layoutEmail(
+    esc(ev.titulo),
+    `<p><strong>Quando:</strong> ${quando}</p>${ev.detalhe ? `<p>${esc(ev.detalhe)}</p>` : ""}
+     <p>O compromisso já está na agenda do Núcleo.</p>`,
+    { texto: "Ver na agenda", url: LINK }
+  );
+  return { quando, titulo, mensagem, html };
+}
+
+/**
+ * Prévia: manda o aviso de um evento só para um e-mail (quem pediu), sem
+ * marcar o evento como avisado. Serve para ver como chega antes de soltar.
+ */
+export async function enviarPreviaBemEstar(eventoId: number, para: string) {
+  const sb = admin();
+  if (!sb) throw new Error("Banco indisponível.");
+  const { data: ev } = await sb.from("eventos_agenda")
+    .select("id,titulo,inicio,fim,detalhe").eq("id", eventoId).eq("tipo", "bem_estar").maybeSingle();
+  if (!ev) throw new Error("Evento de Bem-Estar não encontrado.");
+  const { titulo, mensagem, html } = montarAviso(ev as EventoAviso);
+  const [email, teams] = await Promise.all([
+    enviarEmail(para, `[Prévia] ${titulo}`, html),
+    notificarTeams(para, `[Prévia] ${titulo}`, mensagem, LINK),
+  ]);
+  return { email, teams, para, evento: ev.titulo };
+}
+
 export interface ResultadoAvisos {
   eventos: { id: number; titulo: string; emails: number; teams: number; canal: boolean; falhas: number }[];
 }
@@ -60,15 +94,7 @@ export async function avisarEventosBemEstar(soEvento?: number): Promise<Resultad
       .eq("id", ev.id).is("aviso_enviado_em", null).select("id");
     if (!preso?.length) continue; // outra execução já pegou
 
-    const quando = periodo(ev.inicio, ev.fim);
-    const titulo = `Bem-Estar: ${ev.titulo}`;
-    const mensagem = `${ev.titulo} — ${quando}.${ev.detalhe ? ` ${ev.detalhe}` : ""}`;
-    const html = layoutEmail(
-      esc(ev.titulo),
-      `<p><strong>Quando:</strong> ${quando}</p>${ev.detalhe ? `<p>${esc(ev.detalhe)}</p>` : ""}
-       <p>O compromisso já está na agenda do Núcleo.</p>`,
-      { texto: "Ver na agenda", url: LINK }
-    );
+    const { quando, titulo, mensagem, html } = montarAviso(ev);
 
     let emails = 0, teams = 0, falhas = 0;
     // Lotes de 5 pessoas em paralelo: cabe no tempo da função sem estourar o Graph.
