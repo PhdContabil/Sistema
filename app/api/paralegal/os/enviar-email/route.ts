@@ -4,12 +4,12 @@ import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 import { obterOS } from "@/lib/paralegal/os";
 import { enviarEmail, construirEml, GraphErro } from "@/lib/paralegal/graph";
 
-// Envio da OS por e-mail. Tenta primeiro pelo Microsoft Graph (Mail.Send,
-// app-only) a partir da caixa PARALEGAL_EMAIL_REMETENTE — igual ao Paralegal System
-// antigo (que manda de verdade, sem abrir nada no cliente). Se isso falhar por
-// qualquer motivo (permissão, caixa incorreta, etc.), cai pro plano B: monta um
-// .eml pronto (destinatário + assunto + corpo + PDF anexado) e devolve pro navegador
-// baixar -- o usuário abre no Outlook e só clica em Enviar.
+// Envio da OS por e-mail. Manda pelo Microsoft Graph (Mail.Send, app-only) usando
+// a própria conta do usuário logado como remetente (a mesma conta que ele usa pra entrar
+// no Núcleo) -- geral/financeiro são só os destinatários, nunca o remetente. Se isso falhar por
+// qualquer motivo (permissão, conta sem caixa, etc.), cai pro plano B: monta um .eml pronto
+// (destinatário + assunto + corpo + PDF anexado) e devolve pro navegador baixar -- o
+// usuário abre no Outlook e só clica em Enviar.
 export const dynamic = "force-dynamic";
 
 const DESTINATARIOS: Record<string, string> = {
@@ -17,16 +17,13 @@ const DESTINATARIOS: Record<string, string> = {
   financeiro: process.env.PARALEGAL_EMAIL_FINANCEIRO || "financeiro@phdcontabil.com.br",
 };
 
-const REMETENTE = process.env.PARALEGAL_EMAIL_REMETENTE || DESTINATARIOS.geral;
-
-async function souAutorizado() {
+export async function POST(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
-  return podeAcessarApp(nivel, "paralegal", "Controle");
-}
+  if (!podeAcessarApp(nivel, "paralegal", "Controle")) return NextResponse.json({ error: "Sem acesso ao Paralegal." }, { status: 403 });
 
-export async function POST(req: Request) {
-  if (!(await souAutorizado())) return NextResponse.json({ error: "Sem acesso ao Paralegal." }, { status: 403 });
+  const remetente = user?.email;
+  if (!remetente) return NextResponse.json({ error: "Não consegui identificar seu e-mail de login pra usar como remetente." }, { status: 401 });
 
   let body: { id?: string; destinatario?: string; pdfBase64?: string; nomeArquivo?: string };
   try {
@@ -52,8 +49,8 @@ export async function POST(req: Request) {
   const anexos = [{ nome: nomeArquivo, conteudoBase64: body.pdfBase64, tipoMime: "application/pdf" }];
 
   try {
-    await enviarEmail({ remetente: REMETENTE, para: [destino], assunto, corpoHtml, anexos });
-    return NextResponse.json({ ok: true, modo: "graph", enviadoPara: destino });
+    await enviarEmail({ remetente, para: [destino], assunto, corpoHtml, anexos });
+    return NextResponse.json({ ok: true, modo: "graph", enviadoPara: destino, remetente });
   } catch (e) {
     const mensagem = e instanceof Error ? e.message : "Falha ao enviar e-mail.";
     const status = e instanceof GraphErro ? e.status : 502;
