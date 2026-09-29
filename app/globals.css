@@ -2377,3 +2377,9 @@ html[data-theme="dark"] .estr-escolha.on { background: #1c2f63; }
   .evc-lista { margin: 0 16px 16px; }
 }
 .evc-insc .banner { background: #fff; color: #0f1b2d; margin: 4px 0 0; } .evc-insc .banner.error { background: #fde8ee; color: #9b1c3c; }
+
+/* Tabela nos textos de Pessoas (ex.: benefícios) */
+.ct-tabela-wrap { overflow-x: auto; margin: 10px 0 16px; }
+.ct-tabela { border-collapse: collapse; min-width: 360px; font-size: 14px; }
+.ct-tabela th { text-align: left; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-weight: 600; }
+.ct-tabela th, .ct-tabela td { padding: 8px 14px; border-bottom: 1px solid var(--border); }

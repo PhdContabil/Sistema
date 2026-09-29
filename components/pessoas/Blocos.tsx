@@ -1,5 +1,11 @@
 import type { Bloco } from "@/lib/pessoas/conteudo-formato";
 
+/** Texto com **negrito**. Sem ** o texto sai igual ao de antes. */
+function Rico({ t }: { t: string }) {
+  if (!t.includes("**")) return <>{t}</>;
+  return <>{t.split("**").map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p))}</>;
+}
+
 /**
  * Desenha os blocos de um texto institucional.
  *
@@ -23,11 +29,11 @@ export default function Blocos({ blocos, alt }: { blocos: Bloco[]; alt: string }
               </div>
             );
           case "citacao":
-            return <blockquote key={i} className="ct-citacao">{b.texto}</blockquote>;
+            return <blockquote key={i} className="ct-citacao"><Rico t={b.texto} /></blockquote>;
           case "lista":
             return (
               <ul key={i} className="ct-lista">
-                {b.itens.map((it, j) => <li key={j}>{it}</li>)}
+                {b.itens.map((it, j) => <li key={j}><Rico t={it} /></li>)}
               </ul>
             );
           case "galeria":
@@ -48,8 +54,19 @@ export default function Blocos({ blocos, alt }: { blocos: Bloco[]; alt: string }
                 ))}
               </div>
             );
+          case "tabela":
+            return (
+              <div key={i} className="ct-tabela-wrap">
+                <table className="ct-tabela">
+                  <thead><tr>{b.cabecalho.map((c, j) => <th key={j}><Rico t={c} /></th>)}</tr></thead>
+                  <tbody>
+                    {b.linhas.map((l, j) => <tr key={j}>{l.map((c, k) => <td key={k}><Rico t={c} /></td>)}</tr>)}
+                  </tbody>
+                </table>
+              </div>
+            );
           default:
-            return <p key={i}>{b.texto}</p>;
+            return <p key={i}><Rico t={b.texto} /></p>;
         }
       })}
     </>

@@ -18,6 +18,13 @@
 //   ![legenda](/caminho.png)     -> uma figura
 //   :::galeria ... :::           -> várias figuras lado a lado
 //
+// Uma para tabela (linhas seguidas; a primeira é o cabeçalho, e a linha
+// separadora "| --- |" do Word/Markdown é ignorada):
+//
+//   | Benefício | Participação |
+//
+// E **negrito** dentro de qualquer linha (a tela desenha; aqui fica o texto).
+//
 // SEM IMPORTS: este módulo roda direto no `node --test` com strip-types, que
 // não resolve import relativo sem extensão.
 
@@ -28,7 +35,8 @@ export type Bloco =
   | { tipo: "citacao"; texto: string }
   | { tipo: "lista"; itens: string[] }
   | { tipo: "paragrafo"; texto: string }
-  | { tipo: "galeria"; figuras: Figura[] };
+  | { tipo: "galeria"; figuras: Figura[] }
+  | { tipo: "tabela"; cabecalho: string[]; linhas: string[][] };
 
 export interface Figura {
   src: string;
@@ -50,6 +58,15 @@ export function blocosDoTexto(texto: string | undefined): Bloco[] {
   const linhas = texto.split("\n");
   let lista: string[] = [];
   let galeria: Figura[] | null = null;
+  let tabela: string[][] = [];
+
+  const fecharTabela = () => {
+    if (tabela.length > 0) {
+      const [cabecalho, ...linhas] = tabela;
+      blocos.push({ tipo: "tabela", cabecalho, linhas });
+      tabela = [];
+    }
+  };
 
   const fecharLista = () => {
     if (lista.length > 0) {
@@ -60,6 +77,14 @@ export function blocosDoTexto(texto: string | undefined): Bloco[] {
 
   for (const bruta of linhas) {
     const l = bruta.trim();
+
+    if (galeria === null && l.startsWith("|")) {
+      fecharLista();
+      const celulas = l.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+      if (!celulas.every((c) => /^:?-{3,}:?$/.test(c))) tabela.push(celulas);
+      continue;
+    }
+    fecharTabela();
 
     // Dentro de uma galeria, só figuras contam; o resto é ignorado.
     if (galeria !== null) {
@@ -106,6 +131,7 @@ export function blocosDoTexto(texto: string | undefined): Bloco[] {
   }
 
   fecharLista();
+  fecharTabela();
   // Galeria aberta e não fechada: publica assim mesmo, em vez de sumir com as
   // imagens por causa de um ":::" esquecido.
   if (galeria !== null && galeria.length > 0) blocos.push({ tipo: "galeria", figuras: galeria });

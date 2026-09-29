@@ -130,3 +130,9 @@ test("hífen no meio da frase não vira lista", () => {
   const b = blocosDoTexto("Kaizen - melhoria contínua - traduz essa busca.");
   assert.equal(b[0].tipo, "paragrafo");
 });
+
+test("tabela: cabeçalho, linhas e separador ignorado", () => {
+  const b = blocosDoTexto("Antes\n| **Benefício** | Desconto |\n| --- | --- |\n| VR | Sem desconto |\n| Médico | R$ 0,10 |\nDepois");
+  assert.deepEqual(b[1], { tipo: "tabela", cabecalho: ["**Benefício**", "Desconto"], linhas: [["VR", "Sem desconto"], ["Médico", "R$ 0,10"]] });
+  assert.equal(b[2].tipo, "paragrafo");
+});

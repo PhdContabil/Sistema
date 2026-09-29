@@ -18,6 +18,7 @@
 // ============================================================================
 
 import { TEXTO_IDENTIDADE } from "./sobre-nos";
+import { TEXTO_AUSENCIAS, TEXTO_ALIMENTACAO, TEXTO_LGPD, TEXTO_POSTURA, TEXTO_MULHERES, TEXTO_DIVERSIDADE } from "./normas";
 
 export interface Secao {
   id: string;
@@ -180,10 +181,15 @@ export const AREAS: AreaPessoas[] = [
     id: "normas", titulo: "Normas e Procedimentos", resumo: "Políticas internas da PHD.",
     cor: "oklch(0.62 0.13 20)",
     secoes: [
-      { id: "ausencias", titulo: "Ausências", resumo: "Política de ausências: quem avisar e como proceder.", pendente: true, nota: "Texto do Júnior." },
-      { id: "alimentacao", titulo: "Alimentação", resumo: "Café da manhã, almoço, marmitas e demais regras.", pendente: true, nota: "Texto do Júnior." },
-      { id: "lgpd", titulo: "Segurança da informação (LGPD)", resumo: "Cuidados com dados e informações.", pendente: true, nota: "Documento já existente — colar aqui." },
-      { id: "postura", titulo: "Postura e comportamento", resumo: "O que se espera da convivência no dia a dia.", pendente: true, nota: "Documento já existente — colar aqui." },
+      { id: "ausencias", titulo: "Ausências, Horários, Pagamentos e Descontos", resumo: "Horário e ponto, home office, faltas, férias, salário, transporte e benefícios.", texto: TEXTO_AUSENCIAS },
+      { id: "alimentacao", titulo: "Alimentação e uso da Copa", resumo: "Café da manhã, marmitas, micro-ondas e cuidado com o espaço de todos.", texto: TEXTO_ALIMENTACAO },
+      {
+        id: "lgpd", titulo: "Segurança da Informação (LGPD)", resumo: "Cláusulas de proteção de dados, sigilo e termos de consentimento.", texto: TEXTO_LGPD,
+        anexos: [{ titulo: "Segurança da Informação — LGPD (documento completo)", descricao: "Cláusulas e termos, como no documento original. PDF, 13 páginas.", href: "/pessoas/normas/seguranca-da-informacao-lgpd.pdf" }],
+      },
+      { id: "postura", titulo: "Postura e Comportamento", resumo: "Convivência, celular, sigilo, clientes, vestimenta e espaços comuns.", texto: TEXTO_POSTURA },
+      { id: "mulheres", titulo: "Respeito e Valorização às Mulheres", resumo: "Atitudes de consideração, maternidade e respeito no dia a dia.", texto: TEXTO_MULHERES },
+      { id: "diversidade", titulo: "Política de Respeito à Diversidade", resumo: "Raça, gênero e igualdade de oportunidades. Em construção com a equipe.", texto: TEXTO_DIVERSIDADE },
     ],
   },
   {
