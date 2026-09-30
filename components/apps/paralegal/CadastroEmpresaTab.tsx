@@ -182,7 +182,17 @@ interface CadastroEmpresaTabProps {
   // dos campos corrigidos sem precisar criar uma empresa nova toda vez).
   // Continua passando por pré-visualização/confirmação normalmente antes de
   // gravar qualquer coisa no Questor.
-  dadosIniciais?: (Partial<typeof DADOS_VAZIO> & { socios?: Partial<Socio>[] }) | null;
+  dadosIniciais?: (Partial<typeof DADOS_VAZIO> & {
+    socios?: Partial<Socio>[];
+    // CNAE já vem com código E descrição prontos do Questor -- não precisa
+    // buscar de novo, só pré-selecionar.
+    cnae?: { codigo: string; descricao: string } | null;
+    // Enquadramento (campo "tipoenquad") não vem com código na consulta de
+    // leitura do Questor, só a descrição do regime (ex.: "MICROEMPRESA") --
+    // usada pra tentar casar com a lista de enquadramentos depois que ela
+    // carrega.
+    enquadramentoDescricao?: string;
+  }) | null;
 }
 
 export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosIniciais }: CadastroEmpresaTabProps = {}) {
@@ -202,10 +212,12 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
   const [municipios, setMunicipios] = useState<LookupItem[]>([]);
   const [carregandoListas, setCarregandoListas] = useState(true);
 
-  const [cnaeBusca, setCnaeBusca] = useState("");
+  const [cnaeBusca, setCnaeBusca] = useState(() => (dadosIniciais?.cnae ? `${dadosIniciais.cnae.codigo} - ${dadosIniciais.cnae.descricao}` : ""));
   const [cnaeResultados, setCnaeResultados] = useState<LookupItem[]>([]);
   const [cnaeMostrarResultados, setCnaeMostrarResultados] = useState(false);
-  const [cnaeSelecionado, setCnaeSelecionado] = useState<LookupItem | null>(null);
+  const [cnaeSelecionado, setCnaeSelecionado] = useState<LookupItem | null>(() =>
+    dadosIniciais?.cnae ? { codigo: dadosIniciais.cnae.codigo, descricao: dadosIniciais.cnae.descricao } : null
+  );
 
   const [cnpjStatus, setCnpjStatus] = useState<{ texto: string; tipo: "" | "ok" | "erro" }>({ texto: "", tipo: "" });
   const cnpjBuscadoRef = useRef<string | null>(null);
@@ -260,6 +272,15 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
         setFeriados(f);
         setLogradouros(l);
         setEstados(uf.filter((x) => x.codigo && x.codigo.length === 2));
+
+        // Tenta casar o enquadramento (só vem como texto -- ex. "MICROEMPRESA"
+        // -- na consulta de leitura do Questor) com a lista de códigos.
+        if (dadosIniciais?.enquadramentoDescricao) {
+          const alvo = dadosIniciais.enquadramentoDescricao.trim().toLowerCase();
+          const opcao = e.find((o) => o.descricao.trim().toLowerCase() === alvo)
+            ?? e.find((o) => o.descricao.trim().toLowerCase().includes(alvo) || alvo.includes(o.descricao.trim().toLowerCase()));
+          if (opcao) setDados((d) => (d.tipoenquad ? d : { ...d, tipoenquad: opcao.codigo }));
+        }
       } catch (err) {
         if (!cancelado) setResultado({ tipo: "falha", titulo: "Não foi possível carregar as listas do Questor.", linhas: [err instanceof Error ? err.message : "Erro desconhecido."] });
       } finally {

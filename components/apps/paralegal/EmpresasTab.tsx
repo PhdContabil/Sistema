@@ -61,9 +61,11 @@ function somenteDigitosLocal(v: unknown): string {
 // Monta o "dadosIniciais" do CadastroEmpresaTab a partir do cadastro já
 // existente no Questor — usado pelo botão "Editar cadastro", pra facilitar
 // testar o reenvio dos campos sem precisar criar uma empresa nova cada vez.
-// Os nomes/códigos de lookup (natureza jurídica, enquadramento, tipo de
-// logradouro, município) não vêm prontos nessa consulta — ficam em branco
-// pro usuário selecionar de novo antes de pré-visualizar/confirmar.
+// A consulta detalhada do Questor já traz os códigos de natureza jurídica,
+// tabela de feriado, tipo de logradouro e CNAE prontos -- só o município
+// precisa da lista carregar primeiro (ver useEffect no CadastroEmpresaTab) e
+// o enquadramento só vem como texto ("regime"), sem código -- por isso tenta
+// casar pela descrição depois que a lista de enquadramentos carrega.
 function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
   // dddfone/numerofone vêm como campos próprios no Questor (não precisa
   // separar de "telefone") -- usar direto evita cortar dígitos errados
@@ -76,6 +78,9 @@ function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
     nomefantasia: campo(d, "nomefantasia") !== "-" ? campo(d, "nomefantasia") : "",
     inscrfederal: campo(d, "inscrfederal", "cnpj") !== "-" ? campo(d, "inscrfederal", "cnpj") : "",
     datainicioativ: paraDataInput(d["datainicioativ"] ?? d["iniciodaatividade"] ?? d["dtinicioatividade"]),
+    codigonaturjurid: campo(d, "codigonaturjurid") !== "-" ? campo(d, "codigonaturjurid") : "",
+    codigotabferiado: campo(d, "codigotabferiado") !== "-" ? campo(d, "codigotabferiado") : "",
+    codigotipolograd: campo(d, "codigotipolograd") !== "-" ? campo(d, "codigotipolograd") : "",
     enderecoestab: campo(d, "enderecoestab", "endereco") !== "-" ? campo(d, "enderecoestab", "endereco") : "",
     numenderestab: campo(d, "numenderestab", "numero") !== "-" ? campo(d, "numenderestab", "numero") : "",
     complenderestab: campo(d, "complenderestab", "complemento") !== "-" ? campo(d, "complenderestab", "complemento") : "",
@@ -91,12 +96,32 @@ function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
     numeroregist: campo(d, "numeroregist") !== "-" ? campo(d, "numeroregist") : "",
     inscrmunic: campo(d, "inscrmunic") !== "-" ? campo(d, "inscrmunic") : "",
     inscrestad: campo(d, "inscrestad") !== "-" ? campo(d, "inscrestad") : "",
+    // CNAE já vem com código e descrição prontos -- pré-seleciona direto,
+    // sem precisar buscar de novo.
+    cnae: campo(d, "codigoativfederal") !== "-"
+      ? { codigo: campo(d, "codigoativfederal"), descricao: campo(d, "ativfederal", "descatividade") !== "-" ? campo(d, "ativfederal", "descatividade") : campo(d, "codigoativfederal") }
+      : null,
+    // Enquadramento (campo "tipoenquad") só vem como texto no "regime"
+    // (ex.: "MICROEMPRESA") -- o CadastroEmpresaTab tenta casar com a lista
+    // de enquadramentos depois que ela carrega.
+    enquadramentoDescricao: campo(d, "regime") !== "-" ? campo(d, "regime") : "",
     socios: listaSocios(d).map((s) => ({
       nomesocio: campo(s, "nomesocio", "nome") !== "-" ? campo(s, "nomesocio", "nome") : "",
       inscrfederal: campo(s, "inscrfederal", "cpf", "numcpf") !== "-" ? campo(s, "inscrfederal", "cpf", "numcpf") : "",
+      datanasc: paraDataInput(s["datanasc"]),
       datainicial: paraDataInput(s["datainiciosocio"] ?? s["dataentrada"] ?? s["entrada"] ?? s["dtentrada"]),
+      estadocivil: campo(s, "estadocivil") !== "-" ? campo(s, "estadocivil") : "",
+      numerorg: campo(s, "numerorg") !== "-" ? campo(s, "numerorg") : "",
+      siglaestadorg: campo(s, "siglaestadorg") !== "-" ? campo(s, "siglaestadorg") : "",
+      datarg: paraDataInput(s["datarg"]),
+      nomemae: campo(s, "nomemae") !== "-" ? campo(s, "nomemae") : "",
+      nomepai: campo(s, "nomepai") !== "-" ? campo(s, "nomepai") : "",
+      declarafisicaescrit: campo(s, "declarafisicaescrit") !== "-" && campo(s, "declarafisicaescrit").trim() !== "" ? campo(s, "declarafisicaescrit").trim() : "",
       quantcotas: campo(s, "quantcotas", "qtdcotas", "quantidadecotas", "qtdecotas") !== "-" ? campo(s, "quantcotas", "qtdcotas", "quantidadecotas", "qtdecotas") : "",
       percentcotas: campo(s, "percentcotas", "percentualcotas", "percapital", "percentual") !== "-" ? campo(s, "percentcotas", "percentualcotas", "percapital", "percentual") : "",
+      dddfone: campo(s, "dddfone", "dddcelular") !== "-" ? somenteDigitosLocal(campo(s, "dddfone", "dddcelular")) : "",
+      numerofone: campo(s, "numerofone", "numerocelular") !== "-" ? somenteDigitosLocal(campo(s, "numerofone", "numerocelular")) : "",
+      email: campo(s, "email") !== "-" ? campo(s, "email") : "",
     })),
   };
 }
