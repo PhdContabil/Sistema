@@ -177,12 +177,22 @@ interface CadastroEmpresaTabProps {
   // Vem do botão "Recadastrar" da aba Empresas.
   prefill?: { nome: string; empresa: string; cnpj: string } | null;
   onPrefillConsumido?: () => void;
+  // Vem do botão "Editar cadastro" da aba Empresas — pré-carrega o formulário
+  // inteiro com os dados já existentes de uma empresa (pra testar o reenvio
+  // dos campos corrigidos sem precisar criar uma empresa nova toda vez).
+  // Continua passando por pré-visualização/confirmação normalmente antes de
+  // gravar qualquer coisa no Questor.
+  dadosIniciais?: (Partial<typeof DADOS_VAZIO> & { socios?: Partial<Socio>[] }) | null;
 }
 
-export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: CadastroEmpresaTabProps = {}) {
-  const [dados, setDados] = useState({ ...DADOS_VAZIO });
-  const [socios, setSocios] = useState<Socio[]>(() => [novoSocio(1)]);
-  const socioIdRef = useRef(1);
+export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosIniciais }: CadastroEmpresaTabProps = {}) {
+  const [dados, setDados] = useState({ ...DADOS_VAZIO, ...(dadosIniciais ?? {}) });
+  const [socios, setSocios] = useState<Socio[]>(() =>
+    dadosIniciais?.socios?.length
+      ? dadosIniciais.socios.map((s, i) => novoSocio(i + 1, s))
+      : [novoSocio(1)]
+  );
+  const socioIdRef = useRef(socios.length || 1);
 
   const [naturezas, setNaturezas] = useState<LookupItem[]>([]);
   const [enquadramentos, setEnquadramentos] = useState<LookupItem[]>([]);
