@@ -86,6 +86,7 @@ function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
     complenderestab: campo(d, "complenderestab", "complemento") !== "-" ? campo(d, "complenderestab", "complemento") : "",
     bairroenderestab: campo(d, "bairroenderestab", "bairro") !== "-" ? campo(d, "bairroenderestab", "bairro") : "",
     siglaestado: campo(d, "siglaestado", "uf") !== "-" ? campo(d, "siglaestado", "uf") : "",
+    codigomunic: campo(d, "codigomunic") !== "-" ? campo(d, "codigomunic") : "",
     cependerestab: campo(d, "cependerestab", "cep") !== "-" ? campo(d, "cependerestab", "cep") : "",
     numerofone: numero,
     dddfone: ddd,
