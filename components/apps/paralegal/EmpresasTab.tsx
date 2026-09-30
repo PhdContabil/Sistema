@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatarCnpj } from "./merge-format";
-import CadastroEmpresaTab from "./CadastroEmpresaTab";
 
 interface Empresa {
   codigoempresa: number;
@@ -43,90 +42,6 @@ function formatarDataBr(v: unknown): string {
   return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
-// Converte pra "AAAA-MM-DD" (formato do <input type="date">) quando dá pra
-// reconhecer a data; senão devolve "" e o campo fica em branco pro usuário
-// preencher (melhor vazio do que uma data errada).
-function paraDataInput(v: unknown): string {
-  if (!v) return "";
-  const s = String(v);
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
-}
-
-function somenteDigitosLocal(v: unknown): string {
-  return String(v ?? "").replace(/\D/g, "");
-}
-
-// Monta o "dadosIniciais" do CadastroEmpresaTab a partir do cadastro já
-// existente no Questor — usado pelo botão "Editar cadastro", pra facilitar
-// testar o reenvio dos campos sem precisar criar uma empresa nova cada vez.
-// A consulta detalhada do Questor já traz os códigos de natureza jurídica,
-// tabela de feriado, tipo de logradouro e CNAE prontos -- só o município
-// precisa da lista carregar primeiro (ver useEffect no CadastroEmpresaTab) e
-// o enquadramento só vem como texto ("regime"), sem código -- por isso tenta
-// casar pela descrição depois que a lista de enquadramentos carrega.
-function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
-  // dddfone/numerofone vêm como campos próprios no Questor (não precisa
-  // separar de "telefone") -- usar direto evita cortar dígitos errados
-  // quando o telefone tem 9 dígitos (celular).
-  const ddd = campo(d, "dddfone") !== "-" ? somenteDigitosLocal(campo(d, "dddfone")) : "";
-  const numero = campo(d, "numerofone") !== "-" ? somenteDigitosLocal(campo(d, "numerofone")) : "";
-  return {
-    codigoempresa: String(codigo),
-    nomeempresa: campo(d, "nomeempresa", "nome") !== "-" ? campo(d, "nomeempresa", "nome") : "",
-    nomefantasia: campo(d, "nomefantasia") !== "-" ? campo(d, "nomefantasia") : "",
-    inscrfederal: campo(d, "inscrfederal", "cnpj") !== "-" ? campo(d, "inscrfederal", "cnpj") : "",
-    datainicioativ: paraDataInput(d["datainicioativ"] ?? d["iniciodaatividade"] ?? d["dtinicioatividade"]),
-    codigonaturjurid: campo(d, "codigonaturjurid") !== "-" ? campo(d, "codigonaturjurid") : "",
-    codigotabferiado: campo(d, "codigotabferiado") !== "-" ? campo(d, "codigotabferiado") : "",
-    codigotipolograd: campo(d, "codigotipolograd") !== "-" ? campo(d, "codigotipolograd") : "",
-    enderecoestab: campo(d, "enderecoestab", "endereco") !== "-" ? campo(d, "enderecoestab", "endereco") : "",
-    numenderestab: campo(d, "numenderestab", "numero") !== "-" ? campo(d, "numenderestab", "numero") : "",
-    complenderestab: campo(d, "complenderestab", "complemento") !== "-" ? campo(d, "complenderestab", "complemento") : "",
-    bairroenderestab: campo(d, "bairroenderestab", "bairro") !== "-" ? campo(d, "bairroenderestab", "bairro") : "",
-    siglaestado: campo(d, "siglaestado", "uf") !== "-" ? campo(d, "siglaestado", "uf") : "",
-    codigomunic: campo(d, "codigomunic") !== "-" ? campo(d, "codigomunic") : "",
-    cependerestab: campo(d, "cependerestab", "cep") !== "-" ? campo(d, "cependerestab", "cep") : "",
-    numerofone: numero,
-    dddfone: ddd,
-    email: campo(d, "email") !== "-" ? campo(d, "email") : "",
-    capitalsocial: campo(d, "capitalsocial") !== "-" ? campo(d, "capitalsocial") : "",
-    valornominalcotas: campo(d, "valornominalcotas") !== "-" ? campo(d, "valornominalcotas") : "",
-    tiporegist: campo(d, "tiporegist") !== "-" ? campo(d, "tiporegist") : "",
-    numeroregist: campo(d, "numeroregist") !== "-" ? campo(d, "numeroregist") : "",
-    inscrmunic: campo(d, "inscrmunic") !== "-" ? campo(d, "inscrmunic") : "",
-    inscrestad: campo(d, "inscrestad") !== "-" ? campo(d, "inscrestad") : "",
-    // CNAE já vem com código e descrição prontos -- pré-seleciona direto,
-    // sem precisar buscar de novo.
-    cnae: campo(d, "codigoativfederal") !== "-"
-      ? { codigo: campo(d, "codigoativfederal"), descricao: campo(d, "ativfederal", "descatividade") !== "-" ? campo(d, "ativfederal", "descatividade") : campo(d, "codigoativfederal") }
-      : null,
-    // Enquadramento (campo "tipoenquad") só vem como texto no "regime"
-    // (ex.: "MICROEMPRESA") -- o CadastroEmpresaTab tenta casar com a lista
-    // de enquadramentos depois que ela carrega.
-    enquadramentoDescricao: campo(d, "regime") !== "-" ? campo(d, "regime") : "",
-    socios: listaSocios(d).map((s) => ({
-      nomesocio: campo(s, "nomesocio", "nome") !== "-" ? campo(s, "nomesocio", "nome") : "",
-      inscrfederal: campo(s, "inscrfederal", "cpf", "numcpf") !== "-" ? campo(s, "inscrfederal", "cpf", "numcpf") : "",
-      datanasc: paraDataInput(s["datanasc"]),
-      datainicial: paraDataInput(s["datainiciosocio"] ?? s["dataentrada"] ?? s["entrada"] ?? s["dtentrada"]),
-      estadocivil: campo(s, "estadocivil") !== "-" ? campo(s, "estadocivil") : "",
-      numerorg: campo(s, "numerorg") !== "-" ? campo(s, "numerorg") : "",
-      siglaestadorg: campo(s, "siglaestadorg") !== "-" ? campo(s, "siglaestadorg") : "",
-      datarg: paraDataInput(s["datarg"]),
-      nomemae: campo(s, "nomemae") !== "-" ? campo(s, "nomemae") : "",
-      nomepai: campo(s, "nomepai") !== "-" ? campo(s, "nomepai") : "",
-      declarafisicaescrit: campo(s, "declarafisicaescrit") !== "-" && campo(s, "declarafisicaescrit").trim() !== "" ? campo(s, "declarafisicaescrit").trim() : "",
-      quantcotas: campo(s, "quantcotas", "qtdcotas", "quantidadecotas", "qtdecotas") !== "-" ? campo(s, "quantcotas", "qtdcotas", "quantidadecotas", "qtdecotas") : "",
-      percentcotas: campo(s, "percentcotas", "percentualcotas", "percapital", "percentual") !== "-" ? campo(s, "percentcotas", "percentualcotas", "percapital", "percentual") : "",
-      dddfone: campo(s, "dddfone", "dddcelular") !== "-" ? somenteDigitosLocal(campo(s, "dddfone", "dddcelular")) : "",
-      numerofone: campo(s, "numerofone", "numerocelular") !== "-" ? somenteDigitosLocal(campo(s, "numerofone", "numerocelular")) : "",
-      email: campo(s, "email") !== "-" ? campo(s, "email") : "",
-    })),
-  };
-}
-
 interface EmpresasTabProps {
   // Chamado ao clicar em "Recadastrar" no detalhe — o pai (Controle) decide o
   // que fazer (aqui: abrir a aba Clientes já com um novo cadastro pré-preenchido).
@@ -141,10 +56,6 @@ export default function EmpresasTab({ onRecadastrar }: EmpresasTabProps) {
   const [buscaDebounced, setBuscaDebounced] = useState("");
   const [detalhe, setDetalhe] = useState<{ codigo: number; carregando: boolean; dados: EmpresaDetalhe | null; erro: string | null } | null>(null);
   const [verBruto, setVerBruto] = useState(false);
-  // Edição de teste — abre o próprio formulário de Cadastro de Empresa,
-  // pré-carregado com os dados já existentes, pra facilitar testar o reenvio
-  // dos campos pro Questor numa empresa real em vez de criar uma nova.
-  const [dadosEdicao, setDadosEdicao] = useState<ReturnType<typeof montarDadosIniciaisEdicao> | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -358,36 +269,8 @@ export default function EmpresasTab({ onRecadastrar }: EmpresasTabProps) {
                   Recadastrar (novo cadastro com esses dados)
                 </button>
               )}
-              {detalhe.dados && (
-                <button
-                  className="pl-btn"
-                  title="Abre o formulário de Cadastro de Empresa pré-preenchido com os dados desta empresa — útil pra testar o reenvio dos campos ao Questor"
-                  onClick={() => {
-                    setDadosEdicao(montarDadosIniciaisEdicao(detalhe.codigo, detalhe.dados!));
-                    setDetalhe(null);
-                  }}
-                >
-                  Editar cadastro (teste)
-                </button>
-              )}
               <button className="pl-btn" onClick={() => setDetalhe(null)}>Fechar</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {dadosEdicao && (
-        <div className="pl-modal-bg" onClick={() => setDadosEdicao(null)}>
-          <div className="pl-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 820, maxHeight: "90vh", overflow: "auto" }}>
-            <div className="pl-toolbar" style={{ marginBottom: 12 }}>
-              <button className="pl-btn" onClick={() => setDadosEdicao(null)}>← Voltar</button>
-            </div>
-            <div className="pl-banner">
-              Editando código {dadosEdicao.codigoempresa} — confira natureza jurídica, enquadramento, tipo de
-              logradouro, município e CNAE (não vêm pré-preenchidos) antes de pré-visualizar. Nada é gravado até
-              você confirmar.
-            </div>
-            <CadastroEmpresaTab dadosIniciais={dadosEdicao} />
           </div>
         </div>
       )}

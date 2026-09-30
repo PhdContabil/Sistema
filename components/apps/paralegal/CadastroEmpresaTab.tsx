@@ -177,38 +177,12 @@ interface CadastroEmpresaTabProps {
   // Vem do botão "Recadastrar" da aba Empresas.
   prefill?: { nome: string; empresa: string; cnpj: string } | null;
   onPrefillConsumido?: () => void;
-  // Vem do botão "Editar cadastro" da aba Empresas — pré-carrega o formulário
-  // inteiro com os dados já existentes de uma empresa (pra testar o reenvio
-  // dos campos corrigidos sem precisar criar uma empresa nova toda vez).
-  // Continua passando por pré-visualização/confirmação normalmente antes de
-  // gravar qualquer coisa no Questor.
-  dadosIniciais?: (Partial<typeof DADOS_VAZIO> & {
-    socios?: Partial<Socio>[];
-    // CNAE já vem com código E descrição prontos do Questor -- não precisa
-    // buscar de novo, só pré-selecionar.
-    cnae?: { codigo: string; descricao: string } | null;
-    // Enquadramento (campo "tipoenquad") não vem com código na consulta de
-    // leitura do Questor, só a descrição do regime (ex.: "MICROEMPRESA") --
-    // usada pra tentar casar com a lista de enquadramentos depois que ela
-    // carrega.
-    enquadramentoDescricao?: string;
-  }) | null;
 }
 
-export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosIniciais }: CadastroEmpresaTabProps = {}) {
-  const [dados, setDados] = useState({
-    ...DADOS_VAZIO,
-    ...(dadosIniciais ?? {}),
-    // CNPJ vem sem pontuação da consulta do Questor -- aplica a máscara igual
-    // ao que o usuário digitando veria.
-    ...(dadosIniciais?.inscrfederal ? { inscrfederal: mascararCnpj(dadosIniciais.inscrfederal) } : {}),
-  });
-  const [socios, setSocios] = useState<Socio[]>(() =>
-    dadosIniciais?.socios?.length
-      ? dadosIniciais.socios.map((s, i) => novoSocio(i + 1, s))
-      : [novoSocio(1)]
-  );
-  const socioIdRef = useRef(socios.length || 1);
+export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: CadastroEmpresaTabProps = {}) {
+  const [dados, setDados] = useState({ ...DADOS_VAZIO });
+  const [socios, setSocios] = useState<Socio[]>(() => [novoSocio(1)]);
+  const socioIdRef = useRef(1);
 
   const [naturezas, setNaturezas] = useState<LookupItem[]>([]);
   const [enquadramentos, setEnquadramentos] = useState<LookupItem[]>([]);
@@ -218,19 +192,13 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
   const [municipios, setMunicipios] = useState<LookupItem[]>([]);
   const [carregandoListas, setCarregandoListas] = useState(true);
 
-  const [cnaeBusca, setCnaeBusca] = useState(() => (dadosIniciais?.cnae ? `${dadosIniciais.cnae.codigo} - ${dadosIniciais.cnae.descricao}` : ""));
+  const [cnaeBusca, setCnaeBusca] = useState("");
   const [cnaeResultados, setCnaeResultados] = useState<LookupItem[]>([]);
   const [cnaeMostrarResultados, setCnaeMostrarResultados] = useState(false);
-  const [cnaeSelecionado, setCnaeSelecionado] = useState<LookupItem | null>(() =>
-    dadosIniciais?.cnae ? { codigo: dadosIniciais.cnae.codigo, descricao: dadosIniciais.cnae.descricao } : null
-  );
+  const [cnaeSelecionado, setCnaeSelecionado] = useState<LookupItem | null>(null);
 
   const [cnpjStatus, setCnpjStatus] = useState<{ texto: string; tipo: "" | "ok" | "erro" }>({ texto: "", tipo: "" });
-  // Em modo de edição já sabemos o CNPJ (veio do Questor, que é bem mais
-  // confiável que a BrasilAPI pública pra dados de empresa nossa cliente) --
-  // marca como "já buscado" de cara pra não disparar a busca pública nem
-  // mostrar "CNPJ não encontrado" à toa.
-  const cnpjBuscadoRef = useRef<string | null>(dadosIniciais?.inscrfederal ? somenteDigitos(dadosIniciais.inscrfederal) : null);
+  const cnpjBuscadoRef = useRef<string | null>(null);
 
   const [camposErro, setCamposErro] = useState<Set<string>>(new Set());
   const [avisos, setAvisos] = useState<string[] | null>(null);
@@ -282,15 +250,6 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
         setFeriados(f);
         setLogradouros(l);
         setEstados(uf.filter((x) => x.codigo && x.codigo.length === 2));
-
-        // Tenta casar o enquadramento (só vem como texto -- ex. "MICROEMPRESA"
-        // -- na consulta de leitura do Questor) com a lista de códigos.
-        if (dadosIniciais?.enquadramentoDescricao) {
-          const alvo = dadosIniciais.enquadramentoDescricao.trim().toLowerCase();
-          const opcao = e.find((o) => o.descricao.trim().toLowerCase() === alvo)
-            ?? e.find((o) => o.descricao.trim().toLowerCase().includes(alvo) || alvo.includes(o.descricao.trim().toLowerCase()));
-          if (opcao) setDados((d) => (d.tipoenquad ? d : { ...d, tipoenquad: opcao.codigo }));
-        }
       } catch (err) {
         if (!cancelado) setResultado({ tipo: "falha", titulo: "Não foi possível carregar as listas do Questor.", linhas: [err instanceof Error ? err.message : "Erro desconhecido."] });
       } finally {
@@ -310,20 +269,6 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
     onPrefillConsumido?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
-
-  // Prefill vindo do "Editar cadastro" da aba Empresas: já traz siglaestado
-  // preenchido, mas a lista de municípios só carrega quando o usuário troca
-  // o <select> de estado (aoTrocarEstado) -- então, com prefill, carrega na
-  // mão uma vez pra o <select> de município já vir com as opções certas.
-  useEffect(() => {
-    if (!dadosIniciais?.siglaestado) return;
-    let cancelado = false;
-    buscarLookup("municipios", { uf: dadosIniciais.siglaestado })
-      .then((lista) => { if (!cancelado) setMunicipios(lista); })
-      .catch(() => { /* usuário pode trocar o estado manualmente se falhar */ });
-    return () => { cancelado = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Município depende do estado escolhido.
   async function aoTrocarEstado(uf: string) {
