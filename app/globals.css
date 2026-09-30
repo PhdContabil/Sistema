@@ -2383,3 +2383,11 @@ html[data-theme="dark"] .estr-escolha.on { background: #1c2f63; }
 .ct-tabela { border-collapse: collapse; min-width: 360px; font-size: 14px; }
 .ct-tabela th { text-align: left; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-weight: 600; }
 .ct-tabela th, .ct-tabela td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+/* Circuito: rádio nativo nos cartões de circuito + número visível */
+.evc-mod { position: relative; user-select: none; }
+.evc-mod input[type="radio"] { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.evc-mod:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }
+.evc-mod:has(input:checked) { background: var(--c); border-color: #fff; }
+.evc-check { display: none; position: absolute; top: 6px; right: 8px; font-style: normal; font-weight: 700; }
+.evc-mod.sel .evc-check, .evc-mod:has(input:checked) .evc-check { display: block; }
+.evc-acomp input { color: #0f1b2d; background: #fff; }

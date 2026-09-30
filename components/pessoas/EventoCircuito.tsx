@@ -63,14 +63,19 @@ export default function EventoCircuito() {
     return () => window.removeEventListener("keydown", k);
   }, [i, ir]);
 
-  async function enviar(metodo: "POST" | "DELETE") {
-    if (metodo === "POST" && !modalidade) { setMsg({ tipo: "erro", texto: "Escolha o circuito." }); return; }
+  async function enviar(metodo: "POST" | "DELETE", form?: HTMLFormElement | null) {
+    // O formulário é a fonte da verdade (rádio nativo): não depende de o
+    // clique ter atualizado o estado do React.
+    const dados = form ? new FormData(form) : null;
+    const mod = String(dados?.get("modalidade") ?? modalidade ?? "");
+    const fam = Math.max(0, Math.min(10, Number(dados?.get("acompanhantes") ?? acomp) || 0));
+    if (metodo === "POST" && !mod) { setMsg({ tipo: "erro", texto: "Escolha o circuito: toque em 3 km, 5 km ou 10 km." }); return; }
     if (metodo === "DELETE" && !window.confirm("Cancelar a sua inscrição?")) return;
     setSalvando(true); setMsg(null);
     try {
       const r = await fetch(`/api/pessoas/eventos/${EVENTO}/inscricoes`, {
         method: metodo, headers: { "Content-Type": "application/json" },
-        body: metodo === "POST" ? JSON.stringify({ modalidade, acompanhantes: acomp }) : undefined,
+        body: metodo === "POST" ? JSON.stringify({ modalidade: mod, acompanhantes: fam }) : undefined,
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setMsg({ tipo: "erro", texto: j.error ?? `Falha (HTTP ${r.status}).` }); return; }
@@ -110,36 +115,38 @@ export default function EventoCircuito() {
             <img key={i} className="evc-img" src={SLIDES[i].src} alt={SLIDES[i].alt} />
           ) : (
             <div className="evc-insc">
-              <div className="evc-insc-txt">
+              <form className="evc-insc-txt" onSubmit={(e) => { e.preventDefault(); enviar("POST", e.currentTarget); }}>
                 <p className="evc-frase">O primeiro passo da caminhada não começa no parque. <strong>Começa aqui.</strong></p>
                 <p className="evc-frase2">Cuidado também é decisão. Inscreva-se, convide quem você ama e deixe o caminho começar.</p>
 
-                <div className="evc-label">Circuito desejado</div>
-                <div className="evc-mods">
+                <div className="evc-label" id="evc-circ">Circuito desejado</div>
+                <div className="evc-mods" role="radiogroup" aria-labelledby="evc-circ">
                   {MODALIDADES.map((m) => (
-                    <button key={m.id} type="button" className={`evc-mod${modalidade === m.id ? " sel" : ""}`}
-                            style={{ ["--c" as string]: m.cor }} onClick={() => setModalidade(m.id)}>
+                    <label key={m.id} className={`evc-mod${modalidade === m.id ? " sel" : ""}`} style={{ ["--c" as string]: m.cor }}>
+                      <input type="radio" name="modalidade" value={m.id} checked={modalidade === m.id}
+                             onChange={() => { setModalidade(m.id); setMsg(null); }} />
                       <strong>{m.titulo}</strong><span>{m.sub}</span>
-                    </button>
+                      <em className="evc-check" aria-hidden="true">✓</em>
+                    </label>
                   ))}
                 </div>
 
                 <label className="evc-label" htmlFor="evc-acomp">Familiares que vão com você</label>
                 <div className="evc-acomp">
                   <button type="button" className="btn" onClick={() => setAcomp(Math.max(0, acomp - 1))} aria-label="Menos">−</button>
-                  <input id="evc-acomp" type="number" min={0} max={10} value={acomp}
+                  <input id="evc-acomp" name="acompanhantes" type="number" min={0} max={10} value={acomp}
                          onChange={(e) => setAcomp(Math.max(0, Math.min(10, Number(e.target.value) || 0)))} />
                   <button type="button" className="btn" onClick={() => setAcomp(Math.min(10, acomp + 1))} aria-label="Mais">+</button>
                 </div>
 
                 {msg && <div className={`banner ${msg.tipo === "ok" ? "ok" : "error"}`}>{msg.texto}</div>}
                 <div className="evc-botoes">
-                  <button className="btn primary" disabled={salvando || !carregado} onClick={() => enviar("POST")}>
+                  <button type="submit" className="btn primary" disabled={salvando || !carregado}>
                     {salvando ? "Salvando…" : minha ? "Atualizar inscrição" : "Quero participar"}
                   </button>
-                  {minha && <button className="btn" disabled={salvando} onClick={() => enviar("DELETE")}>Cancelar inscrição</button>}
+                  {minha && <button type="button" className="btn" disabled={salvando} onClick={() => enviar("DELETE")}>Cancelar inscrição</button>}
                 </div>
-              </div>
+              </form>
 
               <div className="evc-lista">
                 <div className="evc-lista-head">
