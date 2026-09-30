@@ -43,6 +43,17 @@ const ESTADO_CIVIL_OPCOES = [
   { valor: "6", texto: "Outros" },
 ];
 
+// Órgão de registro (campo "tiporegist" no Questor) — lista fixa, igual à
+// tabela TipoRegistro do controle.accdb antigo (só 6 opções, nunca muda).
+const TIPO_REGISTRO_OPCOES = [
+  { valor: "1", texto: "Junta Comercial" },
+  { valor: "2", texto: "Cartório" },
+  { valor: "3", texto: "Cartório Pessoas Jurídicas" },
+  { valor: "4", texto: "OAB" },
+  { valor: "5", texto: "CEI" },
+  { valor: "6", texto: "Em Branco" },
+];
+
 const CAMPO_LABEL: Record<string, string> = {
   codigoempresa: "Código da empresa",
   nomeempresa: "Nome (razão social)",
@@ -65,10 +76,10 @@ const CAMPO_LABEL: Record<string, string> = {
   email: "E-mail",
   capitalsocial: "Capital social",
   valornominalcotas: "Valor da cota",
-  orgaoregistro: "Órgão de registro",
+  tiporegist: "Órgão de registro",
   numeroregistro: "Número de registro",
-  inscrmunicipal: "Inscrição municipal",
-  inscrestadual: "Inscrição estadual",
+  inscrmunic: "Inscrição municipal",
+  inscrestad: "Inscrição estadual",
 };
 
 function somenteDigitos(v: string): string {
@@ -156,10 +167,10 @@ const DADOS_VAZIO = {
   email: "",
   capitalsocial: "",
   valornominalcotas: "",
-  orgaoregistro: "",
+  tiporegist: "",
   numeroregistro: "",
-  inscrmunicipal: "",
-  inscrestadual: "",
+  inscrmunic: "",
+  inscrestad: "",
 };
 
 interface CadastroEmpresaTabProps {
@@ -429,10 +440,10 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
       codigoativfederal: cnaeSelecionado?.codigo ?? "",
       capitalsocial: dados.capitalsocial.trim(),
       valornominalcotas: dados.valornominalcotas.trim(),
-      orgaoregistro: dados.orgaoregistro.trim(),
+      tiporegist: dados.tiporegist ? Number(dados.tiporegist) : undefined,
       numeroregistro: dados.numeroregistro.trim(),
-      inscrmunicipal: dados.inscrmunicipal.trim(),
-      inscrestadual: dados.inscrestadual.trim(),
+      inscrmunic: dados.inscrmunic.trim(),
+      inscrestad: dados.inscrestad.trim(),
       socios: socios.map((s) => ({
         nomesocio: s.nomesocio.trim(),
         inscrfederal: s.inscrfederal.trim(),
@@ -618,16 +629,19 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
           <h2>Registro e Inscrições</h2>
           <div className="pl-form-grid">
             <label>Órgão de registro
-              <input type="text" placeholder="ex.: JUCESP" value={dados.orgaoregistro} onChange={(e) => campo("orgaoregistro", e.target.value)} className={erro("orgaoregistro")} />
+              <select value={dados.tiporegist} onChange={(e) => campo("tiporegist", e.target.value)} className={erro("tiporegist")}>
+                <option value="">selecione</option>
+                {TIPO_REGISTRO_OPCOES.map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
+              </select>
             </label>
             <label>Número de registro
               <input type="text" placeholder="NIRE / número na Junta" value={dados.numeroregistro} onChange={(e) => campo("numeroregistro", e.target.value)} className={erro("numeroregistro")} />
             </label>
             <label>Inscrição municipal
-              <input type="text" placeholder="ou ISENTO" value={dados.inscrmunicipal} onChange={(e) => campo("inscrmunicipal", e.target.value)} className={erro("inscrmunicipal")} />
+              <input type="text" placeholder="ou ISENTO" value={dados.inscrmunic} onChange={(e) => campo("inscrmunic", e.target.value)} className={erro("inscrmunic")} />
             </label>
             <label>Inscrição estadual
-              <input type="text" placeholder="ou ISENTO" value={dados.inscrestadual} onChange={(e) => campo("inscrestadual", e.target.value)} className={erro("inscrestadual")} />
+              <input type="text" placeholder="ou ISENTO" value={dados.inscrestad} onChange={(e) => campo("inscrestad", e.target.value)} className={erro("inscrestad")} />
             </label>
           </div>
         </div>

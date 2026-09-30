@@ -340,10 +340,10 @@ export interface DadosCadastroEmpresa {
   email?: string;
   capitalsocial?: string;
   valornominalcotas?: string;
-  orgaoregistro?: string;
+  tiporegist?: number;
   numeroregistro?: string;
-  inscrmunicipal?: string;
-  inscrestadual?: string;
+  inscrmunic?: string;
+  inscrestad?: string;
   socios: SocioCadastroEmpresa[];
 }
 
