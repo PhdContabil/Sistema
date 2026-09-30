@@ -339,7 +339,7 @@ export interface DadosCadastroEmpresa {
   numerofone?: number;
   email?: string;
   capitalsocial?: string;
-  valorcota?: string;
+  valornominalcotas?: string;
   orgaoregistro?: string;
   numeroregistro?: string;
   inscrmunicipal?: string;

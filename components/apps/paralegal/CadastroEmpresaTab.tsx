@@ -64,7 +64,7 @@ const CAMPO_LABEL: Record<string, string> = {
   numerofone: "Telefone",
   email: "E-mail",
   capitalsocial: "Capital social",
-  valorcota: "Valor da cota",
+  valornominalcotas: "Valor da cota",
   orgaoregistro: "Órgão de registro",
   numeroregistro: "Número de registro",
   inscrmunicipal: "Inscrição municipal",
@@ -155,7 +155,7 @@ const DADOS_VAZIO = {
   numerofone: "",
   email: "",
   capitalsocial: "",
-  valorcota: "",
+  valornominalcotas: "",
   orgaoregistro: "",
   numeroregistro: "",
   inscrmunicipal: "",
@@ -428,7 +428,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
       numerofone: dados.numerofone.trim() ? Number(dados.numerofone) : undefined,
       codigoativfederal: cnaeSelecionado?.codigo ?? "",
       capitalsocial: dados.capitalsocial.trim(),
-      valorcota: dados.valorcota.trim(),
+      valornominalcotas: dados.valornominalcotas.trim(),
       orgaoregistro: dados.orgaoregistro.trim(),
       numeroregistro: dados.numeroregistro.trim(),
       inscrmunicipal: dados.inscrmunicipal.trim(),
@@ -609,7 +609,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
               <input type="text" inputMode="decimal" placeholder="ex.: 10000,00" value={dados.capitalsocial} onChange={(e) => campo("capitalsocial", e.target.value)} className={erro("capitalsocial")} />
             </label>
             <label>Valor da cota
-              <input type="text" inputMode="decimal" placeholder="ex.: 1,00" value={dados.valorcota} onChange={(e) => campo("valorcota", e.target.value)} className={erro("valorcota")} />
+              <input type="text" inputMode="decimal" placeholder="ex.: 1,00" value={dados.valornominalcotas} onChange={(e) => campo("valornominalcotas", e.target.value)} className={erro("valornominalcotas")} />
             </label>
           </div>
         </div>
