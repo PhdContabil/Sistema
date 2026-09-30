@@ -63,6 +63,12 @@ const CAMPO_LABEL: Record<string, string> = {
   dddfone: "DDD",
   numerofone: "Telefone",
   email: "E-mail",
+  capitalsocial: "Capital social",
+  valorcota: "Valor da cota",
+  orgaoregistro: "Órgão de registro",
+  numeroregistro: "Número de registro",
+  inscrmunicipal: "Inscrição municipal",
+  inscrestadual: "Inscrição estadual",
 };
 
 function somenteDigitos(v: string): string {
@@ -85,6 +91,13 @@ function mascararCpf(valor: string): string {
   if (digitos.length > 3) out = digitos.slice(0, 3) + "." + digitos.slice(3);
   if (digitos.length > 6) out = out.slice(0, 7) + "." + out.slice(7);
   if (digitos.length > 9) out = out.slice(0, 11) + "-" + out.slice(11);
+  return out;
+}
+
+function mascararCep(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 8);
+  let out = digitos;
+  if (digitos.length > 5) out = digitos.slice(0, 5) + "-" + digitos.slice(5);
   return out;
 }
 
@@ -141,6 +154,12 @@ const DADOS_VAZIO = {
   dddfone: "",
   numerofone: "",
   email: "",
+  capitalsocial: "",
+  valorcota: "",
+  orgaoregistro: "",
+  numeroregistro: "",
+  inscrmunicipal: "",
+  inscrestadual: "",
 };
 
 interface CadastroEmpresaTabProps {
@@ -293,7 +312,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
         if (d.numero) novo.numenderestab = String(d.numero);
         if (d.complemento) novo.complenderestab = d.complemento;
         if (d.bairro) novo.bairroenderestab = d.bairro;
-        if (d.cep) novo.cependerestab = d.cep;
+        if (d.cep) novo.cependerestab = mascararCep(String(d.cep));
         if (d.data_inicio_atividade && !prev.datainicioativ) novo.datainicioativ = d.data_inicio_atividade;
         if (d.email && !prev.email.trim()) novo.email = d.email;
         if (d.ddd_telefone_1) {
@@ -397,11 +416,23 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
   }
 
   function montarDados() {
+    // CEP mandado só com dígitos (sem ponto/traço) pro Questor: com máscara,
+    // o CEP do sócio já chegou cortado em "05." (o da empresa, mesmo formato,
+    // gravou certo) -- então tiramos a pontuação dos dois pra não arriscar de
+    // novo.
+    const cepEmpresaDigitos = somenteDigitos(dados.cependerestab);
     return {
       ...dados,
+      cependerestab: cepEmpresaDigitos,
       dddfone: dados.dddfone.trim() ? Number(dados.dddfone) : undefined,
       numerofone: dados.numerofone.trim() ? Number(dados.numerofone) : undefined,
       codigoativfederal: cnaeSelecionado?.codigo ?? "",
+      capitalsocial: dados.capitalsocial.trim(),
+      valorcota: dados.valorcota.trim(),
+      orgaoregistro: dados.orgaoregistro.trim(),
+      numeroregistro: dados.numeroregistro.trim(),
+      inscrmunicipal: dados.inscrmunicipal.trim(),
+      inscrestadual: dados.inscrestadual.trim(),
       socios: socios.map((s) => ({
         nomesocio: s.nomesocio.trim(),
         inscrfederal: s.inscrfederal.trim(),
@@ -430,7 +461,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
         enderecosocio: dados.enderecoestab,
         numendersocio: dados.numenderestab,
         bairroendersocio: dados.bairroenderestab,
-        cependersocio: dados.cependerestab,
+        cependersocio: cepEmpresaDigitos,
         datainiciosocio: s.datainicial,
       })),
     };
@@ -574,6 +605,30 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
             <label>Data de início da atividade
               <input type="date" required value={dados.datainicioativ} onChange={(e) => campo("datainicioativ", e.target.value)} className={erro("datainicioativ")} />
             </label>
+            <label>Capital social
+              <input type="text" inputMode="decimal" placeholder="ex.: 10000,00" value={dados.capitalsocial} onChange={(e) => campo("capitalsocial", e.target.value)} className={erro("capitalsocial")} />
+            </label>
+            <label>Valor da cota
+              <input type="text" inputMode="decimal" placeholder="ex.: 1,00" value={dados.valorcota} onChange={(e) => campo("valorcota", e.target.value)} className={erro("valorcota")} />
+            </label>
+          </div>
+        </div>
+
+        <div className="pl-card" style={{ marginTop: 16 }}>
+          <h2>Registro e Inscrições</h2>
+          <div className="pl-form-grid">
+            <label>Órgão de registro
+              <input type="text" placeholder="ex.: JUCESP" value={dados.orgaoregistro} onChange={(e) => campo("orgaoregistro", e.target.value)} className={erro("orgaoregistro")} />
+            </label>
+            <label>Número de registro
+              <input type="text" placeholder="NIRE / número na Junta" value={dados.numeroregistro} onChange={(e) => campo("numeroregistro", e.target.value)} className={erro("numeroregistro")} />
+            </label>
+            <label>Inscrição municipal
+              <input type="text" placeholder="ou ISENTO" value={dados.inscrmunicipal} onChange={(e) => campo("inscrmunicipal", e.target.value)} className={erro("inscrmunicipal")} />
+            </label>
+            <label>Inscrição estadual
+              <input type="text" placeholder="ou ISENTO" value={dados.inscrestadual} onChange={(e) => campo("inscrestadual", e.target.value)} className={erro("inscrestadual")} />
+            </label>
           </div>
         </div>
 
@@ -628,7 +683,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
               </select>
             </label>
             <label>CEP
-              <input type="text" value={dados.cependerestab} onChange={(e) => campo("cependerestab", e.target.value)} className={erro("cependerestab")} />
+              <input type="text" placeholder="00000-000" maxLength={9} value={dados.cependerestab} onChange={(e) => campo("cependerestab", mascararCep(e.target.value))} className={erro("cependerestab")} />
             </label>
           </div>
         </div>

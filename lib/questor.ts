@@ -338,6 +338,12 @@ export interface DadosCadastroEmpresa {
   dddfone?: number;
   numerofone?: number;
   email?: string;
+  capitalsocial?: string;
+  valorcota?: string;
+  orgaoregistro?: string;
+  numeroregistro?: string;
+  inscrmunicipal?: string;
+  inscrestadual?: string;
   socios: SocioCadastroEmpresa[];
 }
 
