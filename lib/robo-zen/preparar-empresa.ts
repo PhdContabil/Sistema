@@ -11,6 +11,7 @@ import { baixarConteudo, listarContratos } from "./empresas-sharepoint";
 import { filtrarDocumentosParaEnviar, ordenarCandidatosParaExtrairDados } from "./filtro-documentos";
 import { type DadosCertidao, extrairDadosCertidao, pdfPareceEscaneado } from "./certidao-parser";
 import { ClienteNaoEncontradoError, consultarCliente, hasQuestorZenToken, QuestorZenError } from "../questor-zen";
+import { obterCnpjManual } from "./db";
 
 // Categorias fixas (pra bater com o vocabulário que a Júlia já conhece dos
 // relatórios do Robô Zen em Python).
@@ -227,15 +228,37 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
   resultado.qtdDocumentosEscaneados = escaneados.length;
   resultado.documentosEscaneados = escaneados;
 
-  if (!dados || !dados.cnpj) {
+  // cnpjFinal/origemCnpj passam a valer tanto pro CNPJ achado no PDF quanto
+  // pro fallback manual abaixo — o resto da função (Questor, mensagens de
+  // status) não precisa saber qual dos dois foi.
+  let cnpjFinal: string | null = dados?.cnpj ?? null;
+  let origemCnpj: string | null = arquivoUsado?.nome ?? null;
+
+  if (!cnpjFinal) {
+    // Último recurso, só depois que a busca no PDF (extrairDadosComFallback,
+    // incluindo o corte por orçamento de tempo) genuinamente não achou nada
+    // — nunca antes disso. Cobre empresas específicas cujo CNPJ não aparece
+    // escrito em nenhum documento elegível (ex.: requerimento de empresário
+    // individual, que só traz CPF/NIRE); a Júlia registra esses casos um a
+    // um em robo_zen_cnpj_manual, então isso só entra em ação pras empresas
+    // que ela realmente cadastrou lá — as demais seguem batendo em
+    // MOTIVO_CNPJ_NAO_ENCONTRADO exatamente como antes.
+    const cnpjManual = await obterCnpjManual(empresa.codigo);
+    if (cnpjManual) {
+      cnpjFinal = cnpjManual;
+      origemCnpj = "informado manualmente (CNPJ não estava em nenhum documento elegível)";
+    }
+  }
+
+  if (!cnpjFinal) {
     const detalhe = problemas.length > 0 ? problemas.join(" | ") : "nenhum documento elegível pôde ser lido";
     resultado.status = `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${detalhe})`;
     resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
     return resultado;
   }
 
-  resultado.cnpj = dados.cnpj;
-  resultado.documentoCnpjOrigem = arquivoUsado?.nome ?? null;
+  resultado.cnpj = cnpjFinal;
+  resultado.documentoCnpjOrigem = origemCnpj;
 
   const avisoEscaneados = escaneados.length > 0 ? `, ${escaneados.length} escaneado(s)/sem texto` : "";
 
@@ -246,10 +269,10 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
   }
 
   try {
-    const cliente = await consultarCliente(dados.cnpj);
+    const cliente = await consultarCliente(cnpjFinal);
     resultado.status =
       `PRONTA (cliente no Questor: ${cliente.Nome ?? ""}, ${elegiveis.length} documento(s)` +
-      `${avisoEscaneados}, CNPJ extraído de ${arquivoUsado?.nome ?? "?"})`;
+      `${avisoEscaneados}, CNPJ extraído de ${origemCnpj ?? "?"})`;
     resultado.motivo = MOTIVO_PRONTA;
     resultado.pronta = true;
   } catch (e) {
