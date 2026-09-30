@@ -196,7 +196,13 @@ interface CadastroEmpresaTabProps {
 }
 
 export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosIniciais }: CadastroEmpresaTabProps = {}) {
-  const [dados, setDados] = useState({ ...DADOS_VAZIO, ...(dadosIniciais ?? {}) });
+  const [dados, setDados] = useState({
+    ...DADOS_VAZIO,
+    ...(dadosIniciais ?? {}),
+    // CNPJ vem sem pontuação da consulta do Questor -- aplica a máscara igual
+    // ao que o usuário digitando veria.
+    ...(dadosIniciais?.inscrfederal ? { inscrfederal: mascararCnpj(dadosIniciais.inscrfederal) } : {}),
+  });
   const [socios, setSocios] = useState<Socio[]>(() =>
     dadosIniciais?.socios?.length
       ? dadosIniciais.socios.map((s, i) => novoSocio(i + 1, s))
@@ -220,7 +226,11 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
   );
 
   const [cnpjStatus, setCnpjStatus] = useState<{ texto: string; tipo: "" | "ok" | "erro" }>({ texto: "", tipo: "" });
-  const cnpjBuscadoRef = useRef<string | null>(null);
+  // Em modo de edição já sabemos o CNPJ (veio do Questor, que é bem mais
+  // confiável que a BrasilAPI pública pra dados de empresa nossa cliente) --
+  // marca como "já buscado" de cara pra não disparar a busca pública nem
+  // mostrar "CNPJ não encontrado" à toa.
+  const cnpjBuscadoRef = useRef<string | null>(dadosIniciais?.inscrfederal ? somenteDigitos(dadosIniciais.inscrfederal) : null);
 
   const [camposErro, setCamposErro] = useState<Set<string>>(new Set());
   const [avisos, setAvisos] = useState<string[] | null>(null);
