@@ -65,7 +65,11 @@ function somenteDigitosLocal(v: unknown): string {
 // logradouro, município) não vêm prontos nessa consulta — ficam em branco
 // pro usuário selecionar de novo antes de pré-visualizar/confirmar.
 function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
-  const foneDigitos = somenteDigitosLocal(campo(d, "numerofone", "telefone") !== "-" ? campo(d, "numerofone", "telefone") : "");
+  // dddfone/numerofone vêm como campos próprios no Questor (não precisa
+  // separar de "telefone") -- usar direto evita cortar dígitos errados
+  // quando o telefone tem 9 dígitos (celular).
+  const ddd = campo(d, "dddfone") !== "-" ? somenteDigitosLocal(campo(d, "dddfone")) : "";
+  const numero = campo(d, "numerofone") !== "-" ? somenteDigitosLocal(campo(d, "numerofone")) : "";
   return {
     codigoempresa: String(codigo),
     nomeempresa: campo(d, "nomeempresa", "nome") !== "-" ? campo(d, "nomeempresa", "nome") : "",
@@ -78,8 +82,8 @@ function montarDadosIniciaisEdicao(codigo: number, d: EmpresaDetalhe) {
     bairroenderestab: campo(d, "bairroenderestab", "bairro") !== "-" ? campo(d, "bairroenderestab", "bairro") : "",
     siglaestado: campo(d, "siglaestado", "uf") !== "-" ? campo(d, "siglaestado", "uf") : "",
     cependerestab: campo(d, "cependerestab", "cep") !== "-" ? campo(d, "cependerestab", "cep") : "",
-    numerofone: foneDigitos.slice(-8),
-    dddfone: foneDigitos.length > 8 ? foneDigitos.slice(-10, -8) : "",
+    numerofone: numero,
+    dddfone: ddd,
     email: campo(d, "email") !== "-" ? campo(d, "email") : "",
     capitalsocial: campo(d, "capitalsocial") !== "-" ? campo(d, "capitalsocial") : "",
     valornominalcotas: campo(d, "valornominalcotas") !== "-" ? campo(d, "valornominalcotas") : "",

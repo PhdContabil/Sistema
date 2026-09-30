@@ -280,6 +280,20 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, dadosI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
+  // Prefill vindo do "Editar cadastro" da aba Empresas: já traz siglaestado
+  // preenchido, mas a lista de municípios só carrega quando o usuário troca
+  // o <select> de estado (aoTrocarEstado) -- então, com prefill, carrega na
+  // mão uma vez pra o <select> de município já vir com as opções certas.
+  useEffect(() => {
+    if (!dadosIniciais?.siglaestado) return;
+    let cancelado = false;
+    buscarLookup("municipios", { uf: dadosIniciais.siglaestado })
+      .then((lista) => { if (!cancelado) setMunicipios(lista); })
+      .catch(() => { /* usuário pode trocar o estado manualmente se falhar */ });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Município depende do estado escolhido.
   async function aoTrocarEstado(uf: string) {
     campo("siglaestado", uf);
