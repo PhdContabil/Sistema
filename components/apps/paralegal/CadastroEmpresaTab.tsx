@@ -77,7 +77,7 @@ const CAMPO_LABEL: Record<string, string> = {
   capitalsocial: "Capital social",
   valornominalcotas: "Valor da cota",
   tiporegist: "Órgão de registro",
-  numeroregistro: "Número de registro",
+  numeroregist: "Número de registro",
   inscrmunic: "Inscrição municipal",
   inscrestad: "Inscrição estadual",
 };
@@ -168,7 +168,7 @@ const DADOS_VAZIO = {
   capitalsocial: "",
   valornominalcotas: "",
   tiporegist: "",
-  numeroregistro: "",
+  numeroregist: "",
   inscrmunic: "",
   inscrestad: "",
 };
@@ -441,7 +441,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
       capitalsocial: dados.capitalsocial.trim(),
       valornominalcotas: dados.valornominalcotas.trim(),
       tiporegist: dados.tiporegist ? Number(dados.tiporegist) : undefined,
-      numeroregistro: dados.numeroregistro.trim(),
+      numeroregist: dados.numeroregist.trim(),
       inscrmunic: dados.inscrmunic.trim(),
       inscrestad: dados.inscrestad.trim(),
       socios: socios.map((s) => ({
@@ -635,7 +635,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
               </select>
             </label>
             <label>Número de registro
-              <input type="text" placeholder="NIRE / número na Junta" value={dados.numeroregistro} onChange={(e) => campo("numeroregistro", e.target.value)} className={erro("numeroregistro")} />
+              <input type="text" placeholder="NIRE / número na Junta" value={dados.numeroregist} onChange={(e) => campo("numeroregist", e.target.value)} className={erro("numeroregist")} />
             </label>
             <label>Inscrição municipal
               <input type="text" placeholder="ou ISENTO" value={dados.inscrmunic} onChange={(e) => campo("inscrmunic", e.target.value)} className={erro("inscrmunic")} />

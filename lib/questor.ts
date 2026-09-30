@@ -341,7 +341,7 @@ export interface DadosCadastroEmpresa {
   capitalsocial?: string;
   valornominalcotas?: string;
   tiporegist?: number;
-  numeroregistro?: string;
+  numeroregist?: string;
   inscrmunic?: string;
   inscrestad?: string;
   socios: SocioCadastroEmpresa[];
