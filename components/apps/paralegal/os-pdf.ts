@@ -29,6 +29,11 @@ interface DadosOSPdf {
   obs?: string;
   usuario?: string;
   tratadoCom?: string;
+  // Só usados na versão "Geral" (sem valores) -- ver gerarDocPdfOS.
+  ativPrincipal?: string;
+  inscrEstadual?: string;
+  inscrMunicipal?: string;
+  regimeTributario?: string;
 }
 
 function fmtData(iso: string | null | undefined): string {
@@ -42,16 +47,16 @@ function txt(v: unknown): string {
   return v === undefined || v === null || v === "" ? "-" : String(v);
 }
 
-function listaServicos(d: DadosOSPdf): string[] {
+function listaServicos(d: DadosOSPdf, comValores: boolean): string[] {
   const linhas: string[] = [];
   for (let i = 0; i < 4; i++) {
     const nome = d.servicos[i];
     const valor = d.valoresServ[i];
     if (nome) {
-      linhas.push(nome + (valor ? " - " + Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""));
+      linhas.push(nome + (comValores && valor ? " - " + Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""));
     }
   }
-  if (d.valorTT) {
+  if (comValores && d.valorTT) {
     linhas.push("Valor Total: " + Number(d.valorTT).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
   }
   return linhas.length ? linhas : ["-"];
@@ -62,7 +67,12 @@ export function nomeArquivoPdfOS(d: DadosOSPdf): string {
   return "OS-" + cod + ".pdf";
 }
 
-export function gerarDocPdfOS(d: DadosOSPdf): jsPDF {
+// "financeiro": mostra valores por serviço e valor total (nada de IE/IM/regime).
+// "geral": sem nenhum valor monetário; mostra atividade principal (CNAE),
+// inscrição estadual/municipal e regime tributário -- igual à separação que
+// já existia no sistema antigo (Ordem de Serviço x COMUNICADO).
+export function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeiro" = "financeiro"): jsPDF {
+  const comValores = publico === "financeiro";
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const margemX = 40;
   const largura = doc.internal.pageSize.getWidth() - margemX * 2;
@@ -117,10 +127,22 @@ export function gerarDocPdfOS(d: DadosOSPdf): jsPDF {
   const cidade = [d.bairro, d.cidade, d.cep].filter(Boolean).join(" - ") || "-";
   doc.text(cidade, margemX, y);
   y += 13;
-  doc.text("Ativ. Principal: " + txt(d.natJuridica), margemX, y);
-  y += 13;
   doc.text("Início das Atividades: " + fmtData(d.dataInicio), margemX, y);
-  y += 22;
+  y += 13;
+
+  // "Geral" (COMUNICADO): mostra atividade (CNAE) e I.E./I.M./Regime
+  // Tributário -- nunca valores. "Financeiro" (Ordem de Serviço): mostra os
+  // valores dos serviços/honorários, nunca esses dados cadastrais.
+  if (!comValores) {
+    doc.text("Ativ. Principal: " + txt(d.ativPrincipal), margemX, y);
+    y += 13;
+    const colLargura = largura / 3;
+    doc.text("I.E.: " + txt(d.inscrEstadual), margemX, y);
+    doc.text("I.M.: " + txt(d.inscrMunicipal), margemX + colLargura, y);
+    doc.text("Regime Tributário: " + txt(d.regimeTributario), margemX + colLargura * 2, y);
+    y += 13;
+  }
+  y += 9;
 
   secao("CONTATO");
   const contatoLinha = [
@@ -131,8 +153,8 @@ export function gerarDocPdfOS(d: DadosOSPdf): jsPDF {
   doc.text(contatoLinha || "-", margemX, y);
   y += 22;
 
-  secao("SERVIÇOS CONTRATADOS");
-  listaServicos(d).forEach((linha) => {
+  secao(comValores ? "SERVIÇOS / HONORÁRIOS" : "SERVIÇOS CONTRATADOS");
+  listaServicos(d, comValores).forEach((linha) => {
     doc.text(linha, margemX, y);
     y += 14;
   });

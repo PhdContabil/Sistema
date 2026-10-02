@@ -26,6 +26,11 @@ interface OS {
   indicacao: string;
   tratadoCom: string;
   natJuridica: string;
+  // Usados só na versão "Geral" do PDF (sem valores) -- ver os-pdf.ts.
+  ativPrincipal: string;
+  inscrEstadual: string;
+  inscrMunicipal: string;
+  regimeTributario: string;
   outraEmpresa: string;
   obs: string;
   usuario: string;
@@ -43,7 +48,8 @@ const VAZIO: Omit<OS, "id"> = {
   titulo: "", data: null, codigo: "", tipo: "", questor: "", razao: "", cnpj: "",
   logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", cep: "",
   contato: "", email: "", telefone: "", celular: "", indicacao: "", tratadoCom: "",
-  natJuridica: "", outraEmpresa: "", obs: "", usuario: "", dataInicio: null,
+  natJuridica: "", ativPrincipal: "", inscrEstadual: "", inscrMunicipal: "", regimeTributario: "",
+  outraEmpresa: "", obs: "", usuario: "", dataInicio: null,
   servicos: ["", "", "", ""], valoresServ: [null, null, null, null], valorTT: null, obsGerais: "",
 };
 
@@ -282,6 +288,10 @@ export default function OSTab() {
           if (!atual) return atual;
           const dados = { ...atual.dados };
           dados.natJuridica = dados.natJuridica || val("naturjuridica", "naturezajuridica");
+          dados.ativPrincipal = dados.ativPrincipal || val("ativfederal", "atividadefederal", "cnae", "descatividade");
+          dados.inscrEstadual = dados.inscrEstadual || val("inscrestad");
+          dados.inscrMunicipal = dados.inscrMunicipal || val("inscrmunic");
+          dados.regimeTributario = dados.regimeTributario || val("regime");
           dados.logradouro = dados.logradouro || [val("tipologradouro"), val("enderecoestab", "endereco")].filter(Boolean).join(" ");
           dados.numero = dados.numero || val("numenderestab", "numero");
           const complemento = val("complenderestab", "complemento");
@@ -393,8 +403,8 @@ export default function OSTab() {
     }
   }
 
-  function baixarPdf(o: OS) {
-    const doc = gerarDocPdfOS(o);
+  function baixarPdf(o: OS, publico: "geral" | "financeiro" = "financeiro") {
+    const doc = gerarDocPdfOS(o, publico);
     doc.save(nomeArquivoPdfOS(o));
   }
 
@@ -417,7 +427,7 @@ export default function OSTab() {
     setEnviando(true);
     setErro(null);
     try {
-      const doc = gerarDocPdfOS(o);
+      const doc = gerarDocPdfOS(o, destinatario);
       const pdfBase64 = doc.output("datauristring").split(",")[1];
       const r = await fetch("/api/paralegal/os/enviar-email", {
         method: "POST",
@@ -612,6 +622,13 @@ export default function OSTab() {
               <label style={{ marginBottom: 0 }}><span>CNPJ</span><input value={modal.dados.cnpj} onChange={(e) => setCampo("cnpj", mascararCnpjDigitando(e.target.value))} /></label>
               <label style={{ marginBottom: 0 }}><span>Natureza jurídica</span><input value={modal.dados.natJuridica} onChange={(e) => setCampo("natJuridica", e.target.value)} /></label>
             </div>
+            <label style={{ marginTop: 10 }}><span>Atividade principal (CNAE)</span><input value={modal.dados.ativPrincipal} onChange={(e) => setCampo("ativPrincipal", e.target.value)} /></label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <label style={{ marginBottom: 0 }}><span>Inscrição estadual</span><input value={modal.dados.inscrEstadual} onChange={(e) => setCampo("inscrEstadual", e.target.value)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Inscrição municipal</span><input value={modal.dados.inscrMunicipal} onChange={(e) => setCampo("inscrMunicipal", e.target.value)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Regime tributário</span><input value={modal.dados.regimeTributario} onChange={(e) => setCampo("regimeTributario", e.target.value)} /></label>
+            </div>
+            <p className="pl-cnae-selecionado" style={{ marginTop: 2 }}>Esses 3 campos só aparecem no PDF "Geral" (sem valores) — o PDF "Financeiro" não mostra.</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
               <label style={{ marginBottom: 0 }}><span>Outra empresa</span><input value={modal.dados.outraEmpresa} onChange={(e) => setCampo("outraEmpresa", e.target.value)} /></label>
               <div ref={indicacaoBuscaRef} style={{ position: "relative" }}>
@@ -743,7 +760,7 @@ export default function OSTab() {
 
             <div className="pl-toolbar" style={{ marginTop: 4 }}>
               <button className="pl-btn" onClick={() => setModal(null)} disabled={salvando}>Cancelar</button>
-              {modal.editando && <button className="pl-btn" onClick={() => baixarPdf(modal.editando as OS)}>Baixar PDF</button>}
+              {modal.editando && <button className="pl-btn" onClick={() => baixarPdf(modal.editando as OS, destinatario)}>Baixar PDF ({destinatario === "geral" ? "Geral" : "Financeiro"})</button>}
               <button className="pl-btn primary" onClick={salvar} disabled={salvando}>{salvando ? "Salvando…" : "Salvar"}</button>
             </div>
           </div>
