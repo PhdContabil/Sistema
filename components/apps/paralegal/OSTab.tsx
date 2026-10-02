@@ -17,8 +17,8 @@ type DadosCadastrais = { ativPrincipal: string; inscrEstadual: string; inscrMuni
 // Busca no cadastro da empresa (Questor) atividade principal, I.E., I.M. e
 // regime tributário. Esses campos não ficam salvos na lista da OS, então são
 // sempre puxados do cadastro na hora (ao abrir/editar a OS e ao gerar o PDF).
-async function buscarDadosCadastrais(codigo: string): Promise<DadosCadastrais | null> {
-  const cod = (codigo || "").replace(/\D/g, "");
+async function buscarDadosCadastrais(codigo: string | number): Promise<DadosCadastrais | null> {
+  const cod = String(codigo ?? "").replace(/\D/g, "");
   if (!cod) return null;
   try {
     const r = await fetch(`/api/paralegal/empresas/${cod}`, { cache: "no-store" });
