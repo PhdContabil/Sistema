@@ -614,7 +614,7 @@ export default function OSTab() {
                 <td>{o.codigo}</td>
                 <td>{o.titulo}</td>
                 <td>{o.razao}</td>
-                <td>{o.cnpj}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{o.cnpj}</td>
                 <td>{o.data ? new Date(o.data).toLocaleDateString("pt-BR") : ""}</td>
                 <td>{formatarValor(o.valorTT)}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -802,8 +802,8 @@ export default function OSTab() {
               </button>
             )}
             <label><span>Valor total</span><input value={formatarValor(modal.dados.valorTT)} readOnly disabled /></label>
-            <label><span>Observações gerais</span><textarea rows={2} value={modal.dados.obsGerais} onChange={(e) => setCampo("obsGerais", e.target.value)} /></label>
-            <label><span>Observações</span><textarea rows={2} value={modal.dados.obs} onChange={(e) => setCampo("obs", e.target.value)} /></label>
+            <label><span>Observações gerais <small style={{ opacity: 0.7 }}>(vai no PDF Geral e no Financeiro)</small></span><textarea rows={2} value={modal.dados.obsGerais} onChange={(e) => setCampo("obsGerais", e.target.value)} /></label>
+            <label><span>Observações financeiro <small style={{ opacity: 0.7 }}>(só no PDF Financeiro — valores, forma de pagamento)</small></span><textarea rows={2} value={modal.dados.obs} onChange={(e) => setCampo("obs", e.target.value)} /></label>
 
             {sugerirEnvio && modal.editando && (
               <div className="pl-banner" style={{ marginTop: 8, marginBottom: 4 }}>

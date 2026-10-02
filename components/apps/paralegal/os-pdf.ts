@@ -213,11 +213,16 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
   });
   y += 8;
 
-  secao("OBSERVAÇÕES");
-  const obsPartes = [d.obsGerais, d.obs].filter(Boolean).join("\n\n") || "-";
-  const obsLinhas = doc.splitTextToSize(obsPartes, largura) as string[];
-  doc.text(obsLinhas, margemX, y);
-  y += obsLinhas.length * 13 + 20;
+  // Igual ao sistema antigo (Access): "Observações Gerais" vai pros dois PDFs;
+  // "Observações Financeiro" (campo obs) só no PDF Financeiro.
+  function blocoObs(titulo: string, texto: string | undefined) {
+    secao(titulo);
+    const linhas = doc.splitTextToSize(texto || "-", largura) as string[];
+    doc.text(linhas, margemX, y);
+    y += linhas.length * 13 + 20;
+  }
+  if (comValores) blocoObs("OBSERVAÇÕES FINANCEIRO", d.obs);
+  blocoObs(comValores ? "OBSERVAÇÕES GERAIS" : "OBSERVAÇÕES", d.obsGerais);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
