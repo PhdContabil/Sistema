@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { gerarDocPdfOS, nomeArquivoPdfOS } from "./os-pdf";
+import { gerarDocPdfOS, nomeArquivoPdfOS, pdfParaBase64 } from "./os-pdf";
 import { formatarCnpj } from "./merge-format";
 
 interface OS {
@@ -415,8 +415,8 @@ export default function OSTab() {
     }
   }
 
-  function baixarPdf(o: OS, publico: "geral" | "financeiro" = "financeiro") {
-    const doc = gerarDocPdfOS(o, publico);
+  async function baixarPdf(o: OS, publico: "geral" | "financeiro" = "financeiro") {
+    const doc = await gerarDocPdfOS(o, publico);
     doc.save(nomeArquivoPdfOS(o, publico));
   }
 
@@ -439,8 +439,8 @@ export default function OSTab() {
     setEnviando(true);
     setErro(null);
     try {
-      const doc = gerarDocPdfOS(o, destinatario);
-      const pdfBase64 = doc.output("datauristring").split(",")[1];
+      const doc = await gerarDocPdfOS(o, destinatario);
+      const pdfBase64 = pdfParaBase64(doc);
       const r = await fetch("/api/paralegal/os/enviar-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -473,7 +473,7 @@ export default function OSTab() {
       // Plano B: o envio pelo Graph falhou, então baixa um .eml com destinatário, assunto, corpo e o
       // PDF já anexados -- ao abrir esse arquivo o Outlook do próprio usuário assume como remetente,
       // e ele só revisa e clica em Enviar.
-      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS - ${destinatario === "geral" ? "Geral" : "Financeiro"} ${o.codigo || o.id}.eml`, "message/rfc822");
+      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS ${destinatario === "geral" ? "Geral" : "Financeiro"} - ${o.codigo || o.id}.eml`, "message/rfc822");
       alert(`Não consegui enviar automaticamente (${j.avisoGraph || "erro no envio"}). Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
     } catch {
       setErro("Falha de rede ao preparar o e-mail.");
