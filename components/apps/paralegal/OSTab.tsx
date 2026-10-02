@@ -417,7 +417,7 @@ export default function OSTab() {
 
   function baixarPdf(o: OS, publico: "geral" | "financeiro" = "financeiro") {
     const doc = gerarDocPdfOS(o, publico);
-    doc.save(nomeArquivoPdfOS(o));
+    doc.save(nomeArquivoPdfOS(o, publico));
   }
 
   function baixarArquivoBase64(base64: string, nomeArquivo: string, tipoMime: string) {
@@ -444,14 +444,14 @@ export default function OSTab() {
       const r = await fetch("/api/paralegal/os/enviar-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o), rascunho }),
+        body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o, destinatario), rascunho }),
       });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao preparar o e-mail."); return; }
       setSugerirEnvio(false);
       setErro(null);
       if (rascunho && j.modo === "mailto") {
-        baixarArquivoBase64(pdfBase64, nomeArquivoPdfOS(o), "application/pdf");
+        baixarArquivoBase64(pdfBase64, nomeArquivoPdfOS(o, destinatario), "application/pdf");
         const mailtoUrl =
           `mailto:${j.destino}` +
           `?subject=${encodeURIComponent(j.assunto)}` +
@@ -473,7 +473,7 @@ export default function OSTab() {
       // Plano B: o envio pelo Graph falhou, então baixa um .eml com destinatário, assunto, corpo e o
       // PDF já anexados -- ao abrir esse arquivo o Outlook do próprio usuário assume como remetente,
       // e ele só revisa e clica em Enviar.
-      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS-${o.codigo || o.id}.eml`, "message/rfc822");
+      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS - ${destinatario === "geral" ? "Geral" : "Financeiro"} ${o.codigo || o.id}.eml`, "message/rfc822");
       alert(`Não consegui enviar automaticamente (${j.avisoGraph || "erro no envio"}). Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
     } catch {
       setErro("Falha de rede ao preparar o e-mail.");

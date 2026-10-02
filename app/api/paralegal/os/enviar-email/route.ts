@@ -46,7 +46,8 @@ export async function POST(req: Request) {
     <p>Segue em anexo a O.S. com todas as informações.</p>
     <p>Fico à disposição.<br/>Atenciosamente,</p>
   `;
-  const nomeArquivo = body.nomeArquivo || `OS-${os.codigo || os.id}.pdf`;
+  const rotulo = (body.destinatario ?? "geral") === "geral" ? "Geral" : "Financeiro";
+  const nomeArquivo = body.nomeArquivo || `OS - ${rotulo} ${os.codigo || os.id}.pdf`;
   const anexos = [{ nome: nomeArquivo, conteudoBase64: body.pdfBase64, tipoMime: "application/pdf" }];
 
   // Botão "Editar antes de enviar": não baixa nem manda nada -- devolve o
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
       avisoGraph: mensagem,
       destino,
       emlBase64: Buffer.from(eml, "utf-8").toString("base64"),
-      nomeArquivoEml: `OS-${os.codigo || os.id}.eml`,
+      nomeArquivoEml: `OS - ${rotulo} ${os.codigo || os.id}.eml`,
     });
   }
 }
