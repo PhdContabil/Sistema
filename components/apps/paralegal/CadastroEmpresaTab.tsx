@@ -45,6 +45,19 @@ const ESTADO_CIVIL_OPCOES = [
 
 // Órgão de registro (campo "tiporegist" no Questor) — lista fixa, igual à
 // tabela TipoRegistro do controle.accdb antigo (só 6 opções, nunca muda).
+// Nomes do "Regime Tributário" como o time já conhece do sistema antigo
+// (tabela AxRegime do controle.accdb) -- a API do Questor devolve esses
+// mesmos 4 códigos em /lookups/enquadramentos, só que com a descrição em
+// outro texto (ex.: "EMPRESA DE PEQUENO PORTE" em vez de "Simples Nacional -
+// EPP"). O valor enviado ao Questor continua sendo o código (1-4); só o
+// texto exibido no <select> muda.
+const REGIME_TRIBUTARIO_LABEL: Record<string, string> = {
+  "1": "Regime Normal",
+  "2": "Simples Nacional - EPP",
+  "3": "Simples Nacional - ME",
+  "4": "MEI",
+};
+
 const TIPO_REGISTRO_OPCOES = [
   { valor: "1", texto: "Junta Comercial" },
   { valor: "2", texto: "Cartório" },
@@ -610,7 +623,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
             <label>Regime Tributário
               <select required value={dados.tipoenquad} onChange={(e) => campo("tipoenquad", e.target.value)} className={erro("tipoenquad")}>
                 <option value="">{carregandoListas ? "carregando..." : "selecione"}</option>
-                {enquadramentos.map((n) => <option key={n.codigo} value={n.codigo}>{n.descricao}</option>)}
+                {enquadramentos.map((n) => <option key={n.codigo} value={n.codigo}>{REGIME_TRIBUTARIO_LABEL[String(n.codigo)] ?? n.descricao}</option>)}
               </select>
             </label>
             <label>Tabela de feriado
