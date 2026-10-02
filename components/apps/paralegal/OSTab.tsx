@@ -501,8 +501,13 @@ export default function OSTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: o.id, destinatario, pdfBase64, nomeArquivo: nomeArquivoPdfOS(o, destinatario), rascunho }),
       });
-      const j = await r.json();
-      if (!r.ok) { setErro(j.error ?? "Falha ao preparar o e-mail."); return; }
+      // Lê como texto primeiro: se o servidor devolver uma página de erro (timeout,
+      // corpo grande demais etc.) em vez de JSON, mostra o motivo real em vez de
+      // cair no genérico "falha de rede".
+      const texto = await r.text();
+      let j: Record<string, string>;
+      try { j = JSON.parse(texto); } catch { setErro(`Erro ${r.status} ao preparar o e-mail: ${texto.slice(0, 200)}`); return; }
+      if (!r.ok) { setErro(j.error ?? `Falha ao preparar o e-mail (erro ${r.status}).`); return; }
       setSugerirEnvio(false);
       setErro(null);
       if (rascunho && j.modo === "mailto") {
@@ -530,8 +535,9 @@ export default function OSTab() {
       // e ele só revisa e clica em Enviar.
       baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS ${destinatario === "geral" ? "Geral" : "Financeiro"} - ${o.codigo || o.id}.eml`, "message/rfc822");
       alert(`Não consegui enviar automaticamente (${j.avisoGraph || "erro no envio"}). Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
-    } catch {
-      setErro("Falha de rede ao preparar o e-mail.");
+    } catch (e) {
+      console.error("[OS] enviarPorEmail", e);
+      setErro("Falha ao preparar o e-mail: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEnviando(false);
     }
