@@ -12,9 +12,14 @@ import { enviarEmail, construirEml, GraphErro } from "@/lib/paralegal/graph";
 // usuário abre no Outlook e só clica em Enviar.
 export const dynamic = "force-dynamic";
 
-const DESTINATARIOS: Record<string, string> = {
-  geral: process.env.PARALEGAL_EMAIL_GERAL || "geral@phdcontabil.com.br",
-  financeiro: process.env.PARALEGAL_EMAIL_FINANCEIRO || "financeiro@phdcontabil.com.br",
+// Lista de destinatários por público (as env vars aceitam vários e-mails separados por vírgula).
+const lista = (v: string) => v.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+const DESTINATARIOS: Record<string, string[]> = {
+  geral: lista(process.env.PARALEGAL_EMAIL_GERAL || "geral@phdcontabil.com.br"),
+  financeiro: lista(
+    process.env.PARALEGAL_EMAIL_FINANCEIRO ||
+      "financeiro@phdcontabil.com.br,eloiza.garcia@phdcontabil.com.br,graciele@phdcontabil.com.br"
+  ),
 };
 
 export async function POST(req: Request) {
@@ -34,8 +39,8 @@ export async function POST(req: Request) {
 
   if (!body.id) return NextResponse.json({ error: "Informe a OS." }, { status: 400 });
   if (!body.pdfBase64) return NextResponse.json({ error: "PDF não gerado." }, { status: 400 });
-  const destino = DESTINATARIOS[body.destinatario ?? "geral"];
-  if (!destino) return NextResponse.json({ error: "Destinatário inválido." }, { status: 400 });
+  const para = DESTINATARIOS[body.destinatario ?? "geral"];
+  if (!para?.length) return NextResponse.json({ error: "Destinatário inválido." }, { status: 400 });
 
   const os = await obterOS(body.id).catch(() => null);
   if (!os) return NextResponse.json({ error: "OS não encontrada." }, { status: 404 });
@@ -55,23 +60,23 @@ export async function POST(req: Request) {
   // já com a mensagem pronta pra editar; o PDF a pessoa anexa na mão (mailto não suporta anexo).
   if (body.rascunho) {
     const corpoTexto = `Prezados(as),\n\nSegue em anexo a O.S. com todas as informações.\n\n\nFico à disposição.\nAtenciosamente,`;
-    return NextResponse.json({ ok: true, modo: "mailto", destino, assunto, corpoTexto, nomeArquivo });
+    return NextResponse.json({ ok: true, modo: "mailto", destino: para.join(","), assunto, corpoTexto, nomeArquivo });
   }
 
   try {
-    await enviarEmail({ remetente, para: [destino], assunto, corpoHtml, anexos });
-    return NextResponse.json({ ok: true, modo: "graph", enviadoPara: destino, remetente });
+    await enviarEmail({ remetente, para, assunto, corpoHtml, anexos });
+    return NextResponse.json({ ok: true, modo: "graph", enviadoPara: para.join(", "), remetente });
   } catch (e) {
     const mensagem = e instanceof Error ? e.message : "Falha ao enviar e-mail.";
     const status = e instanceof GraphErro ? e.status : 502;
     console.error("[paralegal/os/enviar-email] envio via Graph falhou (" + status + "): " + mensagem);
     // Plano B: não deixa o usuário sem saída -- monta o .eml com tudo pronto pra abrir no Outlook.
-    const eml = construirEml({ para: [destino], assunto, corpoHtml, anexos });
+    const eml = construirEml({ para, assunto, corpoHtml, anexos });
     return NextResponse.json({
       ok: true,
       modo: "eml",
       avisoGraph: mensagem,
-      destino,
+      destino: para.join(", "),
       emlBase64: Buffer.from(eml, "utf-8").toString("base64"),
       nomeArquivoEml: `OS ${rotulo} - ${os.codigo || os.id}.eml`,
     });
