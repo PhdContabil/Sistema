@@ -126,16 +126,23 @@ export default function OSTab() {
   const empresasRef = useRef<EmpresaResumo[]>([]);
   useEffect(() => { empresasRef.current = empresas; }, [empresas]);
 
-  const carregar = useCallback(async () => {
+  // Devolve a lista recém-carregada (não só atualiza o estado) -- o botão
+  // "+ Nova OS" depende disso pra calcular o próximo número sempre em cima do
+  // dado mais atual, nunca de um `itens` que ainda possa estar vazio (ver
+  // abrirNovo).
+  const carregar = useCallback(async (): Promise<OS[]> => {
     setCarregando(true);
     setErro(null);
     try {
       const r = await fetch("/api/paralegal/os", { cache: "no-store" });
       const j = await r.json();
-      if (!r.ok) { setErro(j.error ?? "Falha ao carregar."); return; }
-      setItens(j.itens ?? []);
+      if (!r.ok) { setErro(j.error ?? "Falha ao carregar."); return []; }
+      const lista: OS[] = j.itens ?? [];
+      setItens(lista);
+      return lista;
     } catch {
       setErro("Falha de rede ao carregar.");
+      return [];
     } finally {
       setCarregando(false);
     }
@@ -220,9 +227,9 @@ export default function OSTab() {
   // fora da faixa normal (o resto da lista vai até uns 57 mil). Sem esse limite,
   // o cálculo "maior valor + 1" pega esse lixo e sugere um código absurdo.
   const LIMITE_RAZOAVEL = 200000;
-  function proximoCodigo(): string {
+  function proximoCodigo(lista: OS[]): string {
     let maior = 0;
-    for (const o of itens) {
+    for (const o of lista) {
       const nCodigo = parseInt(somenteDigitos(o.codigo), 10);
       if (!isNaN(nCodigo) && nCodigo > maior && nCodigo <= LIMITE_RAZOAVEL) maior = nCodigo;
       const nQuestor = parseInt(somenteDigitos(o.questor), 10);
@@ -231,8 +238,13 @@ export default function OSTab() {
     return String(maior + 1);
   }
 
+  // Sempre busca a lista mais atual antes de sugerir o número -- nunca confia
+  // no `itens` do estado, que pode ainda estar vazio (ex: clique logo na
+  // abertura da tela, antes do useEffect inicial terminar). É por isso que
+  // `carregar()` devolve a lista em vez de só atualizar o estado.
   async function abrirNovo() {
-    setModal({ editando: null, dados: { ...VAZIO, data: hoje(), codigo: proximoCodigo() } });
+    const lista = await carregar();
+    setModal({ editando: null, dados: { ...VAZIO, data: hoje(), codigo: proximoCodigo(lista) } });
     setSugerirEnvio(false);
     setBuscaEmpresa(""); setBuscaIndicacao(""); setServicoManual([false, false, false, false]); setQtdServicos(1);
     cnpjJaBuscadoRef.current = null;
@@ -531,7 +543,7 @@ export default function OSTab() {
       <div className="pl-toolbar">
         <input type="text" placeholder="Buscar por número da OS, código Questor, razão social, CNPJ ou contato…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <button className="pl-btn" onClick={carregar} disabled={carregando}>{carregando ? "Carregando…" : "↻ Atualizar"}</button>
-        <button className="pl-btn primary" onClick={abrirNovo}>+ Nova OS</button>
+        <button className="pl-btn primary" onClick={abrirNovo} disabled={carregando}>{carregando ? "Carregando…" : "+ Nova OS"}</button>
       </div>
 
       {erro && <div className="pl-banner error">{erro}</div>}
