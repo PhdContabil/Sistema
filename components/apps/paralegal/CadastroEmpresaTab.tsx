@@ -60,7 +60,13 @@ const CAMPO_LABEL: Record<string, string> = {
   nomefantasia: "Nome fantasia",
   inscrfederal: "CNPJ",
   codigonaturjurid: "Natureza jurídica",
-  tipoenquad: "Enquadramento",
+  // Chamado de "Enquadramento" na API do Questor, mas é o mesmo "Regime
+  // Tributário" do sistema antigo (confirmado: os 4 códigos da API
+  // /lookups/enquadramentos -- 1 NORMAL, 2 EMPRESA DE PEQUENO PORTE,
+  // 3 MICROEMPRESA, 4 MICRO EMPREENDEDOR INDIVIDUAL -- batem com a tabela
+  // AxRegime do controle.accdb antigo). Rótulo ajustado pro nome que o time
+  // já conhece.
+  tipoenquad: "Regime Tributário",
   codigotabferiado: "Tabela de feriado",
   datainicioativ: "Data de início da atividade",
   codigoativfederal: "Atividade (CNAE)",
@@ -601,7 +607,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
                 {naturezas.map((n) => <option key={n.codigo} value={n.codigo}>{n.descricao}</option>)}
               </select>
             </label>
-            <label>Enquadramento
+            <label>Regime Tributário
               <select required value={dados.tipoenquad} onChange={(e) => campo("tipoenquad", e.target.value)} className={erro("tipoenquad")}>
                 <option value="">{carregandoListas ? "carregando..." : "selecione"}</option>
                 {enquadramentos.map((n) => <option key={n.codigo} value={n.codigo}>{n.descricao}</option>)}
