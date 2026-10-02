@@ -4,6 +4,46 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gerarDocPdfOS, nomeArquivoPdfOS, pdfParaBase64 } from "./os-pdf";
 import { formatarCnpj } from "./merge-format";
 
+// Nomes do sistema antigo (AxRegime) pro "regime" que o Questor devolve.
+const REGIME_NOME: Record<string, string> = {
+  "NORMAL": "Regime Normal",
+  "EMPRESA DE PEQUENO PORTE": "Simples Nacional - EPP",
+  "MICROEMPRESA": "Simples Nacional - ME",
+  "MICRO EMPREENDEDOR INDIVIDUAL": "MEI",
+};
+
+type DadosCadastrais = { ativPrincipal: string; inscrEstadual: string; inscrMunicipal: string; regimeTributario: string };
+
+// Busca no cadastro da empresa (Questor) atividade principal, I.E., I.M. e
+// regime tributário. Esses campos não ficam salvos na lista da OS, então são
+// sempre puxados do cadastro na hora (ao abrir/editar a OS e ao gerar o PDF).
+async function buscarDadosCadastrais(codigo: string): Promise<DadosCadastrais | null> {
+  const cod = (codigo || "").replace(/\D/g, "");
+  if (!cod) return null;
+  try {
+    const r = await fetch(`/api/paralegal/empresas/${cod}`, { cache: "no-store" });
+    const j = await r.json();
+    if (!r.ok || !j.empresa) return null;
+    const d = j.empresa as Record<string, unknown>;
+    const s = (k: string) => (d[k] === undefined || d[k] === null ? "" : String(d[k]).trim());
+    const regime = s("regime");
+    return {
+      ativPrincipal: [s("codigoativfederal"), s("ativfederal")].filter(Boolean).join(" - "),
+      inscrEstadual: s("inscrestad"),
+      inscrMunicipal: s("inscrmunic"),
+      regimeTributario: REGIME_NOME[regime.toUpperCase()] ?? regime,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function preencherVazios<T extends DadosCadastrais>(alvo: T, cad: DadosCadastrais): T {
+  const novo = { ...alvo };
+  (Object.keys(cad) as (keyof DadosCadastrais)[]).forEach((k) => { if (!novo[k] && cad[k]) novo[k] = cad[k] as T[typeof k]; });
+  return novo;
+}
+
 interface OS {
   id: string;
   titulo: string;
@@ -272,6 +312,13 @@ export default function OSTab() {
     const ultimoPreenchido = dados.servicos.reduce((max, s, i) => (s ? i : max), 0);
     setQtdServicos(Math.min(4, Math.max(1, ultimoPreenchido + 1)));
     garantirEmpresasCarregadas(); garantirIndicacoesCarregadas();
+    // Atividade / I.E. / I.M. / Regime não ficam salvos na OS: puxa do cadastro.
+    if (o.questor) {
+      buscarDadosCadastrais(o.questor).then((cad) => {
+        if (!cad) return;
+        setModal((atual) => (atual && atual.editando?.id === o.id ? { ...atual, dados: preencherVazios(atual.dados, cad) } : atual));
+      });
+    }
   }
 
   async function selecionarEmpresa(emp: EmpresaResumo) {
@@ -300,10 +347,10 @@ export default function OSTab() {
           if (!atual) return atual;
           const dados = { ...atual.dados };
           dados.natJuridica = dados.natJuridica || val("naturjuridica", "naturezajuridica");
-          dados.ativPrincipal = dados.ativPrincipal || val("ativfederal", "atividadefederal", "cnae", "descatividade");
+          dados.ativPrincipal = dados.ativPrincipal || [val("codigoativfederal"), val("ativfederal", "atividadefederal", "descatividade")].filter(Boolean).join(" - ");
           dados.inscrEstadual = dados.inscrEstadual || val("inscrestad");
           dados.inscrMunicipal = dados.inscrMunicipal || val("inscrmunic");
-          dados.regimeTributario = dados.regimeTributario || val("regime");
+          dados.regimeTributario = dados.regimeTributario || (REGIME_NOME[val("regime").toUpperCase()] ?? val("regime"));
           dados.logradouro = dados.logradouro || [val("tipologradouro"), val("enderecoestab", "endereco")].filter(Boolean).join(" ");
           dados.numero = dados.numero || val("numenderestab", "numero");
           const complemento = val("complenderestab", "complemento");
@@ -416,6 +463,10 @@ export default function OSTab() {
   }
 
   async function baixarPdf(o: OS, publico: "geral" | "financeiro" = "financeiro") {
+    if (publico === "geral" && o.questor) {
+      const cad = await buscarDadosCadastrais(o.questor);
+      if (cad) o = preencherVazios(o, cad);
+    }
     const doc = await gerarDocPdfOS(o, publico);
     doc.save(nomeArquivoPdfOS(o, publico));
   }
@@ -439,6 +490,10 @@ export default function OSTab() {
     setEnviando(true);
     setErro(null);
     try {
+      if (destinatario === "geral" && o.questor) {
+        const cad = await buscarDadosCadastrais(o.questor);
+        if (cad) o = preencherVazios(o, cad);
+      }
       const doc = await gerarDocPdfOS(o, destinatario);
       const pdfBase64 = pdfParaBase64(doc);
       const r = await fetch("/api/paralegal/os/enviar-email", {
@@ -761,10 +816,10 @@ export default function OSTab() {
                   <option value="geral">Enviar para Geral</option>
                   <option value="financeiro">Enviar para Financeiro</option>
                 </select>
-                <button className="pl-btn" onClick={() => enviarPorEmail(modal.editando as OS)} disabled={enviando}>
+                <button className="pl-btn" onClick={() => enviarPorEmail({ ...(modal.editando as OS), ...modal.dados })} disabled={enviando}>
                   {enviando ? "Preparando..." : "✉ Enviar por e-mail"}
                 </button>
-                <button className="pl-btn" onClick={() => enviarPorEmail(modal.editando as OS, true)} disabled={enviando} title="Abre o Outlook com a mensagem pronta pra editar (o PDF baixa separado, pra anexar antes de enviar)">
+                <button className="pl-btn" onClick={() => enviarPorEmail({ ...(modal.editando as OS), ...modal.dados }, true)} disabled={enviando} title="Abre o Outlook com a mensagem pronta pra editar (o PDF baixa separado, pra anexar antes de enviar)">
                   {enviando ? "Preparando..." : "Editar antes de enviar"}
                 </button>
               </div>
@@ -772,7 +827,7 @@ export default function OSTab() {
 
             <div className="pl-toolbar" style={{ marginTop: 4 }}>
               <button className="pl-btn" onClick={() => setModal(null)} disabled={salvando}>Cancelar</button>
-              {modal.editando && <button className="pl-btn" onClick={() => baixarPdf(modal.editando as OS, destinatario)}>Baixar PDF ({destinatario === "geral" ? "Geral" : "Financeiro"})</button>}
+              {modal.editando && <button className="pl-btn" onClick={() => baixarPdf({ ...(modal.editando as OS), ...modal.dados }, destinatario)}>Baixar PDF ({destinatario === "geral" ? "Geral" : "Financeiro"})</button>}
               <button className="pl-btn primary" onClick={salvar} disabled={salvando}>{salvando ? "Salvando…" : "Salvar"}</button>
             </div>
           </div>
