@@ -802,7 +802,7 @@ export default function OSTab() {
               </button>
             )}
             <label><span>Valor total</span><input value={formatarValor(modal.dados.valorTT)} readOnly disabled /></label>
-            <label><span>Observações gerais <small style={{ opacity: 0.7 }}>(vai no PDF Geral e no Financeiro)</small></span><textarea rows={2} value={modal.dados.obsGerais} onChange={(e) => setCampo("obsGerais", e.target.value)} /></label>
+            <label><span>Observações gerais <small style={{ opacity: 0.7 }}>(só no PDF Geral)</small></span><textarea rows={2} value={modal.dados.obsGerais} onChange={(e) => setCampo("obsGerais", e.target.value)} /></label>
             <label><span>Observações financeiro <small style={{ opacity: 0.7 }}>(só no PDF Financeiro — valores, forma de pagamento)</small></span><textarea rows={2} value={modal.dados.obs} onChange={(e) => setCampo("obs", e.target.value)} /></label>
 
             {sugerirEnvio && modal.editando && (
