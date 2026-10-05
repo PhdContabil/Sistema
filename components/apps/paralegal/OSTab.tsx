@@ -696,7 +696,7 @@ export default function OSTab() {
                 </select>
               </label>
               <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span><input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} /></label>
-              <label style={{ marginBottom: 0 }}><span>Início dos trabalhos (1º dia da competência)</span><input type="date" value={modal.dados.data ?? ""} onChange={(e) => setCampo("data", e.target.value || null)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Início dos trabalhos</span><input type="date" value={modal.dados.data ?? ""} onChange={(e) => setCampo("data", e.target.value || null)} /></label>
               <label style={{ marginBottom: 0 }}><span>Início das atividades</span><input type="date" value={modal.dados.dataInicio ?? ""} onChange={(e) => setCampo("dataInicio", e.target.value || null)} /></label>
             </div>
 
