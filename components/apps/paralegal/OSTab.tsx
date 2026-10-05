@@ -427,6 +427,8 @@ export default function OSTab() {
           dados.inscrEstadual = dados.inscrEstadual || val("inscrestad");
           dados.inscrMunicipal = dados.inscrMunicipal || val("inscrmunic");
           dados.regimeTributario = dados.regimeTributario || (REGIME_NOME[val("regime").toUpperCase()] ?? val("regime"));
+          // Cód. financeiro da OS = código do cliente da empresa no financeiro.
+          if (val("codigocliente")) dados.codigo = val("codigocliente");
           dados.dataInicio = dados.dataInicio || (val("datainicioativ").slice(0, 10) || null);
           dados.logradouro = dados.logradouro || [val("tipologradouro"), val("enderecoestab", "endereco")].filter(Boolean).join(" ");
           dados.numero = dados.numero || val("numenderestab", "numero");

@@ -178,7 +178,10 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   // Linha principal: cód. empresa (Questor) - razão social, nos dois PDFs.
-  doc.text(txt(d.questor) + " - " + txt(d.razao), margemX, y);
+  // Avulso (sem empresa no Questor, cód. empresa vazio/0): usa o cód. financeiro.
+  const codEmpresa = String(d.questor ?? "").replace(/\D/g, "");
+  const codPrincipal = codEmpresa && Number(codEmpresa) > 0 ? codEmpresa : d.codigo;
+  doc.text(txt(codPrincipal) + " - " + txt(d.razao), margemX, y);
   if (comValores) {
     // Só no Financeiro: Nº da OS e cód. financeiro.
     doc.setFont("helvetica", "normal");
