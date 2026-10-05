@@ -503,10 +503,13 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
 
   function validarAntesDeEnviar(): string | null {
     if (!cnaeSelecionado) return "Selecione um CNAE na busca antes de continuar.";
+    // A API do Questor recusa (422) CEP que não tenha exatamente 8 dígitos.
+    if (somenteDigitos(dados.cependerestab).length !== 8) return "Informe o CEP da empresa completo (8 dígitos).";
     if (!socios.length) return "Adicione pelo menos um sócio no Quadro Societário.";
     for (const s of socios) {
       const cpfDigitos = somenteDigitos(s.inscrfederal);
       if (!s.nomesocio.trim() || cpfDigitos.length !== 11) return "Confira o Quadro Societário: todo sócio precisa de nome e CPF válido (11 dígitos).";
+      if (s.nomesocio.trim().length > 50) return "Confira o Quadro Societário: o nome do sócio pode ter no máximo 50 caracteres.";
       if (!s.datainicial) return "Confira o Quadro Societário: informe a data de entrada de cada sócio na sociedade.";
       if (!s.nomemae.trim() || !s.nomepai.trim()) return "Confira o Quadro Societário: informe o nome da mãe e do pai de cada sócio.";
     }
@@ -759,7 +762,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
               <div className="pl-socio-titulo">Sócio {i + 1}</div>
               <div className="pl-form-grid">
                 <label className="full">Nome completo
-                  <input type="text" required value={s.nomesocio} onChange={(e) => editarSocio(s.id, { nomesocio: e.target.value })} />
+                  <input type="text" required maxLength={50} value={s.nomesocio} onChange={(e) => editarSocio(s.id, { nomesocio: e.target.value.slice(0, 50) })} />
                 </label>
                 <label>CPF
                   <input type="text" placeholder="000.000.000-00" maxLength={14} required value={s.inscrfederal} onChange={(e) => editarSocio(s.id, { inscrfederal: mascararCpf(e.target.value) })} />
