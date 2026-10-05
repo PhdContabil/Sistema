@@ -322,6 +322,7 @@ export interface DadosCadastroEmpresa {
   nomeempresa: string;
   nomefantasia?: string;
   inscrfederal: string;
+  tipoinscr?: number; // 1 = CPF, 2 = CNPJ
   codigonaturjurid: string;
   tipoenquad: string;
   codigotabferiado: string;

@@ -71,7 +71,7 @@ const CAMPO_LABEL: Record<string, string> = {
   codigoempresa: "Código da empresa",
   nomeempresa: "Nome (razão social)",
   nomefantasia: "Nome fantasia",
-  inscrfederal: "CNPJ",
+  inscrfederal: "CNPJ/CPF",
   codigonaturjurid: "Natureza jurídica",
   // Chamado de "Enquadramento" na API do Questor, mas é o mesmo "Regime
   // Tributário" do sistema antigo (confirmado: os 4 códigos da API
@@ -218,6 +218,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
 
   const [cnpjStatus, setCnpjStatus] = useState<{ texto: string; tipo: "" | "ok" | "erro" }>({ texto: "", tipo: "" });
   const cnpjBuscadoRef = useRef<string | null>(null);
+  // Empresa com CNPJ (padrão) ou pessoa física com CPF.
+  const [tipoDoc, setTipoDoc] = useState<"cnpj" | "cpf">("cnpj");
 
   const [camposErro, setCamposErro] = useState<Set<string>>(new Set());
   const [avisos, setAvisos] = useState<string[] | null>(null);
@@ -283,7 +285,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
   // Prefill vindo do "Recadastrar" da aba Empresas.
   useEffect(() => {
     if (!prefill) return;
-    setDados((d) => ({ ...d, nomeempresa: prefill.empresa || d.nomeempresa, nomefantasia: prefill.nome || d.nomefantasia, inscrfederal: mascararCnpj(prefill.cnpj || "") }));
+    setDados((d) => ({ ...d, nomeempresa: prefill.empresa || d.nomeempresa, nomefantasia: prefill.nome || d.nomefantasia, inscrfederal: somenteDigitos(prefill.cnpj || "").length === 11 ? mascararCpf(prefill.cnpj) : mascararCnpj(prefill.cnpj || "") }));
+    setTipoDoc(somenteDigitos(prefill.cnpj || "").length === 11 ? "cpf" : "cnpj");
     cnpjBuscadoRef.current = null;
     onPrefillConsumido?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -454,6 +457,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
     return {
       ...dados,
       cependerestab: cepEmpresaDigitos,
+      tipoinscr: tipoDoc === "cpf" ? 1 : 2,
       dddfone: dados.dddfone.trim() ? Number(dados.dddfone) : undefined,
       numerofone: dados.numerofone.trim() ? Number(dados.numerofone) : undefined,
       codigoativfederal: cnaeSelecionado?.codigo ?? "",
@@ -575,6 +579,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
         setCnaeBusca("");
         cnpjBuscadoRef.current = null;
         setCnpjStatus({ texto: "", tipo: "" });
+        setTipoDoc("cnpj");
         sugerirProximoCodigo();
       } else {
         const { linhas, chaves } = extrairProblemas(corpo);
@@ -610,8 +615,13 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
             <label>Nome fantasia
               <input type="text" value={dados.nomefantasia} onChange={(e) => campo("nomefantasia", e.target.value)} />
             </label>
-            <label className="full">CNPJ
-              <input type="text" placeholder="00.000.000/0000-00" maxLength={18} required value={dados.inscrfederal} onChange={(e) => campo("inscrfederal", mascararCnpj(e.target.value))} className={erro("inscrfederal")} />
+            <div className="full" style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 13 }}>
+              <span>Documento:</span>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}><input type="radio" name="tipoDocEmpresa" checked={tipoDoc === "cnpj"} onChange={() => { setTipoDoc("cnpj"); campo("inscrfederal", ""); setCnpjStatus({ texto: "", tipo: "" }); }} style={{ width: "auto" }} /> CNPJ</label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}><input type="radio" name="tipoDocEmpresa" checked={tipoDoc === "cpf"} onChange={() => { setTipoDoc("cpf"); campo("inscrfederal", ""); setCnpjStatus({ texto: "", tipo: "" }); }} style={{ width: "auto" }} /> CPF</label>
+            </div>
+            <label className="full">{tipoDoc === "cpf" ? "CPF" : "CNPJ"}
+              <input type="text" placeholder={tipoDoc === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"} maxLength={tipoDoc === "cpf" ? 14 : 18} required value={dados.inscrfederal} onChange={(e) => campo("inscrfederal", tipoDoc === "cpf" ? mascararCpf(e.target.value) : mascararCnpj(e.target.value))} className={erro("inscrfederal")} />
               {cnpjStatus.texto && <span className={`pl-cnpj-status${cnpjStatus.tipo ? " " + cnpjStatus.tipo : ""}`}>{cnpjStatus.texto}</span>}
             </label>
             <label>Natureza jurídica

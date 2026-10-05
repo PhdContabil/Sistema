@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gerarDocPdfOS, nomeArquivoPdfOS, pdfParaBase64 } from "./os-pdf";
-import { formatarCnpj } from "./merge-format";
+import { formatarCnpj, formatarDoc } from "./merge-format";
 
 // Nomes do sistema antigo (AxRegime) pro "regime" que o Questor devolve.
 const REGIME_NOME: Record<string, string> = {
@@ -32,7 +32,7 @@ async function buscarDadosCadastrais(codigo: string | number): Promise<DadosCada
       inscrEstadual: s("inscrestad"),
       inscrMunicipal: s("inscrmunic"),
       regimeTributario: REGIME_NOME[regime.toUpperCase()] ?? regime,
-      cnpj: formatarCnpj(s("inscrfederal")) || s("inscrfederal"),
+      cnpj: formatarDoc(s("inscrfederal")) || s("inscrfederal"),
       // Início das atividades = constituição da empresa/CNPJ (Questor).
       dataInicio: s("datainicioativ").slice(0, 10),
     };
@@ -107,6 +107,15 @@ function somenteDigitos(v: string): string {
 
 // Máscara progressiva de CNPJ — igual à do formulário original, aplicada
 // enquanto o usuário digita (não exige os 14 dígitos completos).
+function mascararCpfDigitando(valor: string): string {
+  const digitos = somenteDigitos(valor).slice(0, 11);
+  let out = digitos;
+  if (digitos.length > 3) out = digitos.slice(0, 3) + "." + digitos.slice(3);
+  if (digitos.length > 6) out = out.slice(0, 7) + "." + out.slice(7);
+  if (digitos.length > 9) out = out.slice(0, 11) + "-" + out.slice(11);
+  return out;
+}
+
 function mascararCnpjDigitando(valor: string): string {
   const digitos = somenteDigitos(valor).slice(0, 14);
   let out = digitos;
@@ -170,6 +179,10 @@ export default function OSTab() {
   const indicacaoBuscaRef = useRef<HTMLDivElement>(null);
   // Evita buscar de novo o mesmo CNPJ (a própria seleção reescreve o campo já formatado).
   const cnpjJaBuscadoRef = useRef<string | null>(null);
+  // Documento da OS: CNPJ (empresa) ou CPF (pessoa física). Na lista do
+  // SharePoint os dois ficam na mesma coluna "cnpj"; o tipo é deduzido pelo
+  // número de dígitos ao abrir uma OS existente.
+  const [tipoDocOS, setTipoDocOS] = useState<"cnpj" | "cpf">("cnpj");
   // Espelha `empresas` pra ler o valor mais atual dentro do efeito de CNPJ sem
   // precisar depender de `empresas` no array de dependências (evitaria reexecutar
   // a busca toda vez que a lista de empresas mudasse).
@@ -294,6 +307,7 @@ export default function OSTab() {
   async function abrirNovo() {
     const lista = await carregar();
     setModal({ editando: null, dados: { ...VAZIO, data: primeiroDiaDoMes(), codigo: proximoCodigo(lista) } });
+    setTipoDocOS("cnpj");
     setSugerirEnvio(false);
     setBuscaEmpresa(""); setBuscaIndicacao(""); setServicoManual([false, false, false, false]); setQtdServicos(1);
     cnpjJaBuscadoRef.current = null;
@@ -318,6 +332,7 @@ export default function OSTab() {
     setBuscaEmpresa(""); setBuscaIndicacao("");
     // Já tem CNPJ salvo — não precisa (nem deve) disparar a busca automática de novo.
     cnpjJaBuscadoRef.current = somenteDigitos(dados.cnpj) || null;
+    setTipoDocOS(somenteDigitos(dados.cnpj).length === 11 ? "cpf" : "cnpj");
     setServicoManual(dados.servicos.map((s) => !!s && !SERVICOS_OPCOES.includes(s)) as [boolean, boolean, boolean, boolean]);
     const ultimoPreenchido = dados.servicos.reduce((max, s, i) => (s ? i : max), 0);
     setQtdServicos(Math.min(4, Math.max(1, ultimoPreenchido + 1)));
@@ -336,7 +351,8 @@ export default function OSTab() {
     setBuscaEmpresa("");
     setCampo("questor", String(emp.codigoempresa));
     setCampo("razao", emp.nome ?? "");
-    setCampo("cnpj", formatarCnpj(emp.cnpj) || emp.cnpj || "");
+    setCampo("cnpj", formatarDoc(emp.cnpj) || emp.cnpj || "");
+    setTipoDocOS(somenteDigitos(emp.cnpj ?? "").length === 11 ? "cpf" : "cnpj");
 
     // Busca os dados completos no Questor para preencher o resto sozinho —
     // mesmo comportamento do "aoSelecionarEmpresa" do formulário original.
@@ -389,7 +405,7 @@ export default function OSTab() {
   useEffect(() => {
     if (!modal) return;
     const digitos = somenteDigitos(modal.dados.cnpj);
-    if (digitos.length !== 14) return;
+    if (digitos.length !== (tipoDocOS === "cpf" ? 11 : 14)) return;
     if (cnpjJaBuscadoRef.current === digitos) return;
     cnpjJaBuscadoRef.current = digitos;
     (async () => {
@@ -398,7 +414,7 @@ export default function OSTab() {
       if (achada) {
         selecionarEmpresa(achada);
       } else {
-        setErro(`CNPJ ${formatarCnpj(digitos)} não encontrado no cadastro de empresas ativas do Questor.`);
+        setErro(`${tipoDocOS === "cpf" ? "CPF" : "CNPJ"} ${formatarDoc(digitos)} não encontrado no cadastro de empresas ativas do Questor.`);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -623,7 +639,7 @@ export default function OSTab() {
       <div className="pl-table-wrap">
         <table className="pl-grid">
           <thead>
-            <tr><th style={{ whiteSpace: "nowrap" }}>Nº OS</th><th>Título</th><th>Razão social</th><th>CNPJ</th><th>Data</th><th>Total</th><th></th></tr>
+            <tr><th style={{ whiteSpace: "nowrap" }}>Nº OS</th><th>Título</th><th>Razão social</th><th>CNPJ/CPF</th><th>Data</th><th>Total</th><th></th></tr>
           </thead>
           <tbody>
             {filtrados.map((o) => (
@@ -703,7 +719,13 @@ export default function OSTab() {
             <h3 style={{ fontSize: 12, marginTop: 16 }}>Empresa</h3>
             <label><span>Razão social</span><input value={modal.dados.razao} onChange={(e) => setCampo("razao", e.target.value)} /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <label style={{ marginBottom: 0 }}><span>CNPJ</span><input value={modal.dados.cnpj} onChange={(e) => setCampo("cnpj", mascararCnpjDigitando(e.target.value))} /></label>
+              <label style={{ marginBottom: 0 }}>
+                <span style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="radio" name="tipoDocOS" checked={tipoDocOS === "cnpj"} onChange={() => { setTipoDocOS("cnpj"); setCampo("cnpj", ""); }} style={{ width: "auto" }} /> CNPJ</span>
+                  <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="radio" name="tipoDocOS" checked={tipoDocOS === "cpf"} onChange={() => { setTipoDocOS("cpf"); setCampo("cnpj", ""); }} style={{ width: "auto" }} /> CPF</span>
+                </span>
+                <input placeholder={tipoDocOS === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"} value={modal.dados.cnpj} onChange={(e) => setCampo("cnpj", tipoDocOS === "cpf" ? mascararCpfDigitando(e.target.value) : mascararCnpjDigitando(e.target.value))} />
+              </label>
               <label style={{ marginBottom: 0 }}><span>Natureza jurídica</span><input value={modal.dados.natJuridica} onChange={(e) => setCampo("natJuridica", e.target.value)} /></label>
             </div>
             <label style={{ marginTop: 10 }}><span>Atividade principal (CNAE)</span><input value={modal.dados.ativPrincipal} onChange={(e) => setCampo("ativPrincipal", e.target.value)} /></label>
