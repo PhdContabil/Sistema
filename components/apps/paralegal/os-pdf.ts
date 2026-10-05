@@ -155,7 +155,7 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
   y += 15;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text("Início dos Trabalhos: " + fmtData(d.dataInicio || d.data), margemX + largura, y, { align: "right" });
+  doc.text("Início dos Trabalhos: " + fmtData(d.data), margemX + largura, y, { align: "right" });
 
   y += 14;
   doc.setDrawColor(0);

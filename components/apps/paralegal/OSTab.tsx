@@ -12,14 +12,14 @@ const REGIME_NOME: Record<string, string> = {
   "MICRO EMPREENDEDOR INDIVIDUAL": "MEI",
 };
 
-type DadosCadastrais = { ativPrincipal: string; inscrEstadual: string; inscrMunicipal: string; regimeTributario: string };
+type DadosCadastrais = { ativPrincipal: string; inscrEstadual: string; inscrMunicipal: string; regimeTributario: string; cnpj: string; dataInicio: string };
 
 // Busca no cadastro da empresa (Questor) atividade principal, I.E., I.M. e
 // regime tributário. Esses campos não ficam salvos na lista da OS, então são
 // sempre puxados do cadastro na hora (ao abrir/editar a OS e ao gerar o PDF).
 async function buscarDadosCadastrais(codigo: string | number): Promise<DadosCadastrais | null> {
   const cod = String(codigo ?? "").replace(/\D/g, "");
-  if (!cod) return null;
+  if (!cod || Number(cod) <= 0) return null;
   try {
     const r = await fetch(`/api/paralegal/empresas/${cod}`, { cache: "no-store" });
     const j = await r.json();
@@ -32,13 +32,16 @@ async function buscarDadosCadastrais(codigo: string | number): Promise<DadosCada
       inscrEstadual: s("inscrestad"),
       inscrMunicipal: s("inscrmunic"),
       regimeTributario: REGIME_NOME[regime.toUpperCase()] ?? regime,
+      cnpj: formatarCnpj(s("inscrfederal")) || s("inscrfederal"),
+      // Início das atividades = constituição da empresa/CNPJ (Questor).
+      dataInicio: s("datainicioativ").slice(0, 10),
     };
   } catch {
     return null;
   }
 }
 
-function preencherVazios<T extends DadosCadastrais>(alvo: T, cad: DadosCadastrais): T {
+function preencherVazios<T extends Record<keyof DadosCadastrais, unknown>>(alvo: T, cad: DadosCadastrais): T {
   const novo = { ...alvo };
   (Object.keys(cad) as (keyof DadosCadastrais)[]).forEach((k) => { if (!novo[k] && cad[k]) novo[k] = cad[k] as T[typeof k]; });
   return novo;
@@ -119,8 +122,15 @@ function formatarValor(v: number | null): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function hoje(): string {
-  return new Date().toISOString().slice(0, 10);
+// Início dos trabalhos é sempre o 1º dia da competência (mês).
+function primeiroDiaDoMes(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+// SharePoint devolve datas como "2026-09-01T03:00:00Z"; <input type=date> só aceita "2026-09-01".
+function paraInputData(v: string | null | undefined): string | null {
+  return v ? String(v).slice(0, 10) : null;
 }
 
 export default function OSTab() {
@@ -283,7 +293,7 @@ export default function OSTab() {
   // `carregar()` devolve a lista em vez de só atualizar o estado.
   async function abrirNovo() {
     const lista = await carregar();
-    setModal({ editando: null, dados: { ...VAZIO, data: hoje(), codigo: proximoCodigo(lista) } });
+    setModal({ editando: null, dados: { ...VAZIO, data: primeiroDiaDoMes(), codigo: proximoCodigo(lista) } });
     setSugerirEnvio(false);
     setBuscaEmpresa(""); setBuscaIndicacao(""); setServicoManual([false, false, false, false]); setQtdServicos(1);
     cnpjJaBuscadoRef.current = null;
@@ -301,7 +311,8 @@ export default function OSTab() {
     }
   }
   function abrirEdicao(o: OS) {
-    const { id: _id, ...dados } = o;
+    const { id: _id, ...dadosOrig } = o;
+    const dados = { ...dadosOrig, data: paraInputData(dadosOrig.data), dataInicio: paraInputData(dadosOrig.dataInicio) };
     setModal({ editando: o, dados });
     setSugerirEnvio(false);
     setBuscaEmpresa(""); setBuscaIndicacao("");
@@ -350,6 +361,7 @@ export default function OSTab() {
           dados.inscrEstadual = dados.inscrEstadual || val("inscrestad");
           dados.inscrMunicipal = dados.inscrMunicipal || val("inscrmunic");
           dados.regimeTributario = dados.regimeTributario || (REGIME_NOME[val("regime").toUpperCase()] ?? val("regime"));
+          dados.dataInicio = dados.dataInicio || (val("datainicioativ").slice(0, 10) || null);
           dados.logradouro = dados.logradouro || [val("tipologradouro"), val("enderecoestab", "endereco")].filter(Boolean).join(" ");
           dados.numero = dados.numero || val("numenderestab", "numero");
           const complemento = val("complenderestab", "complemento");
@@ -684,8 +696,8 @@ export default function OSTab() {
                 </select>
               </label>
               <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span><input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} /></label>
-              <label style={{ marginBottom: 0 }}><span>Data</span><input type="date" value={modal.dados.data ?? ""} onChange={(e) => setCampo("data", e.target.value || null)} /></label>
-              <label style={{ marginBottom: 0 }}><span>Data início</span><input type="date" value={modal.dados.dataInicio ?? ""} onChange={(e) => setCampo("dataInicio", e.target.value || null)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Início dos trabalhos (competência)</span><input type="month" value={(modal.dados.data ?? "").slice(0, 7)} onChange={(e) => setCampo("data", e.target.value ? `${e.target.value}-01` : null)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Início das atividades (constituição/CNPJ)</span><input type="date" value={modal.dados.dataInicio ?? ""} onChange={(e) => setCampo("dataInicio", e.target.value || null)} /></label>
             </div>
 
             <h3 style={{ fontSize: 12, marginTop: 16 }}>Empresa</h3>
