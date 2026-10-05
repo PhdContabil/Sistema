@@ -44,6 +44,7 @@ export function pdfParaBase64(doc: jsPDF): string {
 
 
 interface DadosOSPdf {
+  titulo?: string;
   codigo?: string;
   questor?: string;
   tipo?: string;
@@ -132,6 +133,16 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.text("PhD Contabilidade e Consultoria", margemX, y);
+  }
+
+  // Título da OS (ex.: ABERTURA) centralizado entre a logo e o COMUNICADO.
+  if (d.titulo && d.titulo.trim()) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(0, 0, 0);
+    const larguraTitulo = largura - 2 * (logoLargura + 60);
+    const linhasTitulo = doc.splitTextToSize(d.titulo.trim().toUpperCase(), larguraTitulo) as string[];
+    doc.text(linhasTitulo.slice(0, 2), margemX + largura / 2, linhasTitulo.length > 1 ? y - 6 : y, { align: "center" });
   }
 
   doc.setTextColor(192, 0, 0);

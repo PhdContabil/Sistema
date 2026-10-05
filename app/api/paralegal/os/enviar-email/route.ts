@@ -45,7 +45,8 @@ export async function POST(req: Request) {
   const os = await obterOS(body.id).catch(() => null);
   if (!os) return NextResponse.json({ error: "OS não encontrada." }, { status: 404 });
 
-  const assunto = `${os.tipo || "OS"} - ${os.razao || os.codigo || os.id} - O.S. nº: ${os.codigo || os.questor || os.id}`;
+  const titulo = (os.titulo || "").trim().toUpperCase();
+  const assunto = `OS${titulo ? " " + titulo : ""} - ${os.razao || os.codigo || os.id} - O.S. nº: ${os.codigo || os.questor || os.id}`;
   const corpoHtml = `
     <p>Prezados(as),</p>
     <p>Segue em anexo a O.S. com todas as informações.</p>
