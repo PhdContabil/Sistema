@@ -374,7 +374,11 @@ export async function criarCadastroEmpresa(
   opts: { dryRun: boolean; confirmar: boolean; idempotencyKey?: string }
 ): Promise<{ ok: boolean; status: number; corpo: RespostaCadastroEmpresa }> {
   const query = new URLSearchParams({ dry_run: String(opts.dryRun) });
-  return post<RespostaCadastroEmpresa>(`/cadastro/empresa?${query.toString()}`, dados, { idempotencyKey: opts.idempotencyKey });
+  // Sem o bloco "contrato" a API não grava pessoafincliente/servicocontrato
+  // (parâmetros de cobrança). O Access sempre gravava com caixa 2 e
+  // vencimento dia 10 -- mantém o mesmo padrão quando o formulário não manda.
+  const comContrato = { contrato: { codigocaixaconta: 2, diavcto: 10 }, ...dados };
+  return post<RespostaCadastroEmpresa>(`/cadastro/empresa?${query.toString()}`, comContrato, { idempotencyKey: opts.idempotencyKey });
 }
 
 /** Cadastro Avulso: cliente só no financeiro (pessoa + pessoafinanceiro + endereço + contatos + contrato), sem empresa. */
@@ -398,7 +402,29 @@ export interface DadosCadastroAvulso {
 export async function criarCadastroAvulso(
   dados: DadosCadastroAvulso
 ): Promise<{ ok: boolean; status: number; corpo: Record<string, unknown> }> {
-  return post<Record<string, unknown>>(`/cadastro/pessoa-financeiro?dry_run=false`, dados);
+  // Converte o formulário do Núcleo para o PessoaFinanceiroIn da API.
+  const numero = parseInt(String(dados.numero).replace(/\D/g, ""), 10);
+  const corpo = {
+    nome: dados.nome,
+    tipoinscr: dados.tipoinscr,
+    inscrfederal: String(dados.inscrfederal).replace(/\D/g, ""),
+    endereco: {
+      codigotipolograd: dados.codigotipolograd,
+      logradouro: dados.endereco,
+      numero: Number.isNaN(numero) ? null : numero,
+      complemento: dados.complemento || null,
+      bairro: dados.bairro,
+      siglaestado: dados.siglaestado,
+      codigomunic: dados.codigomunic,
+      cep: String(dados.cep).replace(/\D/g, "") || null,
+    },
+    ddd: dados.dddfone || null,
+    telefone: dados.numerofone ? String(dados.numerofone) : null,
+    email: dados.email || null,
+    // Mesmos parâmetros de cobrança que o Access gravava (caixa 2, vencimento dia 10).
+    contrato: { codigocaixaconta: 2, diavcto: 10 },
+  };
+  return post<Record<string, unknown>>(`/cadastro/pessoa-financeiro?dry_run=false`, corpo);
 }
 
 /**

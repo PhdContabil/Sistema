@@ -40,7 +40,13 @@ export async function POST(req: Request) {
         { status: 501 }
       );
     }
-    return NextResponse.json(corpo, { status: ok ? 200 : status || 502 });
+    if (!ok) {
+      const det = (corpo as { detail?: unknown }).detail;
+      const msg = typeof det === "string" ? det : Array.isArray(det) ? det.map((x: { msg?: string; loc?: string[] }) => `${(x.loc ?? []).slice(-1)[0] ?? ""}: ${x.msg ?? ""}`).join("; ") : "A API do Questor recusou o cadastro.";
+      return NextResponse.json({ erro: msg }, { status: status || 502 });
+    }
+    const chave = (corpo as { chave?: { codigocliente?: number } }).chave;
+    return NextResponse.json({ ...corpo, codigocliente: chave?.codigocliente }, { status: 200 });
   } catch (e) {
     const status = e instanceof QuestorError ? e.status : 502;
     return NextResponse.json({ erro: e instanceof Error ? e.message : "Falha ao cadastrar no Questor." }, { status });
