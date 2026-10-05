@@ -44,6 +44,7 @@ export function pdfParaBase64(doc: jsPDF): string {
 
 
 interface DadosOSPdf {
+  id?: string;
   titulo?: string;
   codigo?: string;
   questor?: string;
@@ -104,7 +105,7 @@ function listaServicos(d: DadosOSPdf, comValores: boolean): string[] {
 }
 
 export function nomeArquivoPdfOS(d: DadosOSPdf, publico: "geral" | "financeiro" = "financeiro"): string {
-  const cod = (d && (d.codigo ?? d.questor)) || "os";
+  const cod = (d && (d.id || d.codigo)) || "os";
   const rotulo = publico === "geral" ? "Geral" : "Financeiro";
   return "OS " + rotulo + " - " + cod + ".pdf";
 }
@@ -176,7 +177,16 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
   secao("DADOS");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text(txt(d.codigo ?? d.questor) + " - " + txt(d.razao), margemX, y);
+  // Linha principal: cód. empresa (Questor) - razão social, nos dois PDFs.
+  doc.text(txt(d.questor) + " - " + txt(d.razao), margemX, y);
+  if (comValores) {
+    // Só no Financeiro: Nº da OS e cód. financeiro.
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Nº OS: " + txt(d.id) + "     Cód. financeiro: " + txt(d.codigo), margemX + largura, y, { align: "right" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+  }
   y += 15;
   doc.setTextColor(192, 0, 0);
   doc.text(txt(d.cnpj), margemX, y);

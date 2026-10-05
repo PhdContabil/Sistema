@@ -82,9 +82,9 @@ function converter(item: ItemLista<CamposSP>): OS {
     id: item.id,
     titulo: f.Title ?? "",
     data: f.data ?? null,
-    // Campo "codigo" próprio da lista (numeração da OS) — não confundir com o
-    // ID nativo do SharePoint. É texto normal, editável; o valor sugerido pra
-    // OS nova é calculado no front ao abrir a tela (ver proximoCodigo em OSTab).
+    // Na lista osfinanceiro: ID nativo (coluna "nos") = Nº da OS; "codigo" =
+    // cód. financeiro (sugerido no front, ver proximoCodigo em OSTab);
+    // "questor" = cód. da empresa no Questor.
     codigo: f.codigo ?? "",
     tipo: f.tipo ?? "",
     questor: f.questor ?? "",

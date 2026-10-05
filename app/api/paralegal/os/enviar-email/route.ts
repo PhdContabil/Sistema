@@ -46,21 +46,24 @@ export async function POST(req: Request) {
   if (!os) return NextResponse.json({ error: "OS não encontrada." }, { status: 404 });
 
   const titulo = (os.titulo || "").trim().toUpperCase();
-  const assunto = `OS${titulo ? " " + titulo : ""} - ${os.razao || os.codigo || os.id} - O.S. nº: ${os.codigo || os.questor || os.id}`;
+  const ehFinanceiro = body.destinatario === "financeiro";
+  // Cód. financeiro só aparece no e-mail do Financeiro.
+  const extraFin = ehFinanceiro && os.codigo ? ` - Cód. financeiro: ${os.codigo}` : "";
+  const assunto = `OS${titulo ? " " + titulo : ""} - ${os.razao || os.id} - O.S. nº: ${os.id}${extraFin}`;
   const corpoHtml = `
     <p>Prezados(as),</p>
     <p>Segue em anexo a O.S. com todas as informações.</p>
     <p>Fico à disposição.<br/>Atenciosamente,</p>
   `;
   const rotulo = (body.destinatario ?? "geral") === "geral" ? "Geral" : "Financeiro";
-  const nomeArquivo = body.nomeArquivo || `OS ${rotulo} - ${os.codigo || os.id}.pdf`;
+  const nomeArquivo = body.nomeArquivo || `OS ${rotulo} - ${os.id}.pdf`;
   const anexos = [{ nome: nomeArquivo, conteudoBase64: body.pdfBase64, tipoMime: "application/pdf" }];
 
   // Botão "Editar antes de enviar": não baixa nem manda nada -- devolve o
   // destinatário/assunto/corpo em texto puro pro cliente abrir o Outlook direto (mailto:),
   // já com a mensagem pronta pra editar; o PDF a pessoa anexa na mão (mailto não suporta anexo).
   if (body.rascunho) {
-    const corpoTexto = `Prezados(as),\n\nSegue em anexo a O.S. com todas as informações.\n\n\nFico à disposição.\nAtenciosamente,`;
+    const corpoTexto = `Prezados(as),\n\nSegue em anexo a O.S. com todas as informações.${ehFinanceiro && os.codigo ? `\nCód. financeiro: ${os.codigo}` : ""}\n\n\nFico à disposição.\nAtenciosamente,`;
     return NextResponse.json({ ok: true, modo: "mailto", destino: para.join(","), assunto, corpoTexto, nomeArquivo });
   }
 
@@ -79,7 +82,7 @@ export async function POST(req: Request) {
       avisoGraph: mensagem,
       destino: para.join(", "),
       emlBase64: Buffer.from(eml, "utf-8").toString("base64"),
-      nomeArquivoEml: `OS ${rotulo} - ${os.codigo || os.id}.eml`,
+      nomeArquivoEml: `OS ${rotulo} - ${os.id}.eml`,
     });
   }
 }

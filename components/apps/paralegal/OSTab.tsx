@@ -207,7 +207,7 @@ export default function OSTab() {
     if (!q) return true;
     const qDigitos = somenteDigitos(busca);
     if (qDigitos && qDigitos === busca.trim()) {
-      if (somenteDigitos(o.codigo) === qDigitos || somenteDigitos(o.questor) === qDigitos) return true;
+      if (String(o.id) === qDigitos || somenteDigitos(o.codigo) === qDigitos || somenteDigitos(o.questor) === qDigitos) return true;
     }
     return [o.titulo, o.razao, o.cnpj, o.contato].some((v) => (v ?? "").toLowerCase().includes(q));
   });
@@ -272,8 +272,7 @@ export default function OSTab() {
     for (const o of lista) {
       const nCodigo = parseInt(somenteDigitos(o.codigo), 10);
       if (!isNaN(nCodigo) && nCodigo > maior && nCodigo <= LIMITE_RAZOAVEL) maior = nCodigo;
-      const nQuestor = parseInt(somenteDigitos(o.questor), 10);
-      if (!isNaN(nQuestor) && nQuestor > maior && nQuestor <= LIMITE_RAZOAVEL) maior = nQuestor;
+
     }
     return String(maior + 1);
   }
@@ -533,7 +532,7 @@ export default function OSTab() {
       // Plano B: o envio pelo Graph falhou, então baixa um .eml com destinatário, assunto, corpo e o
       // PDF já anexados -- ao abrir esse arquivo o Outlook do próprio usuário assume como remetente,
       // e ele só revisa e clica em Enviar.
-      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS ${destinatario === "geral" ? "Geral" : "Financeiro"} - ${o.codigo || o.id}.eml`, "message/rfc822");
+      baixarArquivoBase64(j.emlBase64, j.nomeArquivoEml || `OS ${destinatario === "geral" ? "Geral" : "Financeiro"} - ${o.id}.eml`, "message/rfc822");
       alert(`Não consegui enviar automaticamente (${j.avisoGraph || "erro no envio"}). Abri um rascunho pra ${j.destino} -- confira no Outlook e clique em Enviar.`);
     } catch (e) {
       console.error("[OS] enviarPorEmail", e);
@@ -617,7 +616,7 @@ export default function OSTab() {
           <tbody>
             {filtrados.map((o) => (
               <tr key={o.id}>
-                <td>{o.codigo}</td>
+                <td>{o.id}</td>
                 <td>{o.titulo}</td>
                 <td>{o.razao}</td>
                 <td style={{ whiteSpace: "nowrap" }}>{o.cnpj}</td>
@@ -670,11 +669,11 @@ export default function OSTab() {
               {carregandoEmpresaDetalhe && <div className="pl-banner" style={{ marginTop: 8 }}>Preenchendo dados da empresa…</div>}
             </div>
 
-            <h3 style={{ fontSize: 12 }}>Dados da OS</h3>
+            <h3 style={{ fontSize: 12 }}>Dados da OS — Nº {modal.editando ? modal.editando.id : "(gerado ao salvar)"}</h3>
             <label><span>Título</span><input value={modal.dados.titulo} onChange={(e) => setCampo("titulo", e.target.value)} placeholder="Descrição curta da OS" /></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 4 }}>
               <label style={{ marginBottom: 0 }}>
-                <span>Código</span>
+                <span>Cód. financeiro</span>
                 <input value={modal.dados.codigo} onChange={(e) => setCampo("codigo", e.target.value)} />
               </label>
               <label style={{ marginBottom: 0 }}>
@@ -684,7 +683,7 @@ export default function OSTab() {
                   {TIPOS_OS.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </label>
-              <label style={{ marginBottom: 0 }}><span>Cód. Questor</span><input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span><input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} /></label>
               <label style={{ marginBottom: 0 }}><span>Data</span><input type="date" value={modal.dados.data ?? ""} onChange={(e) => setCampo("data", e.target.value || null)} /></label>
               <label style={{ marginBottom: 0 }}><span>Data início</span><input type="date" value={modal.dados.dataInicio ?? ""} onChange={(e) => setCampo("dataInicio", e.target.value || null)} /></label>
             </div>
