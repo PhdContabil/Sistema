@@ -84,6 +84,13 @@ interface OS {
   obsGerais: string;
 }
 
+// Cliente que existe só no financeiro (cadastro avulso) — GET /financeiro/clientes.
+interface ClienteAvulso {
+  codigocliente: number; tipo: string; nome: string; tipoinscr: number; inscrfederal: string;
+  tipologradouro?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; nomemunic?: string | null; cep?: string | null; telefone?: string | null; email?: string | null;
+}
+
 interface EmpresaResumo { codigoempresa: number; nome: string | null; cnpj: string | null; ativa: boolean }
 interface Indicacao { id: string; nome: string; telefone: string; celular: string; whatsapp: string }
 
@@ -159,6 +166,7 @@ export default function OSTab() {
   const [empresas, setEmpresas] = useState<EmpresaResumo[]>([]);
   const [buscaEmpresa, setBuscaEmpresa] = useState("");
   const [empresaAberta, setEmpresaAberta] = useState(false);
+  const [avulsos, setAvulsos] = useState<ClienteAvulso[]>([]);
   const [carregandoEmpresaDetalhe, setCarregandoEmpresaDetalhe] = useState(false);
 
   // Busca de indicação já cadastrada — mesmo padrão do "indicacao-busca".
@@ -250,6 +258,48 @@ export default function OSTab() {
       })
       .slice(0, 20);
   }, [empresas, buscaEmpresa]);
+
+  // Avulsos (só no financeiro) não estão na lista de empresas: busca na API
+  // do financeiro conforme a pessoa digita (nome com 3+ letras ou CPF/CNPJ).
+  useEffect(() => {
+    const q = buscaEmpresa.trim();
+    if (q.length < 3) { setAvulsos([]); return; }
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/paralegal/financeiro-clientes?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+        const j = await r.json();
+        if (!cancelado) setAvulsos(r.ok ? ((j.dados ?? []) as ClienteAvulso[]).filter((c) => c.tipo === "avulso").slice(0, 10) : []);
+      } catch { if (!cancelado) setAvulsos([]); }
+    }, 350);
+    return () => { cancelado = true; clearTimeout(t); };
+  }, [buscaEmpresa]);
+
+  function selecionarAvulso(c: ClienteAvulso) {
+    setEmpresaAberta(false);
+    setBuscaEmpresa("");
+    setAvulsos([]);
+    const doc = somenteDigitos(c.inscrfederal);
+    cnpjJaBuscadoRef.current = doc;
+    setTipoDocOS(doc.length === 11 ? "cpf" : "cnpj");
+    setModal((atual) => {
+      if (!atual) return atual;
+      const d = { ...atual.dados };
+      d.questor = "";
+      d.codigo = String(c.codigocliente);
+      d.razao = c.nome ?? "";
+      d.cnpj = formatarDoc(doc);
+      d.logradouro = [c.tipologradouro, c.logradouro].filter(Boolean).join(" ");
+      d.numero = c.numero ?? "";
+      d.complemento = c.complemento ?? "";
+      d.bairro = c.bairro ?? "";
+      d.cidade = c.nomemunic ?? "";
+      d.cep = c.cep ?? "";
+      d.email = c.email ?? d.email;
+      d.telefone = c.telefone ?? d.telefone;
+      return { ...atual, dados: d };
+    });
+  }
 
   const indicacoesFiltradas = useMemo(() => {
     const qMin = buscaIndicacao.trim().toLowerCase();
@@ -413,8 +463,17 @@ export default function OSTab() {
       const achada = empresasRef.current.find((e) => somenteDigitos(e.cnpj ?? "") === digitos);
       if (achada) {
         selecionarEmpresa(achada);
-      } else {
-        setErro(`${tipoDocOS === "cpf" ? "CPF" : "CNPJ"} ${formatarDoc(digitos)} não encontrado no cadastro de empresas ativas do Questor.`);
+        return;
+      }
+      // Não é empresa: tenta os avulsos do financeiro.
+      try {
+        const r = await fetch(`/api/paralegal/financeiro-clientes?q=${digitos}`, { cache: "no-store" });
+        const j = await r.json();
+        const av = r.ok ? ((j.dados ?? []) as ClienteAvulso[]).find((c) => c.tipo === "avulso") : undefined;
+        if (av) { selecionarAvulso(av); return; }
+      } catch { /* segue pro aviso */ }
+      {
+        setErro(`${tipoDocOS === "cpf" ? "CPF" : "CNPJ"} ${formatarDoc(digitos)} não encontrado nas empresas ativas do Questor nem nos clientes avulsos do financeiro.`);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -680,7 +739,7 @@ export default function OSTab() {
                   onFocus={() => setEmpresaAberta(true)}
                 />
               </label>
-              {empresaAberta && empresasFiltradas.length > 0 && (
+              {empresaAberta && (empresasFiltradas.length > 0 || avulsos.length > 0) && (
                 <div className="pl-dropdown" style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid var(--pl-border)", borderRadius: 8, maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 20px rgba(0,0,0,.12)" }}>
                   {empresasFiltradas.map((e) => (
                     <div
@@ -690,6 +749,16 @@ export default function OSTab() {
                     >
                       <strong>{e.nome ?? "—"}</strong>
                       <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{formatarCnpj(e.cnpj) || e.cnpj || "—"} · Código {e.codigoempresa}</div>
+                    </div>
+                  ))}
+                  {avulsos.map((c) => (
+                    <div
+                      key={"av" + c.codigocliente}
+                      onClick={() => selecionarAvulso(c)}
+                      style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--pl-border)" }}
+                    >
+                      <strong>{c.nome}</strong>
+                      <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{formatarDoc(c.inscrfederal)} · Avulso (só financeiro) · Cód. financeiro {c.codigocliente}</div>
                     </div>
                   ))}
                 </div>

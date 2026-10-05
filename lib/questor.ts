@@ -500,3 +500,34 @@ export function getImpostosCalendario(params: {
   const qs = q.toString();
   return get<CalendarioImpostoResponse>(`/fiscal/impostos-calendario${qs ? `?${qs}` : ""}`);
 }
+
+/** Cliente do financeiro (inclui avulsos, que não têm empresa contábil). GET /financeiro/clientes */
+export interface ClienteFinanceiro {
+  codigocliente: number;
+  tipo: string; // "avulso" | "empresa"
+  codigoempresa: number | null;
+  nome: string;
+  tipoinscr: number;
+  inscrfederal: string;
+  baixado: boolean;
+  tipologradouro?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  siglaestado?: string | null;
+  nomemunic?: string | null;
+  cep?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  inscrestad?: string | null;
+}
+
+export async function buscarClientesFinanceiro(params: { cpf_cnpj?: string; nome?: string; incluirEmpresas?: boolean }): Promise<ClienteFinanceiro[]> {
+  const qs = new URLSearchParams();
+  if (params.cpf_cnpj) qs.set("cpf_cnpj", params.cpf_cnpj);
+  if (params.nome) qs.set("nome", params.nome);
+  if (params.incluirEmpresas) qs.set("incluir_empresas", "true");
+  const resp = await get<{ total?: number; dados?: ClienteFinanceiro[] }>(`/financeiro/clientes?${qs.toString()}`);
+  return resp.dados ?? [];
+}
