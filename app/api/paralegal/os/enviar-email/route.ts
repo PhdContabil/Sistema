@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const os = await obterOS(body.id).catch(() => null);
   if (!os) return NextResponse.json({ error: "OS não encontrada." }, { status: 404 });
 
-  const titulo = (os.titulo || "").trim().toUpperCase();
+  const titulo = (os.tipo || "").trim().toUpperCase();
   const ehFinanceiro = body.destinatario === "financeiro";
   // Cód. financeiro só aparece no e-mail do Financeiro.
   const extraFin = ehFinanceiro && os.codigo ? ` - Cód. financeiro: ${os.codigo}` : "";

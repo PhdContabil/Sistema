@@ -136,20 +136,20 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
     doc.text("PhD Contabilidade e Consultoria", margemX, y);
   }
 
-  // Título da OS (ex.: ABERTURA) centralizado entre a logo e o COMUNICADO.
-  if (d.titulo && d.titulo.trim()) {
+  // Tipo da OS (ex.: ABERTURA) centralizado entre a logo e o COMUNICADO.
+  if (d.tipo && d.tipo.trim()) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(0, 0, 0);
     const larguraTitulo = largura - 2 * (logoLargura + 60);
-    const linhasTitulo = doc.splitTextToSize(d.titulo.trim().toUpperCase(), larguraTitulo) as string[];
+    const linhasTitulo = doc.splitTextToSize(d.tipo.trim().toUpperCase(), larguraTitulo) as string[];
     doc.text(linhasTitulo.slice(0, 2), margemX + largura / 2, linhasTitulo.length > 1 ? y - 6 : y, { align: "center" });
   }
 
   doc.setTextColor(192, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text((d.tipo || "COMUNICADO").toString().toUpperCase(), margemX + largura, y, { align: "right" });
+  doc.text(comValores ? "ORDEM DE SERVIÇO" : "COMUNICADO", margemX + largura, y, { align: "right" });
   doc.setTextColor(0, 0, 0);
 
   y += 15;
