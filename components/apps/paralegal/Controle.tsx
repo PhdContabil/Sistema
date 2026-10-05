@@ -3,6 +3,7 @@
 import { useState } from "react";
 import "./controle.css";
 import CadastroEmpresaTab from "./CadastroEmpresaTab";
+import AvulsoTab from "./AvulsoTab";
 import EmpresasTab from "./EmpresasTab";
 import ContratosTab from "./ContratosTab";
 import OSTab from "./OSTab";
@@ -11,6 +12,7 @@ import RoteiroTab from "./RoteiroTab";
 
 const ABAS = [
   { id: "cadastro", nome: "Cadastro" },
+  { id: "avulso", nome: "Avulso" },
   { id: "empresas", nome: "Empresas" },
   { id: "contratos", nome: "Contratos" },
   { id: "os", nome: "Ordens de Serviço" },
@@ -49,6 +51,7 @@ export default function Controle() {
           }}
         />
       )}
+      {aba === "avulso" && <AvulsoTab />}
       {aba === "contratos" && <ContratosTab />}
       {aba === "os" && <OSTab />}
       {aba === "indicacoes" && <IndicacoesTab />}

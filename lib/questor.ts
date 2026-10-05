@@ -377,6 +377,30 @@ export async function criarCadastroEmpresa(
   return post<RespostaCadastroEmpresa>(`/cadastro/empresa?${query.toString()}`, dados, { idempotencyKey: opts.idempotencyKey });
 }
 
+/** Cadastro Avulso: cliente só no financeiro (pessoa + pessoafinanceiro + endereço + contatos + contrato), sem empresa. */
+export interface DadosCadastroAvulso {
+  tipoinscr: number; // 1 = CPF, 2 = CNPJ
+  nome: string;
+  inscrfederal: string;
+  cep: string;
+  codigotipolograd: number;
+  endereco: string;
+  numero: string;
+  complemento?: string;
+  bairro: string;
+  siglaestado: string;
+  codigomunic: number;
+  dddfone: number;
+  numerofone: number;
+  email: string;
+}
+
+export async function criarCadastroAvulso(
+  dados: DadosCadastroAvulso
+): Promise<{ ok: boolean; status: number; corpo: Record<string, unknown> }> {
+  return post<Record<string, unknown>>(`/cadastro/pessoa-financeiro?dry_run=false`, dados);
+}
+
 /**
  * ICMS por competência — DIFAL, substituição tributária e apuração.
  *
