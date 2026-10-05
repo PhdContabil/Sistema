@@ -623,7 +623,7 @@ export default function OSTab() {
       <div className="pl-table-wrap">
         <table className="pl-grid">
           <thead>
-            <tr><th>Nº OS</th><th>Título</th><th>Razão social</th><th>CNPJ</th><th>Data</th><th>Total</th><th></th></tr>
+            <tr><th style={{ whiteSpace: "nowrap" }}>Nº OS</th><th>Título</th><th>Razão social</th><th>CNPJ</th><th>Data</th><th>Total</th><th></th></tr>
           </thead>
           <tbody>
             {filtrados.map((o) => (
@@ -696,7 +696,7 @@ export default function OSTab() {
                 </select>
               </label>
               <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span><input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} /></label>
-              <label style={{ marginBottom: 0 }}><span>Início dos trabalhos (competência)</span><input type="month" value={(modal.dados.data ?? "").slice(0, 7)} onChange={(e) => setCampo("data", e.target.value ? `${e.target.value}-01` : null)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Início dos trabalhos (1º dia da competência)</span><input type="date" value={modal.dados.data ?? ""} onChange={(e) => setCampo("data", e.target.value || null)} /></label>
               <label style={{ marginBottom: 0 }}><span>Início das atividades (constituição/CNPJ)</span><input type="date" value={modal.dados.dataInicio ?? ""} onChange={(e) => setCampo("dataInicio", e.target.value || null)} /></label>
             </div>
 
