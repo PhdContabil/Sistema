@@ -180,7 +180,9 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
   // Linha principal: cód. empresa (Questor) - razão social, nos dois PDFs.
   // Avulso (sem empresa no Questor, cód. empresa vazio/0): usa o cód. financeiro.
   const codEmpresa = String(d.questor ?? "").replace(/\D/g, "");
-  const codPrincipal = codEmpresa && Number(codEmpresa) > 0 ? codEmpresa : d.codigo;
+  // CPF (pessoa física): sempre ignora o cód. Questor e usa o cód. financeiro.
+  const ehCpf = String(d.cnpj ?? "").replace(/\D/g, "").length === 11;
+  const codPrincipal = !ehCpf && codEmpresa && Number(codEmpresa) > 0 ? codEmpresa : d.codigo;
   doc.text(txt(codPrincipal) + " - " + txt(d.razao), margemX, y);
   if (comValores) {
     // Só no Financeiro: Nº da OS e cód. financeiro.

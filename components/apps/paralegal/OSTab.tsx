@@ -525,6 +525,8 @@ export default function OSTab() {
         if (valor === "" || valor === null) return;
         corpo[chave] = valor;
       });
+      // CPF: cód. Questor não se aplica -- não grava.
+      if (tipoDocOS === "cpf") delete corpo.questor;
       const r = await fetch(editando ? `/api/paralegal/os/${editando.id}` : "/api/paralegal/os", {
         method: editando ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -782,7 +784,9 @@ export default function OSTab() {
                   {TIPOS_OS.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </label>
-              <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span><input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} /></label>
+              <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span>{tipoDocOS === "cpf"
+                ? <input value="" disabled placeholder="não se aplica (CPF)" />
+                : <input value={modal.dados.questor} onChange={(e) => setCampo("questor", e.target.value)} />}</label>
               <label style={{ marginBottom: 0 }}><span>Início dos trabalhos</span><input type="date" value={modal.dados.data ?? ""} onChange={(e) => setCampo("data", e.target.value || null)} /></label>
               <label style={{ marginBottom: 0 }}><span>Início das atividades</span><input type="date" value={modal.dados.dataInicio ?? ""} onChange={(e) => setCampo("dataInicio", e.target.value || null)} /></label>
             </div>
