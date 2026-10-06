@@ -24,7 +24,9 @@ interface Socio {
   siglaestadorg: string;
   datarg: string;
   nomemae: string;
+  cpfmae: string;
   nomepai: string;
+  cpfpai: string;
   declarafisicaescrit: string;
   quantcotas: string;
   percentcotas: string;
@@ -154,7 +156,9 @@ function novoSocio(id: number, iniciais?: Partial<Socio>): Socio {
     siglaestadorg: iniciais?.siglaestadorg ?? "",
     datarg: iniciais?.datarg ?? "",
     nomemae: iniciais?.nomemae ?? "",
+    cpfmae: iniciais?.cpfmae ? mascararCpf(iniciais.cpfmae) : "",
     nomepai: iniciais?.nomepai ?? "",
+    cpfpai: iniciais?.cpfpai ? mascararCpf(iniciais.cpfpai) : "",
     declarafisicaescrit: iniciais?.declarafisicaescrit ?? "",
     quantcotas: iniciais?.quantcotas ?? "",
     percentcotas: iniciais?.percentcotas ?? "",
@@ -477,7 +481,9 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
         siglaestadorg: s.siglaestadorg.trim().toUpperCase(),
         datarg: s.datarg,
         nomemae: s.nomemae.trim(),
+        cpfmae: somenteDigitos(s.cpfmae),
         nomepai: s.nomepai.trim(),
+        cpfpai: somenteDigitos(s.cpfpai),
         declarafisicaescrit: s.declarafisicaescrit,
         quantcotas: s.quantcotas.trim(),
         percentcotas: s.percentcotas.trim(),
@@ -512,6 +518,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
       if (s.nomesocio.trim().length > 50) return "Confira o Quadro Societário: o nome do sócio pode ter no máximo 50 caracteres.";
       if (!s.datainicial) return "Confira o Quadro Societário: informe a data de entrada de cada sócio na sociedade.";
       if (!s.nomemae.trim() || !s.nomepai.trim()) return "Confira o Quadro Societário: informe o nome da mãe e do pai de cada sócio.";
+      if (somenteDigitos(s.cpfmae).length !== 11 || somenteDigitos(s.cpfpai).length !== 11) return "Confira o Quadro Societário: informe o CPF da mãe e do pai de cada sócio (11 dígitos).";
     }
     return null;
   }
@@ -788,11 +795,17 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
                 <label>Data de emissão do RG
                   <input type="date" value={s.datarg} onChange={(e) => editarSocio(s.id, { datarg: e.target.value })} />
                 </label>
-                <label className="full">Nome da mãe
+                <label>Nome da mãe
                   <input type="text" required value={s.nomemae} onChange={(e) => editarSocio(s.id, { nomemae: e.target.value })} />
                 </label>
-                <label className="full">Nome do pai
+                <label>CPF da mãe
+                  <input type="text" required placeholder="000.000.000-00" maxLength={14} value={s.cpfmae} onChange={(e) => editarSocio(s.id, { cpfmae: mascararCpf(e.target.value) })} />
+                </label>
+                <label>Nome do pai
                   <input type="text" required value={s.nomepai} onChange={(e) => editarSocio(s.id, { nomepai: e.target.value })} />
+                </label>
+                <label>CPF do pai
+                  <input type="text" required placeholder="000.000.000-00" maxLength={14} value={s.cpfpai} onChange={(e) => editarSocio(s.id, { cpfpai: mascararCpf(e.target.value) })} />
                 </label>
                 <label>Faz declaração de pessoa física com a PHD?
                   <select value={s.declarafisicaescrit} onChange={(e) => editarSocio(s.id, { declarafisicaescrit: e.target.value })}>
