@@ -17,6 +17,7 @@
  */
 
 import path from "node:path";
+import { cnpjValido } from "./cnpj";
 import { createWorker } from "tesseract.js";
 
 export const MIN_CARACTERES_TEXTO_NATIVO = 40;
@@ -307,34 +308,9 @@ export function parseCertidao(texto: string, pareceEscaneado = false): DadosCert
   return dados;
 }
 
-/**
- * Confere os dois dígitos verificadores oficiais do CNPJ (módulo 11).
- *
- * Aceita com ou sem pontuação. Só devolve true se as contas baterem — não
- * é uma verificação de existência real na Receita, só da fórmula.
- */
-export function cnpjValido(cnpj: string): boolean {
-  const digitos = cnpj.replace(/\D/g, "");
-  if (digitos.length !== 14 || digitos === digitos[0].repeat(14)) {
-    return false;
-  }
-
-  const digitoVerificador = (base: string, pesos: number[]): string => {
-    let soma = 0;
-    for (let i = 0; i < base.length; i++) {
-      soma += Number(base[i]) * pesos[i];
-    }
-    const resto = soma % 11;
-    return resto < 2 ? "0" : String(11 - resto);
-  };
-
-  const dv1 = digitoVerificador(digitos.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
-  const dv2 = digitoVerificador(
-    digitos.slice(0, 12) + dv1,
-    [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-  );
-  return digitos.slice(-2) === dv1 + dv2;
-}
+// `cnpjValido` mora em ./cnpj (módulo puro, usado também pela busca em preparar-empresa.ts);
+// continua exportado daqui pra não quebrar quem já importava deste arquivo.
+export { cnpjValido };
 
 const REGEX_CNPJ_GENERICO = /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g;
 
