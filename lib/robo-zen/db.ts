@@ -159,6 +159,22 @@ export async function listarSimulacoesRecentes(limite = 10): Promise<SimulacaoRo
   return assertOk(db().from("robo_zen_simulacoes").select().order("criado_em", { ascending: false }).limit(limite));
 }
 
+/** Configuração do Robô Zen: variável de ambiente primeiro, tabela `app_config`
+ * (chave/valor, a mesma do resto do Núcleo) depois. Qualquer falha de leitura
+ * vira `null` ("não configurado") — quem usa isto trata ausência como desligado. */
+export async function lerConfig(chave: string): Promise<string | null> {
+  const doEnv = process.env[chave]?.trim();
+  if (doEnv) return doEnv;
+  try {
+    const { data, error } = await db().from("app_config").select("valor").eq("chave", chave).maybeSingle();
+    if (error) return null;
+    const valor = typeof data?.valor === "string" ? data.valor.trim() : "";
+    return valor || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function atualizarSimulacao(id: string, patch: Partial<SimulacaoRow>): Promise<SimulacaoRow> {
   return assertOk(db().from("robo_zen_simulacoes").update(patch).eq("id", id).select().single());
 }
