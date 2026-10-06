@@ -2,12 +2,12 @@
 // tela aberta. Sugestão do time na apresentação do Robô Zen.
 //
 // Hoje a simulação só anda enquanto o navegador fica chamando /continuar (uma
-// empresa por chamada). Aqui, um agendador EXTERNO chama a rota
-// /api/paralegal/robo-zen/cron/varredura a cada poucos minutos (ela chama
+// empresa por chamada). Aqui, um agendador chama a rota
+// /api/paralegal/robo-zen/cron/varredura a cada minuto (ela chama
 // `executarTickVarredura`) e este arquivo decide, a cada "tick", o que fazer.
 // Quem chama NÃO é o Vercel Cron: o time está no plano Hobby, que só aceita cron
-// de 1x por dia (e uma varredura precisa de ticks frequentes). Sem Vercel Cron o
-// deploy também não depende do plano. Veja o PR para as opções de gatilho.
+// de 1x por dia (e uma varredura precisa de ticks frequentes). O gatilho é o
+// pg_cron do próprio Supabase — ver migration_robo_zen_agendador.sql.
 //
 //   - desligado (padrão)  -> não faz nada. Só liga se `ROBO_ZEN_VARREDURA_HORAS`
 //                            (variável de ambiente ou linha em app_config) for > 0.

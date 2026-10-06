@@ -1,20 +1,27 @@
-// "Tick" da varredura agendada do Robô Zen — chamado por um agendador externo a
-// cada poucos minutos (não está no vercel.json: o plano Hobby só aceita cron de
-// 1x por dia) ou à mão (curl). A lógica, o que ele faz e por que
+// "Tick" da varredura agendada do Robô Zen — chamado a cada minuto pelo pg_cron
+// do Supabase (ver migration_robo_zen_agendador.sql; não está no vercel.json: o
+// plano Hobby só aceita cron de 1x por dia) ou à mão (curl). A lógica, o que ele faz e por que
 // é seguro estão em lib/robo-zen/agendador.ts. DESLIGADO por padrão: sem
 // ROBO_ZEN_VARREDURA_HORAS > 0 isto devolve "desligado" e não faz mais nada.
 //
 // Autenticação: igual aos outros crons do Núcleo, com uma diferença de
-// propósito — aqui, SEM `CRON_SECRET` configurado a rota RECUSA (401). O
+// propósito — aqui, sem NENHUM segredo configurado a rota RECUSA (401). O
 // keepalive deixa passar quando o segredo não existe; este endpoint dispara
 // leitura pesada no SharePoint e grava no banco, então "sem segredo" não pode
-// virar "aberto pra qualquer um".
-//   1. Header Authorization: Bearer <CRON_SECRET>  (o formato que o Vercel Cron usa)
-//   2. Header x-cron-secret: <CRON_SECRET>          (agendador externo / curl)
+// virar "aberto pra qualquer um". Vale qualquer um destes dois segredos:
+//   - CRON_SECRET (variável de ambiente do projeto — o mesmo dos outros crons)
+//   - ROBO_ZEN_VARREDURA_TOKEN (variável de ambiente OU linha em app_config,
+//     mínimo de 32 caracteres): token só desta rota, pensado pro agendador do
+//     próprio Supabase (pg_cron), que lê o token do banco, então o segredo nunca
+//     precisa passar por e-mail, chat ou painel de ninguém.
+// E o segredo pode vir em qualquer um destes headers:
+//   1. Authorization: Bearer <segredo>   (o formato que o Vercel Cron usa)
+//   2. x-cron-secret: <segredo>           (agendador externo / curl)
 
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { executarTickVarredura } from "@/lib/robo-zen/agendador";
+import { lerConfig } from "@/lib/robo-zen/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,17 +33,36 @@ function iguais(a: string, b: string): boolean {
   return ba.length === bb.length && timingSafeEqual(ba, bb);
 }
 
-function autorizado(req: NextRequest): boolean {
-  const segredo = process.env.CRON_SECRET;
-  if (!segredo) return false;
-  const bearer = req.headers.get("authorization");
-  if (bearer && iguais(bearer, `Bearer ${segredo}`)) return true;
+/** Chave (env ou app_config) do token próprio desta rota. */
+const CONFIG_TOKEN_VARREDURA = "ROBO_ZEN_VARREDURA_TOKEN";
+
+/** Token mais curto que isto é recusado: um "abc" esquecido na tabela não pode virar a chave de entrada. */
+const TAMANHO_MINIMO_TOKEN = 32;
+
+/** Segredos que a chamada trouxe (Authorization: Bearer … e/ou x-cron-secret). */
+function segredosEnviados(req: NextRequest): string[] {
+  const enviados: string[] = [];
+  const auth = req.headers.get("authorization");
+  if (auth && auth.startsWith("Bearer ") && auth.length > "Bearer ".length) enviados.push(auth.slice("Bearer ".length));
   const x = req.headers.get("x-cron-secret");
-  return !!x && iguais(x, segredo);
+  if (x) enviados.push(x);
+  return enviados;
+}
+
+async function autorizado(req: NextRequest): Promise<boolean> {
+  // Sem nenhum segredo na chamada: recusa já, sem tocar em banco nenhum.
+  const enviados = segredosEnviados(req);
+  if (enviados.length === 0) return false;
+
+  const doAmbiente = process.env.CRON_SECRET;
+  if (doAmbiente && enviados.some((e) => iguais(e, doAmbiente))) return true;
+
+  const token = await lerConfig(CONFIG_TOKEN_VARREDURA);
+  return !!token && token.length >= TAMANHO_MINIMO_TOKEN && enviados.some((e) => iguais(e, token));
 }
 
 async function tick(req: NextRequest) {
-  if (!autorizado(req)) {
+  if (!(await autorizado(req))) {
     return NextResponse.json({ ok: false, erro: "Unauthorized" }, { status: 401 });
   }
   try {
