@@ -241,7 +241,15 @@ export default function OSTab() {
       if (String(o.id) === qDigitos || somenteDigitos(o.codigo) === qDigitos || somenteDigitos(o.questor) === qDigitos) return true;
     }
     return [o.titulo, o.razao, o.cnpj, o.contato].some((v) => (v ?? "").toLowerCase().includes(q));
-  });
+  }).sort((a, b) => Number(b.id) - Number(a.id)); // mais recentes (maior Nº OS) primeiro
+
+  // Paginação: 15 por página.
+  const POR_PAGINA = 15;
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const pagina_itens = filtrados.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+  useEffect(() => { setPagina(1); }, [busca]);
 
   const empresasFiltradas = useMemo(() => {
     const qDigitos = somenteDigitos(buscaEmpresa);
@@ -705,7 +713,7 @@ export default function OSTab() {
             <tr><th style={{ whiteSpace: "nowrap" }}>Nº OS</th><th>Título</th><th>Razão social</th><th>CNPJ/CPF</th><th>Data</th><th>Total</th><th></th></tr>
           </thead>
           <tbody>
-            {filtrados.map((o) => (
+            {pagina_itens.map((o) => (
               <tr key={o.id}>
                 <td>{o.id}</td>
                 <td>{o.titulo}</td>
@@ -726,6 +734,15 @@ export default function OSTab() {
           </tbody>
         </table>
       </div>
+      {filtrados.length > POR_PAGINA && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", marginTop: 12, fontSize: 13 }}>
+          <button className="pl-btn" onClick={() => setPagina(1)} disabled={paginaAtual === 1}>«</button>
+          <button className="pl-btn" onClick={() => setPagina(paginaAtual - 1)} disabled={paginaAtual === 1}>‹ Anterior</button>
+          <span>Página {paginaAtual} de {totalPaginas} · {filtrados.length} OS</span>
+          <button className="pl-btn" onClick={() => setPagina(paginaAtual + 1)} disabled={paginaAtual === totalPaginas}>Próxima ›</button>
+          <button className="pl-btn" onClick={() => setPagina(totalPaginas)} disabled={paginaAtual === totalPaginas}>»</button>
+        </div>
+      )}
 
       {modal && (
         <div className="pl-modal-bg" onClick={() => !salvando && setModal(null)}>

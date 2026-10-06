@@ -11,8 +11,8 @@ import IndicacoesTab from "./IndicacoesTab";
 import RoteiroTab from "./RoteiroTab";
 
 const ABAS = [
-  { id: "cadastro", nome: "Cadastro" },
-  { id: "avulso", nome: "Avulso" },
+  { id: "cadastro", nome: "Cliente Mensal" },
+  { id: "avulso", nome: "Cliente Avulso" },
   { id: "empresas", nome: "Empresas" },
   { id: "contratos", nome: "Contratos" },
   { id: "os", nome: "Ordens de Serviço" },
