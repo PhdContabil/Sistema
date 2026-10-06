@@ -267,6 +267,19 @@ export async function buscarEmpresaMapeada(simulacaoId: string, busca: string): 
 }
 
 // ------------------------------------------------------------------
+// robo_zen_cnpj_manual (fallback manual, por empresa específica)
+// ------------------------------------------------------------------
+
+/** CNPJ informado manualmente pro código da empresa, se houver — usado só
+ * como ÚLTIMO fallback em `prepararDadosParaEnvio`, depois que a busca no
+ * PDF (`extrairDadosComFallback`) não encontrar nada. */
+export async function obterCnpjManual(codigo: string): Promise<string | null> {
+  const { data, error } = await db().from("robo_zen_cnpj_manual").select("cnpj").eq("codigo", codigo).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.cnpj ?? null;
+}
+
+// ------------------------------------------------------------------
 // robo_zen_envios (auditoria permanente)
 // ------------------------------------------------------------------
 
