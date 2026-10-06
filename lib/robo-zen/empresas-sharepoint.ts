@@ -160,16 +160,40 @@ export async function baixarConteudo(ctx: ContextoGraph, itemId: string): Promis
 }
 
 /** Link de download do arquivo, direto do SharePoint — pré-autenticado e de
- * curta duração (a Microsoft devolve em `@microsoft.graph.downloadUrl`).
- * Serve pra o navegador baixar sem os bytes passarem pela função serverless
- * (que tem limite de tamanho de resposta; contratos digitalizados são
- * grandes). Quem chama é responsável por só pedir ids que ele mesmo validou. */
+ * curta duração. Serve pra o navegador baixar sem os bytes passarem pela função
+ * serverless (que tem limite de tamanho de resposta; contratos digitalizados são
+ * grandes). Quem chama é responsável por só pedir ids que ele mesmo validou.
+ *
+ * O SharePoint nem sempre devolve `@microsoft.graph.downloadUrl` quando ele é
+ * pedido num `$select` (foi o que aconteceu em produção: o item vinha sem o
+ * campo). Por isso são três tentativas, da mais simples à mais garantida:
+ *   1. o item SEM `$select` (a resposta padrão traz `@microsoft.graph.downloadUrl`);
+ *   2. `GET …/content` SEM seguir o redirecionamento — é a forma documentada
+ *      ("302 Found" com o endereço pré-autenticado no cabeçalho `Location`);
+ *   3. nada disso deu: devolve `url: null` (a rota explica ao usuário).
+ * Erros do Graph (arquivo apagado = 404, sem permissão…) sobem como
+ * RoboZenSharePointErro, em qualquer uma das tentativas. */
 export async function obterLinkDownload(ctx: ContextoGraph, itemId: string): Promise<{ nome: string; url: string | null }> {
   const item = await graphGet<{ name?: string; "@microsoft.graph.downloadUrl"?: string }>(
     ctx.token,
-    `/drives/${ctx.driveId}/items/${itemId}?$select=id,name,@microsoft.graph.downloadUrl`
+    `/drives/${ctx.driveId}/items/${itemId}`
   );
-  return { nome: item.name ?? "contrato.pdf", url: item["@microsoft.graph.downloadUrl"] ?? null };
+  const nome = item.name ?? "contrato.pdf";
+  const direto = item["@microsoft.graph.downloadUrl"];
+  if (direto) return { nome, url: direto };
+
+  const resp = await fetch(`${GRAPH}/drives/${ctx.driveId}/items/${itemId}/content`, {
+    headers: { Authorization: `Bearer ${ctx.token}` },
+    redirect: "manual",
+    cache: "no-store",
+  });
+  const destino = resp.headers.get("location");
+  if (resp.status >= 300 && resp.status < 400 && destino && /^https:\/\//i.test(destino)) return { nome, url: destino };
+  if (resp.status >= 400) {
+    const corpo = await resp.text().catch(() => "");
+    throw new RoboZenSharePointErro(amigavel(resp.status, corpo), resp.status);
+  }
+  return { nome, url: null };
 }
 
 // ---------------------------------------------------------------------
