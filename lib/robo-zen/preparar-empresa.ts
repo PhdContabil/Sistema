@@ -18,6 +18,15 @@ import {
   MOTIVO_PRONTA_DOC_NOVO,
   type EnvioConhecido,
 } from "./novidades-envio";
+import {
+  aproveitarBuscaParcial,
+  MAX_PASSOS_BUSCA,
+  mesmaVersao,
+  ordenarComVencedor,
+  type BuscaParcial,
+  type DocTentado,
+  type DocVencedor,
+} from "./busca-parcial";
 import * as dbz from "./db";
 
 // Categorias fixas (pra bater com o vocabulário que a Júlia já conhece dos
@@ -28,6 +37,9 @@ export const MOTIVO_SEM_DOC_ELEGIVEL = "SEM DOCUMENTO ELEGÍVEL (só docs fora d
 export const MOTIVO_CNPJ_NAO_ENCONTRADO = "CNPJ NÃO ENCONTRADO em nenhum documento";
 export const MOTIVO_CLIENTE_NAO_CADASTRADO = "CLIENTE NÃO CADASTRADO NO QUESTOR";
 export const MOTIVO_ERRO = "ERRO AO CONSULTAR/LER";
+/** A busca do CNPJ foi cortada pelo tempo, mas o que já foi lido ficou guardado:
+ * a próxima tentativa continua de onde parou (ver lib/robo-zen/busca-parcial.ts). */
+export const MOTIVO_BUSCA_INCOMPLETA = "BUSCA INCOMPLETA (continua na próxima tentativa)";
 
 export interface ResultadoPreparo {
   codigo: string;
@@ -51,14 +63,31 @@ export interface ResultadoPreparo {
   documentosJaEnviados: string[];
   /** Dos já enviados, os mexidos no SharePoint depois do envio (só aviso). */
   documentosAlterados: string[];
+  /** A busca do CNPJ parou por tempo mas ficou guardada: quem chama deve tentar
+   * de novo (o job da simulação faz isso sozinho no passo seguinte) e a busca
+   * continua do documento seguinte. Nunca é `pronta`. */
+  buscaIncompleta: boolean;
 }
 
 /** Dependências que dá pra trocar nos testes (o padrão é o banco de verdade). */
 export interface DepsPreparo {
   enviosDaEmpresa: (codigo: string) => Promise<EnvioConhecido[]>;
+  /** Memória da busca do CNPJ (robo_zen_busca_parcial). Se falhar (ex.: tabela
+   * ainda não criada), a busca segue como antes, sem continuar de onde parou. */
+  obterBuscaParcial: (codigo: string) => Promise<BuscaParcial | null>;
+  salvarBuscaParcial: (
+    codigo: string,
+    busca: { documentos: DocTentado[]; vencedor: DocVencedor | null; passos: number }
+  ) => Promise<void>;
+  limparBuscaParcial: (codigo: string) => Promise<void>;
 }
 
-const depsPadrao: DepsPreparo = { enviosDaEmpresa: dbz.enviosDaEmpresa };
+const depsPadrao: DepsPreparo = {
+  enviosDaEmpresa: dbz.enviosDaEmpresa,
+  obterBuscaParcial: dbz.obterBuscaParcial,
+  salvarBuscaParcial: dbz.salvarBuscaParcial,
+  limparBuscaParcial: dbz.limparBuscaParcial,
+};
 
 function resultadoVazio(empresa: Empresa): ResultadoPreparo {
   return {
@@ -78,6 +107,7 @@ function resultadoVazio(empresa: Empresa): ResultadoPreparo {
     documentosParaEnviar: [],
     documentosJaEnviados: [],
     documentosAlterados: [],
+    buscaIncompleta: false,
   };
 }
 
@@ -91,6 +121,19 @@ interface ResultadoExtracao {
    * "parece escaneado" (ver prepararDadosParaEnvio). */
   escaneados: string[];
   tocados: Set<string>;
+  /** Documentos lidos AGORA sem achar CNPJ (os que a busca vai guardar). */
+  tentadosAgora: DocTentado[];
+  /** A busca parou por tempo antes de cobrir todos os candidatos. */
+  incompleta: boolean;
+  /** Candidatos que ficaram sem ser lidos (só faz sentido se `incompleta`). */
+  naoLidos: number;
+  totalCandidatos: number;
+}
+
+/** Já lidos antes, sem CNPJ, e o vencedor da última vez (ver busca-parcial.ts). */
+interface MemoriaBusca {
+  tentados: Map<string, DocTentado>;
+  vencedor: ArquivoContrato | null;
 }
 
 // Orçamento de tempo (ms), a partir do início de `prepararDadosParaEnvio`,
@@ -140,33 +183,57 @@ const ORCAMENTO_TEMPO_EXTRACAO_MS = 40_000;
 async function extrairDadosComFallback(
   ctx: ContextoGraph,
   elegiveis: ArquivoContrato[],
-  prazoFinal: number
+  prazoFinal: number,
+  memoria: MemoriaBusca = { tentados: new Map(), vencedor: null }
 ): Promise<ResultadoExtracao> {
   const problemas: string[] = [];
   const escaneados: string[] = [];
   const tocados = new Set<string>();
-  const candidatos = ordenarCandidatosParaExtrairDados(elegiveis);
+  const tentadosAgora: DocTentado[] = [];
+  // Na ordem de sempre — só o vencedor da última vez passa pra frente.
+  const candidatos = ordenarComVencedor(ordenarCandidatosParaExtrairDados(elegiveis), memoria.vencedor);
   for (let i = 0; i < candidatos.length; i++) {
-    if (Date.now() >= prazoFinal) {
-      problemas.push(
-        `parou a busca por tempo (limite de segurança da função): tentei ${i} de ` +
-          `${candidatos.length} documento(s) elegível(is) — os demais não chegaram a ser lidos`
-      );
-      break;
-    }
     const candidato = candidatos[i];
+
+    // Já lido numa tentativa anterior (mesma versão do arquivo) e sem CNPJ: não
+    // baixa nem faz OCR de novo — só reaproveita o que ficou registrado.
+    const previo = memoria.tentados.get(candidato.id);
+    if (previo) {
+      tocados.add(candidato.id);
+      if (previo.problema) problemas.push(previo.problema);
+      if (previo.escaneado) escaneados.push(candidato.nome);
+      continue;
+    }
+
+    if (Date.now() >= prazoFinal) {
+      const naoLidos = candidatos.slice(i).filter((c) => !memoria.tentados.has(c.id)).length;
+      return {
+        dados: null,
+        arquivoUsado: null,
+        problemas,
+        escaneados,
+        tocados,
+        tentadosAgora,
+        incompleta: true,
+        naoLidos,
+        totalCandidatos: candidatos.length,
+      };
+    }
+
     tocados.add(candidato.id);
     let dados: DadosCertidao;
     try {
       const bytes = await baixarConteudo(ctx, candidato.id);
       dados = await extrairDadosCertidao(bytes);
     } catch (e) {
-      problemas.push(`${candidato.nome}: erro ao ler (${e instanceof Error ? e.message : String(e)})`);
+      const problema = `${candidato.nome}: erro ao ler (${e instanceof Error ? e.message : String(e)})`;
+      problemas.push(problema);
       // Mesma regra "à prova de falha" do pdfPareceEscaneado() original:
       // se nem deu pra extrair nada, trata como "parece escaneado" (mais
       // seguro avisar de mais do que deixar passar batido um documento
       // ilegível sem nenhum aviso).
       escaneados.push(candidato.nome);
+      tentadosAgora.push({ id: candidato.id, nome: candidato.nome, modificado_em: candidato.modificadoEm ?? null, problema, escaneado: true });
       continue;
     }
     if (dados.pareceEscaneado) escaneados.push(candidato.nome);
@@ -176,12 +243,40 @@ async function extrairDadosComFallback(
           "corrompido, vazio, ou uma digitalização de qualidade muito baixa; confira o arquivo " +
           "direto no SharePoint"
         : "tinha texto, mas não encontrei um CNPJ nele";
-      problemas.push(`${candidato.nome}: ${motivo}`);
+      const problema = `${candidato.nome}: ${motivo}`;
+      problemas.push(problema);
+      tentadosAgora.push({
+        id: candidato.id,
+        nome: candidato.nome,
+        modificado_em: candidato.modificadoEm ?? null,
+        problema,
+        escaneado: !!dados.pareceEscaneado,
+      });
       continue;
     }
-    return { dados, arquivoUsado: candidato, problemas, escaneados, tocados };
+    return {
+      dados,
+      arquivoUsado: candidato,
+      problemas,
+      escaneados,
+      tocados,
+      tentadosAgora,
+      incompleta: false,
+      naoLidos: 0,
+      totalCandidatos: candidatos.length,
+    };
   }
-  return { dados: null, arquivoUsado: null, problemas, escaneados, tocados };
+  return {
+    dados: null,
+    arquivoUsado: null,
+    problemas,
+    escaneados,
+    tocados,
+    tentadosAgora,
+    incompleta: false,
+    naoLidos: 0,
+    totalCandidatos: candidatos.length,
+  };
 }
 
 /**
@@ -317,14 +412,56 @@ export async function prepararDadosParaEnvio(
     return resultado;
   }
 
+  // O que já foi lido numa tentativa anterior desta empresa (e não tinha CNPJ)?
+  // Se a tabela não existir ou o banco falhar, segue como antes: a busca só
+  // não consegue continuar de onde parou.
+  let busca: BuscaParcial | null = null;
+  let memoriaDisponivel = true;
+  try {
+    busca = await deps.obterBuscaParcial(empresa.codigo);
+  } catch {
+    memoriaDisponivel = false;
+  }
+  const aprov = aproveitarBuscaParcial(elegiveis, busca, Date.now());
+  const documentoDe = (c: { id: string }) => elegiveis.find((d) => d.id === c.id) ?? null;
+  const vencedor = aprov.vencedor ? documentoDe(aprov.vencedor) : null;
+
+  // Já gastou todas as chamadas permitidas e ainda não achou: desiste (e limpa a
+  // memória, pra uma nova tentativa manual recomeçar do zero).
+  if (aprov.esgotada) {
+    const lidos = [...aprov.tentados.values()];
+    resultado.qtdDocumentosEscaneados = lidos.filter((d) => d.escaneado).length;
+    resultado.documentosEscaneados = lidos.filter((d) => d.escaneado).map((d) => d.nome);
+    const detalhe = lidos.map((d) => d.problema).filter(Boolean).join(" | ");
+    resultado.status =
+      `${MOTIVO_CNPJ_NAO_ENCONTRADO} (desisti depois de ${aprov.passos} tentativas seguidas, ` +
+      `${lidos.length} de ${elegiveis.length} documento(s) lidos${detalhe ? `: ${detalhe}` : ""} — ` +
+      "confira os arquivos direto no SharePoint)";
+    resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
+    if (memoriaDisponivel) await deps.limparBuscaParcial(empresa.codigo).catch(() => {});
+    return resultado;
+  }
+
+  // Número desta tentativa. Quando está continuando uma busca, já registra no
+  // banco ANTES do trabalho pesado: se a função for morta no meio, a tentativa
+  // conta mesmo assim e o teto de tentativas protege contra laço infinito.
+  const continuando = aprov.tentados.size > 0;
+  const passosAgora = aprov.passos + 1;
+  if (continuando && memoriaDisponivel) {
+    await deps
+      .salvarBuscaParcial(empresa.codigo, {
+        documentos: [...aprov.tentados.values()],
+        vencedor: busca?.vencedor ?? null,
+        passos: passosAgora,
+      })
+      .catch(() => {});
+  }
+
   // Busca o CNPJ tentando os candidatos em ordem de prioridade — já
   // aproveita essa mesma extração pra marcar quem "parece escaneado"
   // (dados.pareceEscaneado), em vez de reprocessar tudo de novo abaixo.
-  const { dados, arquivoUsado, problemas, escaneados, tocados } = await extrairDadosComFallback(
-    ctx,
-    elegiveis,
-    prazoFinal
-  );
+  const { dados, arquivoUsado, problemas, escaneados, tocados, tentadosAgora, incompleta, naoLidos, totalCandidatos } =
+    await extrairDadosComFallback(ctx, elegiveis, prazoFinal, { tentados: aprov.tentados, vencedor });
 
   // Só falta checar "parece escaneado" dos elegíveis que a busca acima
   // NÃO chegou a tocar (ela para assim que acha o CNPJ, então o que vier
@@ -334,6 +471,7 @@ export async function prepararDadosParaEnvio(
   // tempo de `extrairDadosComFallback`: se já estourou, nem vale a pena
   // tentar mais downloads só pra essa checagem cosmética.
   for (const doc of elegiveis) {
+    if (incompleta) break;
     if (tocados.has(doc.id)) continue;
     if (Date.now() >= prazoFinal) break;
     try {
@@ -349,9 +487,64 @@ export async function prepararDadosParaEnvio(
 
   if (!dados || !dados.cnpj) {
     const detalhe = problemas.length > 0 ? problemas.join(" | ") : "nenhum documento elegível pôde ser lido";
+
+    if (incompleta) {
+      // Cortada pelo tempo. Guarda o que já foi lido pra a próxima tentativa
+      // continuar do documento seguinte — e só então avisa que é "incompleta".
+      const lidosTotal = [...aprov.tentados.values(), ...tentadosAgora];
+      let guardou = false;
+      if (memoriaDisponivel) {
+        try {
+          await deps.salvarBuscaParcial(empresa.codigo, {
+            documentos: lidosTotal,
+            vencedor: busca?.vencedor ?? null,
+            passos: passosAgora,
+          });
+          guardou = true;
+        } catch {
+          guardou = false;
+        }
+      }
+      if (guardou) {
+        resultado.buscaIncompleta = true;
+        resultado.status =
+          `${MOTIVO_BUSCA_INCOMPLETA}: li ${totalCandidatos - naoLidos} de ${totalCandidatos} documento(s) sem achar CNPJ ` +
+          `(tentativa ${passosAgora} de ${MAX_PASSOS_BUSCA}) — a busca continua de onde parou na próxima tentativa` +
+          (problemas.length > 0 ? ` [${problemas.join(" | ")}]` : "");
+        resultado.motivo = MOTIVO_BUSCA_INCOMPLETA;
+        return resultado;
+      }
+      // Sem onde guardar (tabela ausente / banco falhou): comportamento antigo.
+      resultado.status =
+        `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${[
+          ...problemas,
+          `parou a busca por tempo (limite de segurança da função): tentei ${totalCandidatos - naoLidos} de ` +
+            `${totalCandidatos} documento(s) elegível(is) — os demais não chegaram a ser lidos`,
+        ].join(" | ")})`;
+      resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
+      return resultado;
+    }
+
+    // Leu tudo e não achou: resultado final (e a memória parcial não serve mais).
     resultado.status = `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${detalhe})`;
     resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
+    if (busca && memoriaDisponivel) await deps.limparBuscaParcial(empresa.codigo).catch(() => {});
     return resultado;
+  }
+
+  // Achou. Guarda de qual documento saiu (a próxima busca tenta ele primeiro) e
+  // zera o que havia de busca parcial — só escreve se mudou alguma coisa.
+  if (memoriaDisponivel && arquivoUsado) {
+    const igualAoGuardado = !!busca?.vencedor && mesmaVersao(arquivoUsado, busca.vencedor);
+    if (!igualAoGuardado || (busca?.documentos.length ?? 0) > 0 || (busca?.passos ?? 0) > 0) {
+      await deps
+        .salvarBuscaParcial(empresa.codigo, {
+          documentos: [],
+          vencedor: { id: arquivoUsado.id, nome: arquivoUsado.nome, modificado_em: arquivoUsado.modificadoEm ?? null },
+          passos: 0,
+        })
+        .catch(() => {});
+    }
   }
 
   resultado.cnpj = dados.cnpj;

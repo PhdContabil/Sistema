@@ -177,6 +177,29 @@ async function avancarProcessamento(ctx: ContextoGraph, simulacao: dbz.Simulacao
 
   const resultado = await prepararDadosParaEnvio(ctx, empresa);
 
+  // A busca do CNPJ estourou o orçamento de tempo mas o que já foi lido ficou
+  // guardado: a empresa NÃO é dada como processada. O próximo passo pega a mesma
+  // empresa de novo (é a primeira ainda não processada) e continua do documento
+  // seguinte, com orçamento novo. O resultado parcial fica visível no motivo/status.
+  if (resultado.buscaIncompleta) {
+    await dbz.atualizarEmpresaSimulacao(proxima.id, {
+      processada: false,
+      pronta: false,
+      motivo: resultado.motivo,
+      status: resultado.status,
+      qtd_documentos_elegiveis: resultado.qtdDocumentosElegiveis,
+      documentos_elegiveis: resultado.documentosElegiveis,
+      qtd_documentos_escaneados: resultado.qtdDocumentosEscaneados,
+      documentos_escaneados: resultado.documentosEscaneados,
+      qtd_documentos_ignorados: resultado.qtdDocumentosIgnorados,
+      documentos_ignorados: resultado.documentosIgnorados,
+    });
+    const atualizada = await dbz.atualizarSimulacao(simulacao.id, {
+      empresa_atual: `${rotuloEmpresa} — continuando a busca do CNPJ de onde parou`,
+    });
+    return serializarSimulacao(atualizada);
+  }
+
   await dbz.atualizarEmpresaSimulacao(proxima.id, {
     processada: true,
     pronta: resultado.pronta,
