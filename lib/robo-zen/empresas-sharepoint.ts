@@ -103,6 +103,8 @@ interface FilhoGraph {
   id: string;
   name: string;
   ehPasta: boolean;
+  /** lastModifiedDateTime do item no SharePoint (ISO), se o Graph informou. */
+  modificadoEm?: string | null;
 }
 
 interface RawGraphItem {
@@ -110,6 +112,7 @@ interface RawGraphItem {
   name: string;
   folder?: unknown;
   file?: unknown;
+  lastModifiedDateTime?: string;
 }
 
 /** Comparação simples (minúsculas, sem espaços nas pontas) — sem stripar
@@ -132,12 +135,12 @@ function normalizarAcentos(s: string): string {
 
 async function listarFilhos(ctx: ContextoGraph, itemId: string | null): Promise<FilhoGraph[]> {
   const base = itemId ? `/drives/${ctx.driveId}/items/${itemId}/children` : `/drives/${ctx.driveId}/root/children`;
-  let url: string | null = `${GRAPH}${base}?$select=id,name,folder,file&$top=999`;
+  let url: string | null = `${GRAPH}${base}?$select=id,name,folder,file,lastModifiedDateTime&$top=999`;
   const todos: FilhoGraph[] = [];
   while (url) {
     const dados: { value?: RawGraphItem[]; "@odata.nextLink"?: string } = await graphGet(ctx.token, url);
     for (const item of dados.value ?? []) {
-      todos.push({ id: item.id, name: item.name, ehPasta: !!item.folder });
+      todos.push({ id: item.id, name: item.name, ehPasta: !!item.folder, modificadoEm: item.lastModifiedDateTime ?? null });
     }
     url = dados["@odata.nextLink"] ?? null;
   }
@@ -465,6 +468,9 @@ async function resolverCaminho(
 export interface ArquivoContrato {
   id: string;
   nome: string;
+  /** Última modificação do arquivo no SharePoint (ISO) — serve pra avisar de arquivo
+   * mexido depois de enviado ao Zen (ver lib/robo-zen/novidades-envio.ts). */
+  modificadoEm?: string | null;
 }
 
 /**
@@ -488,7 +494,7 @@ async function arquivosEmProfundidade(
     const filhos = await listarFilhos(ctx, id);
     for (const item of filhos) {
       if (!item.ehPasta) {
-        arquivos.push({ id: item.id, nome: item.name });
+        arquivos.push({ id: item.id, nome: item.name, modificadoEm: item.modificadoEm ?? null });
       } else if (restante > 0) {
         await andar(item.id, restante - 1);
       }

@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { ehResposta, exigirAcessoParalegal } from "@/lib/robo-zen/guard";
 import { localizarEmpresa, obterContextoGraph, RoboZenSharePointErro } from "@/lib/robo-zen/empresas-sharepoint";
-import { MOTIVO_PRONTA, prepararDadosParaEnvio } from "@/lib/robo-zen/preparar-empresa";
+import { prepararDadosParaEnvio } from "@/lib/robo-zen/preparar-empresa";
 import * as dbz from "@/lib/robo-zen/db";
 
 export const runtime = "nodejs";
@@ -33,7 +33,10 @@ export async function POST(req: Request) {
     }
 
     const resultado = await prepararDadosParaEnvio(ctx, empresa);
-    if (resultado.motivo !== MOTIVO_PRONTA || resultado.documentosElegiveis.length === 0) {
+    // `pronta` já exclui quem tem tudo enviado ("JÁ ENVIADA…"); e só vão os
+    // documentos que ainda NÃO foram ao Zen (`documentosParaEnviar`), nunca os
+    // que já constam em robo_zen_envios — senão o contrato duplicaria no Zen.
+    if (!resultado.pronta || resultado.documentosParaEnviar.length === 0) {
       return NextResponse.json(
         {
           ok: false,
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
       empresaCodigo: empresa.codigo,
       empresaNome: empresa.nome,
       cnpj: resultado.cnpj ?? "",
-      documentos: resultado.documentosElegiveis,
+      documentos: resultado.documentosParaEnviar,
       criadoPor: auth.email,
     });
 
@@ -59,7 +62,9 @@ export async function POST(req: Request) {
       empresa: empresa.nome,
       codigo: empresa.codigo,
       cnpj: resultado.cnpj ?? "",
-      documentos: resultado.documentosElegiveis.map((d) => d.nome),
+      documentos: resultado.documentosParaEnviar.map((d) => d.nome),
+      // Já enviados antes (não vão de novo) — a tela pode mostrar pra pessoa entender.
+      jaEnviados: resultado.documentosJaEnviados,
     });
   } catch (e) {
     const status = e instanceof RoboZenSharePointErro ? e.status : 500;

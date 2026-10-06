@@ -24,6 +24,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { MOTIVO_JA_ENVIADA_ALTERADA, MOTIVO_PRONTA_DOC_NOVO } from "@/lib/robo-zen/novidades-envio";
+
 type StatusSimulacao = "mapeando" | "processando" | "concluida" | "erro" | "parada";
 type StatusLoteEnvio = "processando" | "concluida" | "erro" | "parada";
 
@@ -102,6 +104,8 @@ interface EnvioPendente {
   codigo: string;
   cnpj: string;
   documentos: string[];
+  /** Já enviados antes — não vão de novo. */
+  jaEnviados: string[];
 }
 
 interface ResultadoEnvio {
@@ -365,7 +369,9 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
     // digitou) — `localizarEmpresa` casa código exato antes de qualquer
     // outro critério, então isso garante a MESMA empresa que acabou de
     // aparecer na tela, sem ambiguidade de nome parcial.
-    const j = await chamarApi<{ token: string; empresa: string; codigo: string; cnpj: string; documentos: string[] }>(
+    const j = await chamarApi<{
+      token: string; empresa: string; codigo: string; cnpj: string; documentos: string[]; jaEnviados?: string[];
+    }>(
       "/api/paralegal/robo-zen/preparar-envio",
       { method: "POST", body: JSON.stringify({ busca: consulta.resultado.codigo }) }
     );
@@ -374,7 +380,9 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
       setErroEnvio(j.erro ?? "Não foi possível preparar o envio.");
       return;
     }
-    setPendente({ token: j.token, empresa: j.empresa, codigo: j.codigo, cnpj: j.cnpj, documentos: j.documentos });
+    setPendente({
+      token: j.token, empresa: j.empresa, codigo: j.codigo, cnpj: j.cnpj, documentos: j.documentos, jaEnviados: j.jaEnviados ?? [],
+    });
   }
 
   async function confirmarEnvio() {
@@ -491,7 +499,15 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                       <td style={{ textAlign: "center" }}>
                         <span className={`badge ${r.pronta ? "badge-ok" : "badge-mudo"}`}>{r.pronta ? "Pronta" : "—"}</span>
                       </td>
-                      <td>{r.motivo}</td>
+                      <td>
+                        {r.motivo}
+                        {(r.motivo === MOTIVO_PRONTA_DOC_NOVO || r.motivo === MOTIVO_JA_ENVIADA_ALTERADA) && r.status && (
+                          <div className="dash" style={{ fontSize: 11, marginTop: 2, maxWidth: 340, whiteSpace: "normal" }}>
+                            {/* o status começa repetindo o motivo — corta pra não aparecer duas vezes */}
+                            {r.status.startsWith(r.motivo) ? r.status.slice(r.motivo.length).replace(/^[:.]\s*/, "") : r.status}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         {r.documentos.length === 0 && <span className="dash">–</span>}
                         {r.documentos.length === 1 && (
@@ -543,7 +559,8 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
           <p>
             Isso cadastra de verdade no Questor Zen os documentos de <strong>TODAS</strong> as empresas que estiverem
             PRONTA na simulação acima{simulacao?.status === "concluida" ? ` (${simulacao.empresasProntas} agora)` : ""} —
-            não é simulação. Empresa/documento já enviado antes por esta tela é pulado automaticamente, não duplica.
+            não é simulação. Empresa/documento já enviado antes por esta tela é pulado automaticamente, não duplica
+            (empresa já enviada que ganhou contrato novo manda só o novo).
             <strong> Não tem como desfazer depois.</strong>
           </p>
           <label className="rz-check">
@@ -651,6 +668,12 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
               <dt>Empresa</dt><dd>{pendente.empresa} (#{pendente.codigo})</dd>
               <dt>CNPJ</dt><dd>{pendente.cnpj}</dd>
               <dt>Documentos</dt><dd>{pendente.documentos.join("; ")}</dd>
+              {pendente.jaEnviados.length > 0 && (
+                <>
+                  <dt>Já enviados antes</dt>
+                  <dd>{pendente.jaEnviados.join("; ")} <span className="dash">(não vão de novo)</span></dd>
+                </>
+              )}
             </dl>
             <p className="footnote">Esta confirmação vale por 15 minutos e só pode ser usada uma vez.</p>
             <div className="toolbar" style={{ margin: 0 }}>
