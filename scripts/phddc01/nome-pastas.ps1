@@ -18,6 +18,8 @@ $Base  = 'https://system-contabilidade.vercel.app'
 # Mesmo arquivo que o criador de pastas (python) lê. No phddc01 o T: aponta pra \\phddc01\PastaMonitorada.
 $Xlsx  = if (Test-Path 'T:\Nome pastas\nome_pastas.xlsx') { 'T:\Nome pastas\nome_pastas.xlsx' } else { '\\phddc01\PastaMonitorada\Nome pastas\nome_pastas.xlsx' }
 $Dir   = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Onde o criador de pastas cria as pastas de Empresa (CAMINHO_EMPRESA do python).
+$PastaEmpresas = 'C:\Users\Administrator.PHD\OneDrive - PHD CONTABIL LTDA\Empresas - EMPRESAS'
 $StateFile = Join-Path $Dir 'nome-pastas.ultimo.txt'
 $LogFile   = Join-Path $Dir 'nome-pastas.log'
 
@@ -87,12 +89,22 @@ try {
 
   $desde = [int](Get-Content $StateFile -Raw).Trim()
   $r = Invoke-RestMethod -Uri "$Base/api/paralegal/pastas-fila?desde=$desde" -Headers $h -UseBasicParsing
-  $itens = @($r.itens)
-  if ($itens.Count -eq 0) { return }
+  $todos = @($r.itens)
+  if ($todos.Count -eq 0) { return }
+  # Não manda de novo pasta que já existe (ou repetida no mesmo lote): o xcopy
+  # do criador de pastas pararia perguntando se pode sobrescrever.
+  $vistos = @{}; $itens = @()
+  foreach ($it in $todos) {
+    if ($vistos.ContainsKey($it.nome)) { Log "OS $($it.nos): $($it.nome) repetida no lote, ignorada"; continue }
+    $vistos[$it.nome] = $true
+    if (Test-Path (Join-Path $PastaEmpresas $it.nome)) { Log "OS $($it.nos): pasta $($it.nome) já existe, ignorada"; continue }
+    $itens += $it
+  }
+  $maiorTodos = ($todos | Measure-Object -Property nos -Maximum).Maximum
+  if ($itens.Count -eq 0) { Set-Content -Path $StateFile -Value $maiorTodos; return }
 
   Add-LinhasXlsx -caminho $Xlsx -itens $itens
-  $maior = ($itens | Measure-Object -Property nos -Maximum).Maximum
-  Set-Content -Path $StateFile -Value $maior
+  Set-Content -Path $StateFile -Value $maiorTodos
   foreach ($it in $itens) { Log "OS $($it.nos): $($it.nome) ($($it.tipo))" }
 } catch {
   Log "ERRO: $($_.Exception.Message)"
