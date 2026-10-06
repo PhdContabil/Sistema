@@ -59,10 +59,40 @@ export async function POST(req: Request) {
     );
   }
 
+  // Última barreira contra duplicar no Zen: entre "preparar" e "confirmar"
+  // podem passar até 15 minutos, e nesse intervalo alguém (ou o envio em lote)
+  // pode ter mandado o mesmo documento. Confere o registro de novo na hora.
+  let documentosAEnviar = pendente.documentos;
+  try {
+    const jaEnviados = await dbz.chavesJaEnviadas();
+    documentosAEnviar = pendente.documentos.filter((d) => !jaEnviados.has(dbz.chaveEnvio(pendente.empresa_codigo, d.nome)));
+  } catch (e) {
+    return NextResponse.json(
+      {
+        ok: false,
+        erro:
+          `Não consegui conferir o registro de envios (${e instanceof Error ? e.message : String(e)}) — por segurança ` +
+          "nada foi enviado, para não duplicar no Zen. Consulte a empresa de novo e tente outra vez.",
+      },
+      { status: 503 }
+    );
+  }
+  if (documentosAEnviar.length === 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        erro:
+          "Esses documentos já foram enviados ao Zen (consta no registro de envios) — nada foi enviado de novo. " +
+          "Consulte a empresa para ver o que ainda falta.",
+      },
+      { status: 409 }
+    );
+  }
+
   const enviados: { arquivo: string; documentoId: string }[] = [];
   let erroNoMeio: string | null = null;
 
-  for (const doc of pendente.documentos) {
+  for (const doc of documentosAEnviar) {
     try {
       const bytes = await baixarConteudo(ctx, doc.id);
       const codigoArquivo = await uploadArquivo(doc.nome, bytes);
@@ -91,7 +121,7 @@ export async function POST(req: Request) {
   }
 
   if (erroNoMeio) {
-    const faltaram = pendente.documentos.slice(enviados.length).map((d) => d.nome);
+    const faltaram = documentosAEnviar.slice(enviados.length).map((d) => d.nome);
     const avisoParcial =
       enviados.length > 0
         ? `${enviados.length} documento(s) já tinham sido gravados com sucesso antes deste erro (já estão no ` +

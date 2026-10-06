@@ -11,6 +11,14 @@ import { baixarConteudo, listarContratos } from "./empresas-sharepoint";
 import { filtrarDocumentosParaEnviar, ordenarCandidatosParaExtrairDados } from "./filtro-documentos";
 import { type DadosCertidao, extrairDadosCertidao, pdfPareceEscaneado } from "./certidao-parser";
 import { ClienteNaoEncontradoError, consultarCliente, hasQuestorZenToken, QuestorZenError } from "../questor-zen";
+import {
+  classificarEnvios,
+  MOTIVO_JA_ENVIADA,
+  MOTIVO_JA_ENVIADA_ALTERADA,
+  MOTIVO_PRONTA_DOC_NOVO,
+  type EnvioConhecido,
+} from "./novidades-envio";
+import * as dbz from "./db";
 
 // Categorias fixas (pra bater com o vocabulário que a Júlia já conhece dos
 // relatórios do Robô Zen em Python).
@@ -36,7 +44,21 @@ export interface ResultadoPreparo {
   pronta: boolean;
   /** Nome do arquivo de onde o CNPJ foi extraído (só quando pronta=true). */
   documentoCnpjOrigem: string | null;
+  /** Dos elegíveis, os que AINDA NÃO foram enviados ao Zen — é só isto que o
+   * envio individual pode mandar (`documentosElegiveis` continua trazendo todos). */
+  documentosParaEnviar: ArquivoContrato[];
+  /** Nomes dos elegíveis que já constam em robo_zen_envios. */
+  documentosJaEnviados: string[];
+  /** Dos já enviados, os mexidos no SharePoint depois do envio (só aviso). */
+  documentosAlterados: string[];
 }
+
+/** Dependências que dá pra trocar nos testes (o padrão é o banco de verdade). */
+export interface DepsPreparo {
+  enviosDaEmpresa: (codigo: string) => Promise<EnvioConhecido[]>;
+}
+
+const depsPadrao: DepsPreparo = { enviosDaEmpresa: dbz.enviosDaEmpresa };
 
 function resultadoVazio(empresa: Empresa): ResultadoPreparo {
   return {
@@ -53,6 +75,9 @@ function resultadoVazio(empresa: Empresa): ResultadoPreparo {
     motivo: "",
     pronta: false,
     documentoCnpjOrigem: null,
+    documentosParaEnviar: [],
+    documentosJaEnviados: [],
+    documentosAlterados: [],
   };
 }
 
@@ -160,12 +185,50 @@ async function extrairDadosComFallback(
 }
 
 /**
+ * Confere o cliente no Questor (só leitura) e fecha o resultado: pronta, "cliente
+ * não cadastrado" ou erro. `montarStatusPronta` recebe o nome do cliente no Questor.
+ */
+async function conferirClienteNoQuestor(
+  resultado: ResultadoPreparo,
+  cnpj: string,
+  motivoPronta: string,
+  montarStatusPronta: (nomeCliente: string) => string
+): Promise<void> {
+  if (!hasQuestorZenToken()) {
+    resultado.status = "QUESTOR_ZEN_TOKEN não configurado no servidor — não é possível conferir o cliente no Questor.";
+    resultado.motivo = MOTIVO_ERRO;
+    return;
+  }
+
+  try {
+    const cliente = await consultarCliente(cnpj);
+    resultado.status = montarStatusPronta(cliente.Nome ?? "");
+    resultado.motivo = motivoPronta;
+    resultado.pronta = true;
+  } catch (e) {
+    if (e instanceof ClienteNaoEncontradoError) {
+      resultado.status = `${MOTIVO_CLIENTE_NAO_CADASTRADO} (CRM > Clientes)`;
+      resultado.motivo = MOTIVO_CLIENTE_NAO_CADASTRADO;
+    } else if (e instanceof QuestorZenError) {
+      resultado.status = `Erro ao consultar cliente no Questor: ${e.message}`;
+      resultado.motivo = MOTIVO_ERRO;
+    } else {
+      throw e;
+    }
+  }
+}
+
+/**
  * Mesma lógica de sempre (só leitura, nunca escreve nada no Questor) —
  * além do resultado de status de sempre, devolve pronto para um envio
  * real quando `pronta=true`: `documentosElegiveis` (os PDFs) e `cnpj` já
  * extraídos, sem precisar repetir OCR/extração no momento do envio.
  */
-export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empresa): Promise<ResultadoPreparo> {
+export async function prepararDadosParaEnvio(
+  ctx: ContextoGraph,
+  empresa: Empresa,
+  deps: DepsPreparo = depsPadrao
+): Promise<ResultadoPreparo> {
   const prazoFinal = Date.now() + ORCAMENTO_TEMPO_EXTRACAO_MS;
   const resultado = resultadoVazio(empresa);
 
@@ -194,6 +257,63 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
   if (elegiveis.length === 0) {
     resultado.status = MOTIVO_SEM_DOC_ELEGIVEL;
     resultado.motivo = MOTIVO_SEM_DOC_ELEGIVEL;
+    return resultado;
+  }
+
+  // O que já foi pro Zen? (registro permanente robo_zen_envios, a mesma chave
+  // do envio em lote: código da empresa + nome do arquivo.) Se não der pra
+  // saber, a empresa NÃO pode ser dada como pronta — melhor um erro visível do
+  // que mandar de novo um contrato que já está lá.
+  let envios: EnvioConhecido[];
+  try {
+    envios = await deps.enviosDaEmpresa(empresa.codigo);
+  } catch (e) {
+    resultado.status =
+      `Não consegui consultar o registro de envios (${e instanceof Error ? e.message : String(e)}) — ` +
+      "sem isso não dá para saber o que já foi enviado ao Zen";
+    resultado.motivo = MOTIVO_ERRO;
+    return resultado;
+  }
+  const cls = classificarEnvios(elegiveis, envios);
+  resultado.documentosParaEnviar = cls.novos;
+  resultado.documentosJaEnviados = cls.jaEnviados.map((d) => d.nome);
+  resultado.documentosAlterados = cls.alterados.map((d) => d.nome);
+  const avisoAlterados =
+    cls.alterados.length > 0
+      ? ` ATENÇÃO: ${cls.alterados.length} arquivo(s) já enviado(s) foi(ram) alterado(s) no SharePoint depois do envio ` +
+        `(${cls.alterados.map((d) => d.nome).join(", ")}) — não são reenviados sozinhos; confira se a versão nova precisa ir ao Zen.`
+      : "";
+
+  // Tudo o que é elegível já foi enviado: não há nada a fazer. Nem baixa PDF,
+  // nem OCR, nem consulta ao Questor — é o que deixa as varreduras seguintes
+  // rápidas (só listam a pasta e comparam com o registro).
+  if (cls.jaEnviados.length > 0 && cls.novos.length === 0) {
+    resultado.cnpj = cls.cnpjConhecido;
+    if (cls.alterados.length > 0) {
+      resultado.motivo = MOTIVO_JA_ENVIADA_ALTERADA;
+      resultado.status = `${MOTIVO_JA_ENVIADA_ALTERADA}.${avisoAlterados}`;
+    } else {
+      resultado.motivo = MOTIVO_JA_ENVIADA;
+      resultado.status = `${MOTIVO_JA_ENVIADA}: ${cls.jaEnviados.length} documento(s) elegível(is), todos já enviados ao Zen`;
+    }
+    return resultado;
+  }
+
+  // Empresa que já tinha envio e ganhou documento novo: o CNPJ é o do envio
+  // anterior (já foi lido e conferido no Questor naquela vez) — não precisa
+  // baixar nem fazer OCR de novo, só conferir o cliente e mandar o documento novo.
+  if (cls.jaEnviados.length > 0 && cls.cnpjConhecido) {
+    resultado.cnpj = cls.cnpjConhecido;
+    resultado.documentoCnpjOrigem = "(CNPJ do envio anterior)";
+    const nomesNovos = cls.novos.map((d) => d.nome).join(", ");
+    await conferirClienteNoQuestor(
+      resultado,
+      cls.cnpjConhecido,
+      MOTIVO_PRONTA_DOC_NOVO,
+      (nomeCliente) =>
+        `${MOTIVO_PRONTA_DOC_NOVO}: ${cls.novos.length} para enviar (${nomesNovos}); ${cls.jaEnviados.length} já enviado(s) ` +
+        `antes (cliente no Questor: ${nomeCliente}, CNPJ do envio anterior).${avisoAlterados}`
+    );
     return resultado;
   }
 
@@ -239,30 +359,20 @@ export async function prepararDadosParaEnvio(ctx: ContextoGraph, empresa: Empres
 
   const avisoEscaneados = escaneados.length > 0 ? `, ${escaneados.length} escaneado(s)/sem texto` : "";
 
-  if (!hasQuestorZenToken()) {
-    resultado.status = "QUESTOR_ZEN_TOKEN não configurado no servidor — não é possível conferir o cliente no Questor.";
-    resultado.motivo = MOTIVO_ERRO;
-    return resultado;
-  }
-
-  try {
-    const cliente = await consultarCliente(dados.cnpj);
-    resultado.status =
-      `PRONTA (cliente no Questor: ${cliente.Nome ?? ""}, ${elegiveis.length} documento(s)` +
-      `${avisoEscaneados}, CNPJ extraído de ${arquivoUsado?.nome ?? "?"})`;
-    resultado.motivo = MOTIVO_PRONTA;
-    resultado.pronta = true;
-  } catch (e) {
-    if (e instanceof ClienteNaoEncontradoError) {
-      resultado.status = `${MOTIVO_CLIENTE_NAO_CADASTRADO} (CRM > Clientes)`;
-      resultado.motivo = MOTIVO_CLIENTE_NAO_CADASTRADO;
-    } else if (e instanceof QuestorZenError) {
-      resultado.status = `Erro ao consultar cliente no Questor: ${e.message}`;
-      resultado.motivo = MOTIVO_ERRO;
-    } else {
-      throw e;
-    }
-  }
+  // Se a empresa já tinha envio (mas sem CNPJ aproveitável no registro), o que
+  // sobra é igualmente "documento novo" — só o motivo muda.
+  const motivoPronta = cls.jaEnviados.length > 0 ? MOTIVO_PRONTA_DOC_NOVO : MOTIVO_PRONTA;
+  await conferirClienteNoQuestor(
+    resultado,
+    dados.cnpj,
+    motivoPronta,
+    (nomeCliente) =>
+      `PRONTA (cliente no Questor: ${nomeCliente}, ${elegiveis.length} documento(s)` +
+      `${avisoEscaneados}, CNPJ extraído de ${arquivoUsado?.nome ?? "?"})` +
+      (cls.jaEnviados.length > 0
+        ? ` — ${cls.novos.length} novo(s) para enviar, ${cls.jaEnviados.length} já enviado(s) antes.${avisoAlterados}`
+        : "")
+  );
 
   return resultado;
 }

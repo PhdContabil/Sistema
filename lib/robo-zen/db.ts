@@ -340,6 +340,22 @@ export async function chavesJaEnviadas(): Promise<Set<string>> {
   return new Set(linhas.map((l) => `${l.empresa_codigo}\u0000${l.arquivo_nome}`));
 }
 
+/** Envios já registrados de UMA empresa (do mais recente pro mais antigo) —
+ * a varredura usa isto pra saber o que já foi pro Zen e o que é novo. Qualquer
+ * falha PROPAGA (quem chama decide): na dúvida sobre o que já foi enviado, a
+ * empresa não pode ser dada como pronta. */
+export async function enviosDaEmpresa(
+  codigo: string
+): Promise<{ arquivo_nome: string; cnpj: string; enviado_em: string }[]> {
+  return assertOk(
+    db()
+      .from("robo_zen_envios")
+      .select("arquivo_nome,cnpj,enviado_em")
+      .eq("empresa_codigo", codigo)
+      .order("enviado_em", { ascending: false })
+  );
+}
+
 export function chaveEnvio(codigo: string, arquivoNome: string): string {
   return `${codigo}\u0000${arquivoNome}`;
 }
