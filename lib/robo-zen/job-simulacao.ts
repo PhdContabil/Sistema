@@ -146,7 +146,13 @@ async function avancarMapeamento(ctx: ContextoGraph, simulacao: dbz.SimulacaoRow
 async function avancarProcessamento(ctx: ContextoGraph, simulacao: dbz.SimulacaoRow): Promise<EstadoSimulacao> {
   const proxima = await dbz.proximaEmpresaParaProcessar(simulacao.id);
   if (!proxima) {
+    // Fecha com os números contados nas linhas (cura qualquer contador que um
+    // passo concorrente tenha deixado para trás).
+    const { processadas, prontas } = await dbz.contarProgressoSimulacao(simulacao.id);
     const atualizada = await dbz.atualizarSimulacao(simulacao.id, {
+      empresas_processadas: processadas,
+      empresas_prontas: prontas,
+      cursor_processamento: processadas,
       status: "concluida",
       terminado_em: new Date().toISOString(),
       empresa_atual: null,
@@ -186,8 +192,9 @@ async function avancarProcessamento(ctx: ContextoGraph, simulacao: dbz.Simulacao
     documento_cnpj_origem: resultado.documentoCnpjOrigem,
   });
 
-  const empresasProcessadas = simulacao.empresas_processadas + 1;
-  const empresasProntas = simulacao.empresas_prontas + (resultado.pronta ? 1 : 0);
+  // Contagem nas linhas, não "valor lido no começo do passo + 1": o passo pode
+  // levar dezenas de segundos e outro passo pode ter gravado nesse meio tempo.
+  const { processadas: empresasProcessadas, prontas: empresasProntas } = await dbz.contarProgressoSimulacao(simulacao.id);
   const concluidoAgora = empresasProcessadas >= simulacao.total_empresas;
 
   const atualizada = await dbz.atualizarSimulacao(simulacao.id, {

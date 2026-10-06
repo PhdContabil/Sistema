@@ -218,6 +218,28 @@ export async function contarEmpresasMapeadas(simulacaoId: string): Promise<numbe
   return count ?? 0;
 }
 
+/** Progresso REAL de uma simulação, contado nas linhas por empresa (a fonte da
+ * verdade: é o que a tabela de resultado mostra). Os contadores do cabeçalho
+ * (`empresas_processadas`/`empresas_prontas`) vêm daqui — nunca de "lê o valor,
+ * soma 1 e grava", que perde contagens quando dois passos andam ao mesmo tempo
+ * (o agendador e uma tela aberta, ou um passo lento que atravessa o minuto
+ * seguinte): os dois leem o mesmo valor antigo e o último a gravar vence. */
+export async function contarProgressoSimulacao(simulacaoId: string): Promise<{ processadas: number; prontas: number }> {
+  const contar = async (somenteProntas: boolean): Promise<number> => {
+    let consulta = db()
+      .from("robo_zen_simulacao_empresas")
+      .select("id", { count: "exact", head: true })
+      .eq("simulacao_id", simulacaoId)
+      .eq("processada", true);
+    if (somenteProntas) consulta = consulta.eq("pronta", true);
+    const { count, error } = await consulta;
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  };
+  const [processadas, prontas] = await Promise.all([contar(false), contar(true)]);
+  return { processadas, prontas };
+}
+
 /** Próxima empresa ainda não processada desta simulação (ordem estável de criação). */
 export async function proximaEmpresaParaProcessar(simulacaoId: string): Promise<SimulacaoEmpresaRow | null> {
   const { data, error } = await db()
