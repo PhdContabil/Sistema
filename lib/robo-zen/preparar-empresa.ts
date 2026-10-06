@@ -27,6 +27,7 @@ import {
   type DocTentado,
   type DocVencedor,
 } from "./busca-parcial";
+import { cnpjValido, sugerirDigitosCnpj } from "./cnpj";
 import * as dbz from "./db";
 
 // Categorias fixas (pra bater com o vocabulário que a Júlia já conhece dos
@@ -244,6 +245,32 @@ async function extrairDadosComFallback(
           "direto no SharePoint"
         : "tinha texto, mas não encontrei um CNPJ nele";
       const problema = `${candidato.nome}: ${motivo}`;
+      problemas.push(problema);
+      tentadosAgora.push({
+        id: candidato.id,
+        nome: candidato.nome,
+        modificado_em: candidato.modificadoEm ?? null,
+        problema,
+        escaneado: !!dados.pareceEscaneado,
+      });
+      continue;
+    }
+    // CNPJ lido que não passa na conferência dos dígitos verificadores NÃO existe
+    // (o Questor recusaria com "Inscrição Federal Inválida"). Quase sempre é um
+    // dígito trocado pelo OCR de um documento escaneado — então não vale como
+    // resposta: segue procurando nos outros documentos. Se nenhum tiver um CNPJ
+    // válido, a empresa termina como "CNPJ NÃO ENCONTRADO" (com este detalhe no
+    // status) — o mesmo destino das que não têm CNPJ escrito em nenhum documento.
+    if (!cnpjValido(dados.cnpj)) {
+      const sugestao = sugerirDigitosCnpj(dados.cnpj);
+      const problema =
+        `${candidato.nome}: li o CNPJ ${dados.cnpj}, mas ele não passa na conferência dos dígitos ` +
+        "verificadores (provável erro de leitura do OCR" +
+        (sugestao
+          ? `; se os 12 primeiros dígitos estiverem certos, o CNPJ com os dígitos corretos seria ${sugestao} — ` +
+            "confira no documento antes de usar"
+          : "") +
+        ")";
       problemas.push(problema);
       tentadosAgora.push({
         id: candidato.id,
