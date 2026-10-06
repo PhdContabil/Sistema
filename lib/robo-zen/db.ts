@@ -7,6 +7,7 @@
 
 import { supabaseAdmin } from "../societario/supabase";
 import type { ArquivoContrato } from "./empresas-sharepoint";
+import type { BuscaParcial, DocTentado, DocVencedor } from "./busca-parcial";
 
 export type StatusSimulacao = "mapeando" | "processando" | "concluida" | "erro" | "parada";
 export type StatusLoteEnvio = "processando" | "concluida" | "erro" | "parada";
@@ -376,6 +377,53 @@ export async function enviosDaEmpresa(
       .eq("empresa_codigo", codigo)
       .order("enviado_em", { ascending: false })
   );
+}
+
+// ------------------------------------------------------------------
+// robo_zen_busca_parcial — "continuar de onde parou" (lib/robo-zen/busca-parcial.ts)
+// ------------------------------------------------------------------
+
+/** O que ficou guardado da busca do CNPJ de uma empresa (ou null). Qualquer
+ * falha PROPAGA — quem chama decide (preparar-empresa.ts trata como "sem
+ * memória" e segue como antes, sem continuar de onde parou). */
+export async function obterBuscaParcial(codigo: string): Promise<BuscaParcial | null> {
+  const { data, error } = await db()
+    .from("robo_zen_busca_parcial")
+    .select("documentos,vencedor,passos,atualizado_em")
+    .eq("empresa_codigo", codigo)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    documentos: Array.isArray(data.documentos) ? (data.documentos as DocTentado[]) : [],
+    vencedor: (data.vencedor as DocVencedor | null) ?? null,
+    passos: Number(data.passos) || 0,
+    atualizado_em: String(data.atualizado_em),
+  };
+}
+
+export async function salvarBuscaParcial(
+  codigo: string,
+  busca: { documentos: DocTentado[]; vencedor: DocVencedor | null; passos: number }
+): Promise<void> {
+  const { error } = await db()
+    .from("robo_zen_busca_parcial")
+    .upsert(
+      {
+        empresa_codigo: codigo,
+        documentos: busca.documentos,
+        vencedor: busca.vencedor,
+        passos: busca.passos,
+        atualizado_em: new Date().toISOString(),
+      },
+      { onConflict: "empresa_codigo" }
+    );
+  if (error) throw new Error(error.message);
+}
+
+export async function limparBuscaParcial(codigo: string): Promise<void> {
+  const { error } = await db().from("robo_zen_busca_parcial").delete().eq("empresa_codigo", codigo);
+  if (error) throw new Error(error.message);
 }
 
 export function chaveEnvio(codigo: string, arquivoNome: string): string {
