@@ -22,7 +22,8 @@
 // (credenciais do Microsoft Graph, chave de serviço do Supabase) que não
 // deve entrar no bundle do cliente.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { TAMANHOS_PAGINA, chaveMotivo, filtrarResultados, paginar } from "@/lib/robo-zen/resultado-lista";
 
 type StatusSimulacao = "mapeando" | "processando" | "concluida" | "erro" | "parada";
 type StatusLoteEnvio = "processando" | "concluida" | "erro" | "parada";
@@ -157,6 +158,13 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   const [erroSimulacao, setErroSimulacao] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoSimulacao | null>(null);
   const [carregandoResultado, setCarregandoResultado] = useState(false);
+  // Tabela de resultado: busca, filtro por motivo e paginação (só na tela — o
+  // CSV continua levando todas as empresas).
+  const [buscaResultado, setBuscaResultado] = useState("");
+  const [filtroMotivo, setFiltroMotivo] = useState("");
+  const [porPagina, setPorPagina] = useState<number>(TAMANHOS_PAGINA[0]);
+  const [paginaResultado, setPaginaResultado] = useState(1);
+  const topoResultadoRef = useRef<HTMLDivElement | null>(null);
   const [baixandoContrato, setBaixandoContrato] = useState<string | null>(null);
   const [erroDownload, setErroDownload] = useState<string | null>(null);
   const timerSimulacaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -179,6 +187,32 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   const [confirmando, setConfirmando] = useState(false);
   const [resultadoEnvio, setResultadoEnvio] = useState<ResultadoEnvio | null>(null);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+
+  const linhasFiltradas = useMemo(
+    () => (resultado ? filtrarResultados(resultado.resultados, buscaResultado, filtroMotivo) : []),
+    [resultado, buscaResultado, filtroMotivo]
+  );
+  const pg = paginar(linhasFiltradas, paginaResultado, porPagina);
+
+  /** `rolar`: a barra de baixo leva o topo da tabela de volta à vista (senão a pessoa
+   * clica em "Próxima" lá embaixo e fica no fim da página nova). */
+  function irParaPagina(n: number, rolar = false) {
+    setPaginaResultado(n);
+    if (rolar) topoResultadoRef.current?.scrollIntoView({ block: "start" });
+  }
+
+  function barraPaginas(rolar: boolean) {
+    if (pg.totalPaginas <= 1) return null;
+    return (
+      <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", flexWrap: "wrap", margin: "10px 0", fontSize: 13 }}>
+        <button className="btn" onClick={() => irParaPagina(1, rolar)} disabled={pg.pagina === 1} title="Primeira página">«</button>
+        <button className="btn" onClick={() => irParaPagina(pg.pagina - 1, rolar)} disabled={pg.pagina === 1}>‹ Anterior</button>
+        <span>Página {pg.pagina} de {pg.totalPaginas} · {pg.de}–{pg.ate} de {pg.total}</span>
+        <button className="btn" onClick={() => irParaPagina(pg.pagina + 1, rolar)} disabled={pg.pagina === pg.totalPaginas}>Próxima ›</button>
+        <button className="btn" onClick={() => irParaPagina(pg.totalPaginas, rolar)} disabled={pg.pagina === pg.totalPaginas} title="Última página">»</button>
+      </div>
+    );
+  }
 
   async function baixarContrato(codigo: string, indice: number) {
     if (!simulacao) return;
@@ -205,7 +239,12 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   async function carregarResultado(id: string) {
     setCarregandoResultado(true);
     const j = await chamarApi<ResultadoSimulacao>(`/api/paralegal/robo-zen/simulacoes/${id}/resultado`);
-    if (j.ok) setResultado({ resultados: j.resultados, resumo: j.resumo });
+    if (j.ok) {
+      setResultado({ resultados: j.resultados, resumo: j.resumo });
+      setBuscaResultado("");
+      setFiltroMotivo("");
+      setPaginaResultado(1);
+    }
     setCarregandoResultado(false);
   }
 
@@ -471,10 +510,42 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                 </div>
               ))}
             </div>
-            <div className="toolbar">
-              <button className="btn" onClick={exportarResultadoCsv}>⇩ Baixar CSV do resultado</button>
+            <div className="toolbar" ref={topoResultadoRef} style={{ scrollMarginTop: 12 }}>
+              <button className="btn" onClick={exportarResultadoCsv} title="Baixa todas as empresas, não só as filtradas">⇩ Baixar CSV do resultado</button>
+              <input
+                className="search"
+                style={{ minWidth: 220, flex: "1 1 220px", maxWidth: 360 }}
+                placeholder="Buscar por código, empresa ou CNPJ…"
+                value={buscaResultado}
+                onChange={(e) => { setBuscaResultado(e.target.value); setPaginaResultado(1); }}
+              />
+              <select
+                className="sel wide"
+                value={filtroMotivo}
+                onChange={(e) => { setFiltroMotivo(e.target.value); setPaginaResultado(1); }}
+                aria-label="Filtrar por motivo"
+              >
+                <option value="">Todos os motivos ({resultado.resultados.length})</option>
+                {Object.entries(resultado.resumo).sort((a, b) => b[1] - a[1]).map(([motivo, qtd]) => (
+                  <option key={motivo} value={motivo}>{motivo} ({qtd})</option>
+                ))}
+              </select>
+              <select
+                className="sel"
+                value={porPagina}
+                onChange={(e) => { setPorPagina(Number(e.target.value)); setPaginaResultado(1); }}
+                aria-label="Empresas por página"
+              >
+                {TAMANHOS_PAGINA.map((n) => <option key={n} value={n}>{n} por página</option>)}
+              </select>
+              {(buscaResultado.trim() || filtroMotivo) && (
+                <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                  {linhasFiltradas.length} de {resultado.resultados.length} empresas
+                </span>
+              )}
             </div>
             {erroDownload && <div className="banner error">{erroDownload}</div>}
+            {barraPaginas(false)}
             <div className="table-wrap">
               <table className="grid">
                 <thead>
@@ -483,7 +554,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                   </tr>
                 </thead>
                 <tbody>
-                  {resultado.resultados.map((r) => (
+                  {pg.itens.map((r) => (
                     <tr key={r.codigo}>
                       <td>{r.codigo}</td>
                       <td>{r.empresa}</td>
@@ -527,12 +598,17 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                       </td>
                     </tr>
                   ))}
-                  {resultado.resultados.length === 0 && (
-                    <tr><td className="loading" colSpan={6}>Nenhuma empresa mapeada.</td></tr>
+                  {linhasFiltradas.length === 0 && (
+                    <tr>
+                      <td className="loading" colSpan={6}>
+                        {resultado.resultados.length === 0 ? "Nenhuma empresa mapeada." : "Nenhuma empresa encontrada com esse filtro."}
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
             </div>
+            {barraPaginas(true)}
           </div>
         )}
 
