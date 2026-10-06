@@ -3,8 +3,7 @@
   "crons": [
     { "path": "/api/societario/cron/sync-tareffa", "schedule": "0 9 * * *" },
     { "path": "/api/societario/cron/keepalive", "schedule": "0 4 * * *" },
-    { "path": "/api/pessoas/cron/avisos-bem-estar", "schedule": "0 11 * * *" },
-    { "path": "/api/paralegal/robo-zen/cron/varredura", "schedule": "* * * * *" }
+    { "path": "/api/pessoas/cron/avisos-bem-estar", "schedule": "0 11 * * *" }
   ],
   "functions": {
     "app/api/paralegal/robo-zen/**/route.ts": {

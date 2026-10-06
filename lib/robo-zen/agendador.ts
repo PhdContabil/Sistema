@@ -2,9 +2,12 @@
 // tela aberta. Sugestão do time na apresentação do Robô Zen.
 //
 // Hoje a simulação só anda enquanto o navegador fica chamando /continuar (uma
-// empresa por chamada). Aqui, um agendador (Vercel Cron, ver vercel.json)
-// chama `executarTickVarredura` a cada minuto e este arquivo decide, a cada
-// "tick", o que fazer:
+// empresa por chamada). Aqui, um agendador EXTERNO chama a rota
+// /api/paralegal/robo-zen/cron/varredura a cada poucos minutos (ela chama
+// `executarTickVarredura`) e este arquivo decide, a cada "tick", o que fazer.
+// Quem chama NÃO é o Vercel Cron: o time está no plano Hobby, que só aceita cron
+// de 1x por dia (e uma varredura precisa de ticks frequentes). Sem Vercel Cron o
+// deploy também não depende do plano. Veja o PR para as opções de gatilho.
 //
 //   - desligado (padrão)  -> não faz nada. Só liga se `ROBO_ZEN_VARREDURA_HORAS`
 //                            (variável de ambiente ou linha em app_config) for > 0.
@@ -102,7 +105,7 @@ export async function executarTickVarredura(deps: DepsAgendador = depsReais()): 
     // A idade conta desde o INÍCIO da última simulação (de qualquer origem e em
     // qualquer estado): se alguém rodou uma à mão agora há pouco, o agendador
     // espera; se ela foi parada ou deu erro, também espera o intervalo em vez de
-    // ficar tentando de novo a cada minuto.
+    // ficar tentando de novo a cada tick.
     const ultima = await deps.ultimaSimulacao();
     const intervaloMs = horas * 3_600_000;
     const liberadaEm = ultima ? Date.parse(ultima.criado_em) + intervaloMs : -Infinity;

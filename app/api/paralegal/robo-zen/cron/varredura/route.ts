@@ -1,5 +1,6 @@
-// "Tick" da varredura agendada do Robô Zen — chamado pelo Vercel Cron a cada
-// minuto (ver vercel.json) ou à mão (curl). A lógica, o que ele faz e por que
+// "Tick" da varredura agendada do Robô Zen — chamado por um agendador externo a
+// cada poucos minutos (não está no vercel.json: o plano Hobby só aceita cron de
+// 1x por dia) ou à mão (curl). A lógica, o que ele faz e por que
 // é seguro estão em lib/robo-zen/agendador.ts. DESLIGADO por padrão: sem
 // ROBO_ZEN_VARREDURA_HORAS > 0 isto devolve "desligado" e não faz mais nada.
 //
@@ -8,8 +9,8 @@
 // keepalive deixa passar quando o segredo não existe; este endpoint dispara
 // leitura pesada no SharePoint e grava no banco, então "sem segredo" não pode
 // virar "aberto pra qualquer um".
-//   1. Header Authorization: Bearer <CRON_SECRET>  (o Vercel Cron envia sozinho)
-//   2. Header x-cron-secret: <CRON_SECRET>          (chamada manual via curl)
+//   1. Header Authorization: Bearer <CRON_SECRET>  (o formato que o Vercel Cron usa)
+//   2. Header x-cron-secret: <CRON_SECRET>          (agendador externo / curl)
 
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -40,7 +41,7 @@ async function tick(req: NextRequest) {
   }
   try {
     const resultado = await executarTickVarredura();
-    // Só registra no log quando aconteceu algo — o cron bate a cada minuto e
+    // Só registra no log quando aconteceu algo — o agendador bate o tempo todo e
     // "desligado"/"nada a fazer" encheria o log da Vercel de ruído.
     if (resultado.acao === "iniciou" || resultado.acao === "avancou") {
       console.log(
