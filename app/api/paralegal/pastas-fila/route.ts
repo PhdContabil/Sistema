@@ -42,7 +42,10 @@ export async function GET(req: Request) {
     .map((o) => {
       const questor = String(o.questor).replace(/\D/g, "");
       const razao = String(o.razao ?? "").split(" LTDA").join("");
-      return { nos: Number(o.id), nome: properCase(`${razao}_${questor}`), tipo: "Empresa" };
+      // Tira caracteres que o Windows não aceita em nome de pasta (ex.: "S/A") --
+      // o criador de pastas (python no phddc01) usa o nome direto no MD.
+      const nome = properCase(`${razao}_${questor}`).replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
+      return { nos: Number(o.id), nome, tipo: "Empresa" };
     });
 
   return NextResponse.json({ maxNos, itens });

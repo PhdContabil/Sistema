@@ -15,7 +15,8 @@
 
 $ErrorActionPreference = 'Stop'
 $Base  = 'https://system-contabilidade.vercel.app'
-$Xlsx  = '\\phddc01\PastaMonitorada\Nome pastas\nome_pastas.xlsx'
+# Mesmo arquivo que o criador de pastas (python) lê. No phddc01 o T: aponta pra \\phddc01\PastaMonitorada.
+$Xlsx  = if (Test-Path 'T:\Nome pastas\nome_pastas.xlsx') { 'T:\Nome pastas\nome_pastas.xlsx' } else { '\\phddc01\PastaMonitorada\Nome pastas\nome_pastas.xlsx' }
 $Dir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $StateFile = Join-Path $Dir 'nome-pastas.ultimo.txt'
 $LogFile   = Join-Path $Dir 'nome-pastas.log'
@@ -25,6 +26,13 @@ function Log($msg) { Add-Content -Path $LogFile -Value ("{0:yyyy-MM-dd HH:mm:ss}
 function Add-LinhasXlsx([string]$caminho, $itens) {
   Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
   $ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+  # O criador de pastas (python, a cada 1 min) lê a planilha, apaga a 1ª linha e
+  # regrava o arquivo inteiro. Para não escrever no meio dessa regravação (e a
+  # nossa linha sumir), espera o arquivo ficar 5s sem mudar antes de abrir.
+  for ($w = 0; $w -lt 20; $w++) {
+    if (((Get-Date) - (Get-Item $caminho).LastWriteTime).TotalSeconds -ge 5) { break }
+    Start-Sleep -Seconds 2
+  }
   for ($t = 1; $t -le 10; $t++) {
     try { $zip = [IO.Compression.ZipFile]::Open($caminho, 'Update'); break }
     catch { if ($t -eq 10) { throw }; Start-Sleep -Seconds 3 }   # planilha em uso pelo processo do servidor
