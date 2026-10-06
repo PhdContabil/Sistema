@@ -12,3 +12,7 @@ npm-debug.log*
 next-env.d.ts
 
 .vercel
+
+scripts/phddc01/nome-pastas.token
+scripts/phddc01/nome-pastas.ultimo.txt
+scripts/phddc01/nome-pastas.log

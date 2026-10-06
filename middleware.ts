@@ -32,6 +32,8 @@ const PUBLIC_PATHS = [
   // (ROBO_ZEN_VARREDURA_TOKEN) e recusa com 401 sem isso — por isso só ESTA
   // rota é liberada aqui, não o resto de /api/paralegal.
   "/api/paralegal/robo-zen/cron/varredura",
+  // Fila de nomes de pastas (script do phddc01; autentica por token próprio)
+  "/api/paralegal/pastas-fila",
 ];
 
 /** Domínio corporativo autorizado a entrar no hub. */
