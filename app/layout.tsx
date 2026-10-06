@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import VersaoWatcher from "@/components/VersaoWatcher";
 
 export const metadata: Metadata = {
   title: "Núcleo Contábil",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body suppressHydrationWarning>
         {children}
+        <VersaoWatcher />
       </body>
     </html>
   );

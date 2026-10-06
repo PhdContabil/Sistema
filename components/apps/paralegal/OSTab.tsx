@@ -530,6 +530,10 @@ export default function OSTab() {
       (Object.keys(modal.dados) as (keyof typeof modal.dados)[]).forEach((chave) => {
         if (chave === "servicos" || chave === "valoresServ" || chave === "valorTT") return;
         const valor = modal.dados[chave];
+        // Ao editar, texto apagado precisa ir vazio pro SharePoint -- senão o
+        // valor antigo fica gravado (ex.: tirar o texto das Observações gerais
+        // não tinha efeito). Campos numéricos/datas vazios continuam de fora.
+        if (valor === "" && editando && !["codigo", "questor"].includes(chave as string)) { corpo[chave] = ""; return; }
         if (valor === "" || valor === null) return;
         corpo[chave] = valor;
       });
