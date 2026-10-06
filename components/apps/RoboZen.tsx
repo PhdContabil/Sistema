@@ -67,6 +67,8 @@ interface LinhaResultado {
   empresa: string;
   qtdDocumentosElegiveis: number;
   documentosElegiveis: string;
+  /** Mesma ordem do que o servidor guardou — a posição é o `doc=` do download. */
+  documentos: string[];
   qtdDocumentosEscaneados: number;
   documentosEscaneados: string;
   qtdDocumentosIgnorados: number;
@@ -155,6 +157,8 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   const [erroSimulacao, setErroSimulacao] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoSimulacao | null>(null);
   const [carregandoResultado, setCarregandoResultado] = useState(false);
+  const [baixandoContrato, setBaixandoContrato] = useState<string | null>(null);
+  const [erroDownload, setErroDownload] = useState<string | null>(null);
   const timerSimulacaoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Danger zone: envio real em lote (todas as empresas prontas da simulação acima).
@@ -175,6 +179,28 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   const [confirmando, setConfirmando] = useState(false);
   const [resultadoEnvio, setResultadoEnvio] = useState<ResultadoEnvio | null>(null);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+
+  async function baixarContrato(codigo: string, indice: number) {
+    if (!simulacao) return;
+    setErroDownload(null);
+    setBaixandoContrato(`${codigo}:${indice}`);
+    const j = await chamarApi<{ nome: string; url: string }>(
+      `/api/paralegal/robo-zen/simulacoes/${simulacao.id}/contrato?codigo=${encodeURIComponent(codigo)}&doc=${indice}`
+    );
+    setBaixandoContrato(null);
+    if (!j.ok || !j.url) {
+      setErroDownload(j.erro ?? "Não foi possível baixar o contrato.");
+      return;
+    }
+    // O link é do próprio SharePoint e já vem como anexo (download), então a
+    // página não sai do lugar — só dispara o clique num <a> temporário.
+    const a = document.createElement("a");
+    a.href = j.url;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 
   async function carregarResultado(id: string) {
     setCarregandoResultado(true);
@@ -448,11 +474,12 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
             <div className="toolbar">
               <button className="btn" onClick={exportarResultadoCsv}>⇩ Baixar CSV do resultado</button>
             </div>
+            {erroDownload && <div className="banner error">{erroDownload}</div>}
             <div className="table-wrap">
               <table className="grid">
                 <thead>
                   <tr>
-                    <th>Código</th><th>Empresa</th><th>CNPJ</th><th style={{ textAlign: "center" }}>Pronta</th><th>Motivo</th>
+                    <th>Código</th><th>Empresa</th><th>CNPJ</th><th style={{ textAlign: "center" }}>Pronta</th><th>Motivo</th><th>Contrato</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -465,10 +492,43 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                         <span className={`badge ${r.pronta ? "badge-ok" : "badge-mudo"}`}>{r.pronta ? "Pronta" : "—"}</span>
                       </td>
                       <td>{r.motivo}</td>
+                      <td>
+                        {r.documentos.length === 0 && <span className="dash">–</span>}
+                        {r.documentos.length === 1 && (
+                          <button
+                            className="btn"
+                            style={{ padding: "2px 10px", fontSize: 12 }}
+                            disabled={baixandoContrato === `${r.codigo}:0`}
+                            title={r.documentos[0]}
+                            onClick={() => baixarContrato(r.codigo, 0)}
+                          >
+                            {baixandoContrato === `${r.codigo}:0` ? "Abrindo…" : "⇩ Baixar"}
+                          </button>
+                        )}
+                        {r.documentos.length > 1 && (
+                          <details>
+                            <summary style={{ cursor: "pointer", fontSize: 12 }}>⇩ {r.documentos.length} arquivos</summary>
+                            <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 12 }}>
+                              {r.documentos.map((nome, i) => (
+                                <li key={i} style={{ marginBottom: 4 }}>
+                                  <button
+                                    className="btn"
+                                    style={{ padding: "2px 8px", fontSize: 12, textAlign: "left" }}
+                                    disabled={baixandoContrato === `${r.codigo}:${i}`}
+                                    onClick={() => baixarContrato(r.codigo, i)}
+                                  >
+                                    {baixandoContrato === `${r.codigo}:${i}` ? "Abrindo…" : `⇩ ${nome}`}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {resultado.resultados.length === 0 && (
-                    <tr><td className="loading" colSpan={5}>Nenhuma empresa mapeada.</td></tr>
+                    <tr><td className="loading" colSpan={6}>Nenhuma empresa mapeada.</td></tr>
                   )}
                 </tbody>
               </table>

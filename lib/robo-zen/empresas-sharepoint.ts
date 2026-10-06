@@ -156,6 +156,19 @@ export async function baixarConteudo(ctx: ContextoGraph, itemId: string): Promis
   return new Uint8Array(await resp.arrayBuffer());
 }
 
+/** Link de download do arquivo, direto do SharePoint — pré-autenticado e de
+ * curta duração (a Microsoft devolve em `@microsoft.graph.downloadUrl`).
+ * Serve pra o navegador baixar sem os bytes passarem pela função serverless
+ * (que tem limite de tamanho de resposta; contratos digitalizados são
+ * grandes). Quem chama é responsável por só pedir ids que ele mesmo validou. */
+export async function obterLinkDownload(ctx: ContextoGraph, itemId: string): Promise<{ nome: string; url: string | null }> {
+  const item = await graphGet<{ name?: string; "@microsoft.graph.downloadUrl"?: string }>(
+    ctx.token,
+    `/drives/${ctx.driveId}/items/${itemId}?$select=id,name,@microsoft.graph.downloadUrl`
+  );
+  return { nome: item.name ?? "contrato.pdf", url: item["@microsoft.graph.downloadUrl"] ?? null };
+}
+
 // ---------------------------------------------------------------------
 // Reconhecimento do padrão de pastas de empresas: "NomeDaEmpresa_Codigo"
 // ---------------------------------------------------------------------
