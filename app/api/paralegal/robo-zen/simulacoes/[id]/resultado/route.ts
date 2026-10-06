@@ -32,6 +32,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       empresa: e.nome,
       qtdDocumentosElegiveis: e.qtd_documentos_elegiveis,
       documentosElegiveis: e.documentos_elegiveis.map((d) => d.nome).join("; "),
+      // Mesma ordem de `documentos_elegiveis` — a posição aqui é o `doc=` que o
+      // botão "baixar contrato" manda pra rota .../contrato (só os nomes vão
+      // pro navegador; o id do SharePoint fica no servidor).
+      documentos: e.documentos_elegiveis.map((d) => d.nome),
       qtdDocumentosEscaneados: e.qtd_documentos_escaneados,
       documentosEscaneados: e.documentos_escaneados.join("; "),
       qtdDocumentosIgnorados: e.qtd_documentos_ignorados,

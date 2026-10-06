@@ -266,6 +266,20 @@ export async function buscarEmpresaMapeada(simulacaoId: string, busca: string): 
   return data;
 }
 
+/** Uma empresa de uma simulação pelo código exato — usado pra baixar um
+ * contrato: o id do documento no SharePoint sai DAQUI (do que a própria
+ * simulação gravou), nunca de um parâmetro vindo do navegador. */
+export async function obterEmpresaDaSimulacao(simulacaoId: string, codigo: string): Promise<SimulacaoEmpresaRow | null> {
+  const { data, error } = await db()
+    .from("robo_zen_simulacao_empresas")
+    .select()
+    .eq("simulacao_id", simulacaoId)
+    .eq("codigo", codigo)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ------------------------------------------------------------------
 // robo_zen_envios (auditoria permanente)
 // ------------------------------------------------------------------
