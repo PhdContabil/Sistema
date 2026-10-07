@@ -531,8 +531,15 @@ export async function lancarHoras(
   const segundos = Math.max(0, Math.round(campos.horas * 3600));
   if (segundos === 0) return "Informe quantas horas foram gastas.";
 
+  // Incidente não tem Estimate: as horas abatem da reserva de incidentes
+  // da sprint (capacidade da pessoa), sem teto por cartão.
+  const { data: tk } = await db.from("tickets").select("incidente").eq("id", ticketId).maybeSingle();
+  const incidente = !!(tk as { incidente?: boolean } | null)?.incidente;
+
   const { estimate, lancado, saldo } = await saldoDoCartao(ticketId);
-  if (estimate === null || estimate <= 0) {
+  if (incidente) {
+    // segue direto para o lançamento
+  } else if (estimate === null || estimate <= 0) {
     return "Defina o Estimate do cartão antes de lançar horas.";
   }
   if (saldo !== null && campos.horas > saldo + 0.001) {

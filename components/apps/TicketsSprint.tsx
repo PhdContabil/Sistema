@@ -979,13 +979,15 @@ function DetalheCartao({
 
   // Regra do time: o cartão não estoura. Sem estimate não há teto, e com o
   // teto atingido só resta aumentar a estimativa ou abrir outro cartão.
-  const semSaldo = r.estimate > 0 && r.falta <= 0;
-  const bloqueado = r.estimate <= 0 || semSaldo;
+  // Incidente não tem Estimate: lança livre e abate da reserva de incidentes.
+  const ehIncidente = !!t?.incidente;
+  const semSaldo = !ehIncidente && r.estimate > 0 && r.falta <= 0;
+  const bloqueado = !ehIncidente && (r.estimate <= 0 || semSaldo);
   const pedido = Number((horas ?? "").replace(",", ".")) || 0;
-  const passaDoTeto = pedido > r.falta + 0.001;
+  const passaDoTeto = !ehIncidente && pedido > r.falta + 0.001;
   // As opções param no que ainda cabe: oferecer um valor que a regra do
-  // estimate vai recusar seria convidar ao erro.
-  const opcoes = opcoesDeHoras(r.falta);
+  // estimate vai recusar seria convidar ao erro. Incidente vai até 12 h.
+  const opcoes = opcoesDeHoras(ehIncidente ? 12 : r.falta);
 
   const porDia = useMemo(() => {
     const m = new Map<string, number>();
@@ -1114,7 +1116,12 @@ function DetalheCartao({
               )}
             </div>
 
-            {r.estimate <= 0 && (
+            {ehIncidente && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                Incidente não tem Estimate: as horas lançadas abatem da reserva de incidentes da sprint.
+              </p>
+            )}
+            {!ehIncidente && r.estimate <= 0 && (
               <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
                 Defina o Estimate acima antes de lançar horas — sem teto não dá para saber o que é estouro.
               </p>
@@ -1157,7 +1164,7 @@ function DetalheCartao({
               </button>
             </div>
 
-            {!bloqueado && (
+            {!bloqueado && !ehIncidente && (
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2">
                 De meia em meia hora. Cabem {horasEmTexto(r.falta)} neste cartão — para o que
                 passar disso, abra outro.
