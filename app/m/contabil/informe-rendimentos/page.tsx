@@ -1,0 +1,57 @@
+import Workspace from "@/components/Workspace";
+import InformeRendimentos from "@/components/apps/InformeRendimentos";
+import { getModule } from "@/lib/modules";
+import { getEmpresas, hasApiKey } from "@/lib/questor";
+import { listarLog, type LinhaLog } from "@/lib/informe-rendimentos-log";
+import { exigirContabil } from "@/app/api/contabil/informe-rendimentos/_auth";
+import AcessoNegado from "@/components/AcessoNegado";
+
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  const m = getModule("contabil")!;
+
+  // Mesmo critério da API: quem não tem o módulo não carrega nem a lista de clientes.
+  const email = await exigirContabil();
+  if (!email) {
+    return (
+      <Workspace moduleId="contabil" appName="Informe de Rendimentos">
+        <AcessoNegado moduloNome="Informe de Rendimentos" />
+      </Workspace>
+    );
+  }
+
+  let empresas: Array<{ codigo: number; nome: string }> = [];
+  let log: LinhaLog[] = [];
+  let erro: string | null = null;
+
+  if (!hasApiKey()) {
+    erro = "QUESTOR_API_KEY não configurada no servidor.";
+  } else {
+    try {
+      const r = await getEmpresas(true);
+      empresas = (r.dados ?? [])
+        .filter((e) => e.ativa && e.codigoempresa < 9000 && (e.cnpj ?? "").replace(/\D/g, "").length === 14)
+        .map((e) => ({ codigo: e.codigoempresa, nome: e.nome ?? "" }))
+        .sort((a, b) => a.codigo - b.codigo);
+    } catch (e) {
+      erro = e instanceof Error ? e.message : "Falha ao consultar a API Questor.";
+    }
+  }
+  try { log = await listarLog(100); } catch { /* o log é acessório: a tela funciona sem ele */ }
+
+  return (
+    <Workspace moduleId="contabil" appName="Informe de Rendimentos">
+      <div className="app-head">
+        <div className="app-ic mono" style={{ background: m.color }}>IR</div>
+        <div>
+          <h1>Informe de Rendimentos</h1>
+          <div className="desc">
+            Receitas financeiras, dividendos e IRRF lançados no Questor Fiscal. O regime (Presumido ou Real) vem do Tareffa.
+          </div>
+        </div>
+      </div>
+      <InformeRendimentos empresas={empresas} logInicial={log} erroServidor={erro} />
+    </Workspace>
+  );
+}
