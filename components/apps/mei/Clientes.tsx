@@ -41,6 +41,7 @@ export function Ficha({ m, voltar, mudou }: { m: Mei; voltar: () => void; mudou:
   const [obsEd, setObsEd] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [encerrar, setEncerrar] = useState(false);
+  const [editar, setEditar] = useState(false);
 
   useEffect(() => {
     ler<{ dados: Tarefa[] }>("/mei/tarefas", { codigoempresa: m.cod, status: "Em Aberto", limit: 500 }).then((j) => setPend(j.dados ?? [])).catch(() => setPend([]));
@@ -95,7 +96,7 @@ export function Ficha({ m, voltar, mudou }: { m: Mei; voltar: () => void; mudou:
               </div>
             ))}
           </div>
-          <div style={st.aviso}>No Access o botão “Salvar” desta aba grava salão, I.E., I.M. e os dados do sócio direto no Questor. A API ainda não tem a rota para alterar estabelecimento/sócio (PATCH /cadastro/estabelecimento e /cadastro/socio — pedido B6.2), por isso aqui está só leitura.</div>
+          <div style={st.bar}><button style={st.btnP} onClick={() => setEditar(true)}>Editar dados (salão, I.E., I.M., sócio)</button></div>
           <div style={st.card}>
             <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Tarefas pendentes</h3>
             {pend === null ? <p style={st.mut}>Carregando…</p> : (
@@ -126,6 +127,7 @@ export function Ficha({ m, voltar, mudou }: { m: Mei; voltar: () => void; mudou:
       )}
 
       {encerrar && <Encerramento m={m} fechar={() => setEncerrar(false)} mudou={mudou} />}
+      {editar && <EditarDados m={m} fechar={() => setEditar(false)} mudou={mudou} />}
     </div>
   );
 }
@@ -165,6 +167,59 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
         <button style={st.btnD} onClick={salvar}>Salvar encerramento</button>
         <button style={st.btn} onClick={comunicado} disabled={!feito}>Gerar comunicado (.eml)</button>
       </div>
+      <Mensagem msg={msg} />
+    </Modal>
+  );
+}
+
+/** "Salvar" da aba Dados do Access: ESTAB (salão, I.E., I.M.) e SOCIO 1 no Questor. Só envia o que mudou. */
+function EditarDados({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou: () => void }) {
+  const dig = (s: string) => s.replace(/\D/g, "");
+  const tel = (s: string) => { const d = dig(s); return { ddd: d.slice(0, 2), num: d.slice(2) }; };
+  const ini = {
+    apelidoestab: m.apelido, inscrestad: m.ie, inscrmunic: m.im,
+    inscrfederal: m.cpf, datanasc: (m.nasc ?? "").slice(0, 10), tituloeleitornumero: m.titulo, email: m.email,
+    fone: m.cel, celular: m.whats, nomemae: m.mae, numerorg: m.rg,
+  };
+  const [d, setD] = useState({ ...ini });
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+  const campo = (k: keyof typeof ini, label: string, tipo = "text") => (
+    <Campo label={label}><input type={tipo} style={st.input} value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} /></Campo>
+  );
+  async function salvar() {
+    if (!d.datanasc) { setMsg({ ok: false, texto: "Data de nascimento do sócio é obrigatória (regra do Access)." }); return; }
+    const estab: Record<string, unknown> = {};
+    for (const k of ["apelidoestab", "inscrestad", "inscrmunic"] as const) if (d[k] !== ini[k]) estab[k] = d[k];
+    const socio: Record<string, unknown> = {};
+    for (const k of ["inscrfederal", "datanasc", "tituloeleitornumero", "email", "nomemae", "numerorg"] as const) if (d[k] !== ini[k]) socio[k] = d[k];
+    if (d.fone !== ini.fone) { const t = tel(d.fone); socio.dddfone = t.ddd; socio.numerofone = t.num; }
+    if (d.celular !== ini.celular) { const t = tel(d.celular); socio.dddcelular = t.ddd; socio.numerocelular = t.num; }
+    if (!Object.keys(estab).length && !Object.keys(socio).length) { setMsg({ ok: false, texto: "Nada foi alterado." }); return; }
+    if (!confirm("Gravar as alterações no Questor?")) return;
+    const linhas: string[] = [];
+    let ok = true;
+    if (Object.keys(estab).length) {
+      const r = await api("PATCH", `/cadastro/estabelecimento/${m.cod}/1`, { corpo: estab, idempotencia: `mei-estab-${m.cod}-${Date.now()}` });
+      const x = resumoGravacao(r); ok = ok && x.ok; linhas.push(`Estabelecimento: ${x.texto}`);
+    }
+    if (Object.keys(socio).length) {
+      const r = await api("PATCH", `/cadastro/socio/${m.cod}/1`, { corpo: socio, idempotencia: `mei-socio-${m.cod}-${Date.now()}` });
+      const x = resumoGravacao(r); ok = ok && x.ok; linhas.push(`Sócio: ${x.texto}`);
+    }
+    setMsg({ ok, texto: linhas.join(" | ") });
+    if (ok) mudou();
+  }
+  return (
+    <Modal titulo={`Editar dados — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
+      <h4 style={{ margin: "0 0 8px" }}>Estabelecimento</h4>
+      <div style={st.grid}>{campo("apelidoestab", "Salão (cód. financeiro; 53278 = avulso)")}{campo("inscrestad", "I.E.")}{campo("inscrmunic", "I.M.")}</div>
+      <h4 style={{ margin: "0 0 8px" }}>Sócio (titular)</h4>
+      <div style={st.grid}>
+        {campo("inscrfederal", "CPF")}{campo("datanasc", "Nascimento *", "date")}{campo("tituloeleitornumero", "Título de eleitor")}
+        {campo("nomemae", "Nome da mãe")}{campo("numerorg", "RG")}{campo("email", "E-mail")}
+        {campo("fone", "Telefone (DDD + número)")}{campo("celular", "Celular/WhatsApp (DDD + número)")}
+      </div>
+      <button style={st.btnP} onClick={salvar}>Salvar</button>
       <Mensagem msg={msg} />
     </Modal>
   );

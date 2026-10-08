@@ -60,7 +60,7 @@ export function Servicos() {
 
   async function salvar() {
     if (!ed?.descricao?.trim()) { setMsg({ ok: false, texto: "Informe a descrição." }); return; }
-    const corpo = { descricao: ed.descricao.trim(), dia_vencimento: num(ed.dia_vencimento), dia_prazo_interno: num(ed.dia_prazo_interno), gera_guia_auto: !!ed.gera_guia_auto, ...(ed.id ? { ativo: ed.ativo !== false } : {}) };
+    const corpo = { competencia_tipo: Number(ed.competencia_tipo ?? 0), descricao: ed.descricao.trim(), dia_vencimento: num(ed.dia_vencimento), dia_prazo_interno: num(ed.dia_prazo_interno), gera_guia_auto: !!ed.gera_guia_auto, ...(ed.id ? { ativo: ed.ativo !== false } : {}) };
     const r = ed.id ? await api("PATCH", `/mei/servicos/${ed.id}`, { corpo }) : await api("POST", "/mei/servicos", { corpo });
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) { setEd(null); recarregar(); }
@@ -68,7 +68,7 @@ export function Servicos() {
 
   return (
     <div style={st.card}>
-      <div style={st.aviso}>Serviços de tarefa (tabela “servico” do Access). O serviço 6 é a emissão da guia DAS. A coluna “competência” (mês atual / anterior / ano anterior) vem do Access; a API ainda não permite alterá-la.</div>
+      <div style={st.aviso}>Serviços de tarefa (tabela “servico” do Access). O serviço 6 é a emissão da guia DAS. A “competência” define se a tarefa é do mês atual, do anterior ou do ano anterior.</div>
       <div style={st.bar}><button style={st.btnP} onClick={() => { setEd({ descricao: "", ativo: true }); setMsg(null); }}>Novo serviço</button></div>
       <Mensagem msg={msg} />
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
@@ -82,6 +82,7 @@ export function Servicos() {
             <Campo label="Descrição"><input style={st.input} value={ed.descricao ?? ""} onChange={(e) => setEd({ ...ed, descricao: e.target.value })} /></Campo>
             <Campo label="Dia de vencimento"><input style={st.input} value={ed.dia_vencimento ?? ""} onChange={(e) => setEd({ ...ed, dia_vencimento: e.target.value.replace(/\D/g, "") as unknown as number })} /></Campo>
             <Campo label="Prazo interno (dia de entrega)"><input style={st.input} value={ed.dia_prazo_interno ?? ""} onChange={(e) => setEd({ ...ed, dia_prazo_interno: e.target.value.replace(/\D/g, "") as unknown as number })} /></Campo>
+            <Campo label="Competência"><select style={st.input} value={String(ed.competencia_tipo ?? 0)} onChange={(e) => setEd({ ...ed, competencia_tipo: Number(e.target.value) })}><option value="0">Mês atual</option><option value="-1">Mês anterior</option><option value="-2">Ano anterior</option></select></Campo>
           </div>
           <label style={{ fontSize: 13, display: "block", marginBottom: 6 }}><input type="checkbox" checked={!!ed.gera_guia_auto} onChange={(e) => setEd({ ...ed, gera_guia_auto: e.target.checked })} /> Gera guia automática</label>
           {ed.id && <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}><input type="checkbox" checked={ed.ativo !== false} onChange={(e) => setEd({ ...ed, ativo: e.target.checked })} /> Ativo</label>}

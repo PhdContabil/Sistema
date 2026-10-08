@@ -140,16 +140,16 @@ function Situacao({ chaves }: { chaves: Chaves | null }) {
       ]} />
       <h3 style={{ fontSize: 15 }}>Conferência dos dados (08/10/2026, Access × Núcleo)</h3>
       <Tabela cab={["Item", "Access", "Núcleo/API", "Resultado"]} linhas={[
-        ["Carteira MEI (enquad. 4, cód. < 4000)", "1.862", "1.861", "OK — falta só o cód. 2 (API exclui; pedido ao responsável)"],
-        ["MEIs ativos (encerramento 31/12/2100)", "545", "545", "OK — corrigida a regra (antes 547 pela data de hoje)"],
+        ["Carteira MEI (enquad. 4, cód. < 4000)", "1.862", "1.861", "Cód. 2 em análise (Questor diz enquad. 3)"],
+        ["MEIs ativos (encerramento 31/12/2100)", "546", "546", "OK — regra do Access (pela data de hoje seriam 547)"],
         ["Salão do MEI", "1.862", "1.861 iguais", "OK"],
         ["Bloqueados (último segmento = 2)", "40", "40", "OK"],
-        ["Mensalidade (72/102 vigentes)", "502 MEI", "501 MEI", "1 diferença: MEI 923 (código com 3 dígitos no texto) — pedido à API"],
+        ["Mensalidade (72/102 vigentes)", "502 MEI", "502 MEI", "OK — API corrigida (MEI 923)"],
         ["Tarefas", "18.822", "18.822", "OK"],
         ["Serviços de tarefa", "38", "38", "OK"],
         ["Responsáveis", "5", "6 (1 removido)", "OK"],
         ["Observações", "184", "182", "2 a menos — pedido à API"],
-        ["Senhas (6 tabelas)", "4.319", "—", "Não conferido: falta a chave do perfil credenciais"],
+        ["Senhas (6 tabelas)", "4.319", "4.316", "Prefeitura, gov.br, Posto, Regularize e Nacional iguais; Simples Nacional 798 × 795"],
         ["O.S. do MEI (mei.osfinanceiro)", "4.166", "—", "Sem rota na API (pedido /mei/os)"],
         ["Contratos / modelos", "7 / 5", "—", "Tabelas no Supabase prontas para criar (migration_mei_contratos.sql)"],
       ]} />
