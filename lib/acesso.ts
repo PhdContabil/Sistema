@@ -158,6 +158,9 @@ export function podeAcessarApp(nivel: NivelAcesso, moduloId: string, appNome: st
   if (overrideApp === "bloqueado") return false;
   if (overrideApp === "liberado") return true;
 
+  // Submódulo marcado como apenasTI: só a T.I. (nem Diretoria nem o setor).
+  if (getModule(moduloId)?.apps.find((a) => a.name === appNome)?.apenasTI) return nivel.ti;
+
   const overrideModulo = nivel.overridesModulos[moduloId];
   if (overrideModulo === "bloqueado") return false;
   if (overrideModulo === "liberado") return true;

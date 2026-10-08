@@ -5,6 +5,8 @@ export interface AppItem {
   name: string;
   desc: string;
   href?: string;
+  /** Submódulo restrito à T.I. (só libera por override individual). */
+  apenasTI?: boolean;
 }
 
 export interface ModuleDef {
@@ -107,6 +109,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Carteira MEI: acompanhamento, obrigações e indicadores do setor.",
     apps: [
       { name: "Painel MEI", desc: "Indicadores da carteira, direto do Power BI.", href: "/m/mei/painel" },
+      { name: "Sistema MEI", desc: "Clientes, ficha, avulsos, notas e relatórios da carteira MEI. Em migração — só T.I.", href: "/m/mei/sistema", apenasTI: true },
     ],
   },
   {
