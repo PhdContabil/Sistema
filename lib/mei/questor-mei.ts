@@ -53,7 +53,7 @@ export interface MeiItem {
   cod: number; codigocliente: number | null; razao: string; cnpj: string;
   salao: string; salaoCnpj: string; salaoCod: number | null;
   bloqueado: boolean; segmento: number | null;
-  inicio: string | null; fim: string | null; ativo: boolean; mensal: number;
+  inicio: string | null; fim: string | null; ativo: boolean; mensal: number; clienteDesde: string | null; mensalNF: boolean;
   cidade: string; uf: string; email: string; cel: string; cpf: string; ie: string; im: string; cnae: string;
   endereco: string; compl: string; bairro: string; cep: string;
   mae: string; rg: string; nasc: string; titulo: string; whats: string; socio: string; apelido: string;
@@ -63,51 +63,66 @@ export interface MeiItem {
 
 let cache: { t: number; v: MeiItem[] } | null = null;
 const TTL = 10 * 60 * 1000;
+export const AVULSO_SALAO = 53278;
+const ATIVO_ATE = "2100-12-31";
 
-/** Matriz de cada empresa com regime MEI e código < 4000 (mesma regra do MEI System). */
+/**
+ * Carteira MEI com as MESMAS regras do Access (validadas em 08/10/2026 contra o MeiSistema.accdb):
+ * - quem é MEI: /mei/empresas (cfgempresagem.tipoenquad = 4 e código < 4000) = consultaMEI;
+ * - ativo: dataencerativ = 31/12/2100 (o Access não usa a data de hoje);
+ * - salão: Val(apelidoestab) = codigopessoafin; 53278 = avulso;
+ * - bloqueado: último segmento = 2;
+ * - mensalidade: servicofixo codigoescrit 1, serviço 72/102, sem competfinalvalid, MEI = 4 primeiros
+ *   caracteres do compldescr (sem "plano B" pelos serviços do próprio MEI — o Access não tem).
+ * Os dados cadastrais (endereço, sócio, IE/IM, CNAE) vêm de /empresas/cadastro.
+ */
 export async function listaMEI(forcar = false): Promise<MeiItem[]> {
   if (!forcar && cache && Date.now() - cache.t < TTL) return cache.v;
-  const r = await q("/empresas/cadastro", { apenas_ativas: "false", detalhado: "true" });
-  if (r.status !== 200) throw new Error(`Questor /empresas/cadastro ${r.status}: ${JSON.stringify(r.json).slice(0, 200)}`);
+  const [me, r] = await Promise.all([
+    q("/mei/empresas", { limit: 5000 }),
+    q("/empresas/cadastro", { apenas_ativas: "false", detalhado: "true" }),
+  ]);
+  if (me.status !== 200) throw new Error(`Questor /mei/empresas ${me.status}: ${JSON.stringify(me.json).slice(0, 200)}`);
+  const cad = new Map<number, Json>();
+  if (r.status === 200) for (const e of r.json.dados ?? []) if (e.codigoestab === 1 || e.matriz) cad.set(e.codigoempresa, e);
 
-  // Extras opcionais: bloqueio/segmento (/mei/empresas) e mensalidade (serviços 72/102 no salão).
-  const extra = new Map<number, Json>();
-  const mensalMEI = new Map<number, number>();
+  const mensal = new Map<number, { valor: number; desde: string | null; nf: boolean }>();
   try {
-    const me = await q("/mei/empresas", { limit: 5000 });
-    if (me.status === 200) for (const x of me.json.dados ?? []) extra.set(x.codigoempresa, x);
     const sf = await q("/financeiro/servicos-fixos");
     if (sf.status === 200) for (const x of sf.json.dados ?? []) {
-      if (!x.codigoempresa_mei || x.competfinalvalid || ![72, 102].includes(x.codigoservicoescrit)) continue;
-      mensalMEI.set(x.codigoempresa_mei, (mensalMEI.get(x.codigoempresa_mei) ?? 0) + (+x.valor || 0));
+      if (!x.codigoempresa_mei || x.competfinalvalid || x.codigoescrit !== 1 || ![72, 102].includes(x.codigoservicoescrit)) continue;
+      const a = mensal.get(x.codigoempresa_mei) ?? { valor: 0, desde: null, nf: false };
+      a.valor += +x.valor || 0;
+      if (!a.desde || (x.competinicialvalid && x.competinicialvalid < a.desde)) a.desde = x.competinicialvalid ?? a.desde;
+      if (x.codigoservicoescrit === 102) a.nf = true;
+      mensal.set(x.codigoempresa_mei, a);
     }
-  } catch { /* segue sem os extras */ }
+  } catch { /* segue sem mensalidade */ }
 
   const out: MeiItem[] = [];
-  for (const e of r.json.dados ?? []) {
-    if (!e.matriz) continue;
-    if (!String(e.regime ?? "").toUpperCase().includes("MICRO EMPREENDEDOR")) continue;
-    if (e.codigoempresa >= 4000) continue;
-    const s = (e.socios ?? []).find((x: Json) => x.ativo) ?? (e.socios ?? [])[0] ?? {};
-    const fixos = (e.servicos ?? []).filter((x: Json) => !x.competfinalvalid && x.periodicidade === "mensal");
-    const apel = String(e.apelidoestab ?? "").trim();
-    const ex = extra.get(e.codigoempresa) ?? {};
+  for (const m of me.json.dados ?? []) {
+    const e = cad.get(m.codigoempresa) ?? {};
+    const s = (e.socios ?? []).find((x: Json) => x.codigosocio === 1) ?? (e.socios ?? [])[0] ?? {};
+    const salaoCod = m.salao_codigopessoafin ?? null;
+    const mm = mensal.get(m.codigoempresa);
     out.push({
-      cod: e.codigoempresa, codigocliente: e.codigocliente ?? null, razao: e.nomeestab || e.nomeempresa || "",
-      cnpj: mascararDoc(e.inscrfederal),
-      salao: e.salao_nome || "", salaoCnpj: e.salao_cnpj || "",
-      salaoCod: e.salao_codigopessoafin || (/^\d+$/.test(apel) ? +apel : null),
-      bloqueado: !!ex.bloqueado, segmento: ex.codigosegmento ?? null,
-      inicio: e.datainicioativ ?? null, fim: e.dataencerativ ?? null, ativo: !!e.ativa,
-      mensal: Math.round((mensalMEI.has(e.codigoempresa) ? mensalMEI.get(e.codigoempresa)! : fixos.reduce((a: number, x: Json) => a + (+x.valor || 0), 0)) * 100) / 100,
-      cidade: e.nomemunic || "", uf: e.siglaestado || "", email: e.email || s.email || "", cel: e.telefone || "",
-      cpf: mascararDoc(s.inscrfederal), ie: e.inscrestad || "Isento", im: e.inscrmunic || "",
-      cnae: [e.codigoativfederal, e.ativfederal].filter(Boolean).join(" "),
+      cod: m.codigoempresa, codigocliente: m.codigocliente ?? e.codigocliente ?? null, razao: m.nome || e.nomeestab || "",
+      cnpj: mascararDoc(m.cnpj ?? e.inscrfederal),
+      salao: salaoCod === AVULSO_SALAO || !salaoCod ? "AVULSO" : (m.salao_nome || e.salao_nome || ""),
+      salaoCnpj: e.salao_cnpj || "", salaoCod,
+      bloqueado: !!m.bloqueado, segmento: m.codigosegmento ?? null,
+      inicio: m.datainicioativ ?? null, fim: m.dataencerativ ?? null,
+      ativo: String(m.dataencerativ ?? "").slice(0, 10) === ATIVO_ATE,
+      mensal: Math.round((mm?.valor ?? 0) * 100) / 100, clienteDesde: mm?.desde ?? null, mensalNF: !!mm?.nf,
+      cidade: m.municipio || e.nomemunic || "", uf: m.uf || e.siglaestado || "", email: e.email || s.email || "",
+      cel: e.telefone || "", cpf: mascararDoc(s.inscrfederal), ie: e.inscrestad || "", im: e.inscrmunic || "",
+      cnae: [e.codigoativfederal, e.ativfederal].filter(Boolean).join(" - "),
       endereco: [e.tipologradouro, e.enderecoestab].filter(Boolean).join(" ") + (e.numenderestab ? ", " + e.numenderestab : ""),
       compl: e.complenderestab || "", bairro: e.bairroenderestab || "", cep: e.cependerestab || "",
       mae: s.nomemae || "", rg: s.numerorg || "", nasc: s.datanasc || "", titulo: s.tituloeleitornumero || "",
       whats: s.numerocelular ? `(${s.dddcelular || ""}) ${s.numerocelular}` : "",
-      socio: s.nomesocio || "", apelido: apel, servicos: e.servicos ?? [], ativMunic: e.codigoativmunic || "",
+      socio: s.nomesocio || "", apelido: String(m.apelidoestab ?? ""), servicos: e.servicos ?? [],
+      ativMunic: [e.codigoativmunic, e.descrativmunestab].filter(Boolean).join(" - "),
     });
   }
   out.sort((a, b) => a.cod - b.cod);

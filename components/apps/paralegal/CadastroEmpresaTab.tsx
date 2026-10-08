@@ -200,10 +200,15 @@ interface CadastroEmpresaTabProps {
   // Vem do botão "Recadastrar" da aba Empresas.
   prefill?: { nome: string; empresa: string; cnpj: string } | null;
   onPrefillConsumido?: () => void;
+  // "mei" = tela "Cliente Mensal" do Sistema MEI: faixa 2001–3999, natureza 2135, enquadramento 4 (MEI),
+  // salão (apelidoestab) e senha do Emissor Nacional, com a trava de gravação do Sistema MEI.
+  modo?: "mei";
 }
 
-export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: CadastroEmpresaTabProps = {}) {
-  const [dados, setDados] = useState({ ...DADOS_VAZIO });
+export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }: CadastroEmpresaTabProps = {}) {
+  const ehMei = modo === "mei";
+  const [dados, setDados] = useState(ehMei ? { ...DADOS_VAZIO, codigonaturjurid: "2135", tipoenquad: "4" } : { ...DADOS_VAZIO });
+  const [meiExtra, setMeiExtra] = useState({ salao: "", usuarioNacional: "", senhaNacional: "" });
   const [socios, setSocios] = useState<Socio[]>(() => [novoSocio(1)]);
   const socioIdRef = useRef(1);
 
@@ -247,7 +252,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
 
   async function sugerirProximoCodigo() {
     try {
-      const r = await fetch("/api/paralegal/cadastro-empresa/proximo-codigo?inicio=1&fim=1999", { cache: "no-store" });
+      const r = await fetch(ehMei ? "/api/paralegal/cadastro-empresa/proximo-codigo?inicio=2001&fim=3999" : "/api/paralegal/cadastro-empresa/proximo-codigo?inicio=1&fim=1999", { cache: "no-store" });
       const j = await r.json();
       const codigo = j?.dados?.[0]?.codigo;
       if (codigo) setDados((d) => (d.codigoempresa ? d : { ...d, codigoempresa: String(codigo) }));
@@ -529,7 +534,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
     const r = await fetch("/api/paralegal/cadastro-empresa", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dados: dadosMontados, dry_run: dryRun, confirmar, idempotency_key: dryRun ? undefined : idempotencyKeyRef.current }),
+      body: JSON.stringify({ dados: ehMei ? { ...dadosMontados, apelidoestab: meiExtra.salao || "53278" } : dadosMontados, dry_run: dryRun, confirmar, idempotency_key: dryRun ? undefined : idempotencyKeyRef.current, mei: ehMei }),
     });
     const corpo = await r.json();
     return { ok: r.ok, corpo };
@@ -574,6 +579,14 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
     setEnviando("confirmar");
     try {
       const { ok, corpo } = await enviarCadastro(false, true);
+      if (ok && corpo.ok && corpo.simulacao_mei) {
+        setResultado({ tipo: "sucesso", titulo: "Validado em SIMULAÇÃO: a trava de gravação do Sistema MEI está ligada, nada foi gravado no Questor.", linhas: [`Código previsto: ${corpo.codigoempresa ?? "?"}`] });
+        return;
+      }
+      if (ok && corpo.ok && ehMei && meiExtra.usuarioNacional) {
+        // Access: grava emi_nacional (senha do Portal Nacional) junto com o cadastro.
+        await fetch("/api/mei/proxy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ metodo: "POST", caminho: "/mei/credenciais", corpo: { tipo: "EMISSOR_NACIONAL", codigoempresa: Number(corpo.codigoempresa), usuario: meiExtra.usuarioNacional, senha: meiExtra.senhaNacional || undefined } }) }).catch(() => null);
+      }
       if (ok && corpo.ok) {
         setResultado({
           tipo: "sucesso",
@@ -617,7 +630,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
           <h2>Dados da Empresa</h2>
           <div className="pl-form-grid">
             <label>Código da empresa
-              <input type="number" min={1} max={1999} required value={dados.codigoempresa} onChange={(e) => campo("codigoempresa", e.target.value)} className={erro("codigoempresa")} />
+              <input type="number" min={ehMei ? 2001 : 1} max={ehMei ? 3999 : 1999} required value={dados.codigoempresa} onChange={(e) => campo("codigoempresa", e.target.value)} className={erro("codigoempresa")} />
             </label>
             <label className="full">Nome (razão social)
               <input type="text" required value={dados.nomeempresa} onChange={(e) => campo("nomeempresa", e.target.value)} className={erro("nomeempresa")} />
@@ -625,6 +638,19 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido }: Cada
             <label>Nome fantasia
               <input type="text" value={dados.nomefantasia} onChange={(e) => campo("nomefantasia", e.target.value)} />
             </label>
+            {ehMei && (
+              <>
+                <label>Salão (cód. financeiro — vazio = avulso 53278)
+                  <input type="text" value={meiExtra.salao} onChange={(e) => setMeiExtra({ ...meiExtra, salao: e.target.value.replace(/\D/g, "") })} />
+                </label>
+                <label>Portal Nacional — usuário
+                  <input type="text" value={meiExtra.usuarioNacional} onChange={(e) => setMeiExtra({ ...meiExtra, usuarioNacional: e.target.value })} />
+                </label>
+                <label>Portal Nacional — senha
+                  <input type="password" autoComplete="new-password" value={meiExtra.senhaNacional} onChange={(e) => setMeiExtra({ ...meiExtra, senhaNacional: e.target.value })} />
+                </label>
+              </>
+            )}
             <div className="full" style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 13 }}>
               <span>Documento:</span>
               <label style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}><input type="radio" name="tipoDocEmpresa" checked={tipoDoc === "cnpj"} onChange={() => { setTipoDoc("cnpj"); campo("inscrfederal", ""); setCnpjStatus({ texto: "", tipo: "" }); }} style={{ width: "auto" }} /> CNPJ</label>

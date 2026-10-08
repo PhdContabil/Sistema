@@ -72,7 +72,7 @@ const LABEL: Record<keyof Dados, string> = {
 // Igual ao Access: todos em negrito são obrigatórios (só o complemento não).
 const OBRIGATORIOS: (keyof Dados)[] = ["nome", "inscrfederal", "cep", "codigotipolograd", "endereco", "numero", "bairro", "siglaestado", "codigomunic", "dddfone", "numerofone", "email"];
 
-export default function AvulsoTab() {
+export default function AvulsoTab({ modo }: { modo?: "mei" } = {}) {
   const [tipoDoc, setTipoDoc] = useState<"cnpj" | "cpf">("cnpj");
   const [dados, setDados] = useState<Dados>({ ...VAZIO });
   const [logradouros, setLogradouros] = useState<LookupItem[]>([]);
@@ -225,6 +225,7 @@ export default function AvulsoTab() {
           dddfone: Number(dados.dddfone),
           numerofone: Number(somenteDigitos(dados.numerofone)),
           email: dados.email.trim().toLowerCase(),
+          mei: modo === "mei",
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -232,6 +233,7 @@ export default function AvulsoTab() {
         setMensagem({ texto: j.erro || j.error || `Erro ${r.status} ao cadastrar.`, tipo: "erro" });
         return;
       }
+      if (j.simulacao_mei) { setMensagem({ texto: "Validado em SIMULAÇÃO: a trava de gravação do Sistema MEI está ligada, nada foi gravado no Questor.", tipo: "ok" }); return; }
       const cod = j.codigocliente ?? j.codigopessoafin;
       setMensagem({ texto: `Pessoa cadastrada no Financeiro com sucesso${cod ? ` (código ${cod})` : ""}.`, tipo: "ok" });
       limpar();

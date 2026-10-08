@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 import { criarCadastroEmpresa, QuestorError, type DadosCadastroEmpresa } from "@/lib/questor";
+import { gravacaoLiberada } from "@/lib/mei/api";
 
 // Criação (com pré-visualização via dry_run) de empresa nova no Questor —
 // migrado de /api/cadastro-empresa do Paralegal System (index.html antigo).
@@ -16,21 +17,25 @@ interface CorpoRequisicao {
   dry_run: boolean;
   confirmar: boolean;
   idempotency_key?: string;
+  mei?: boolean; // tela "Cliente Mensal" do Sistema MEI
 }
 
 export async function POST(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
-  if (!podeAcessarApp(nivel, "paralegal", "Controle")) {
-    return NextResponse.json({ error: "Sem acesso ao Paralegal." }, { status: 403 });
-  }
-
   let body: CorpoRequisicao;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });
   }
+  const liberado = body?.mei ? podeAcessarApp(nivel, "mei", "Sistema MEI") : podeAcessarApp(nivel, "paralegal", "Controle");
+  if (!liberado) {
+    return NextResponse.json({ error: body?.mei ? "Sistema MEI restrito à T.I." : "Sem acesso ao Paralegal." }, { status: 403 });
+  }
+  // Trava do Sistema MEI: enquanto MEI_GRAVACAO_LIBERADA != "sim", o "Confirmar" vira simulação.
+  const simulacaoMei = !!body.mei && !gravacaoLiberada() && !body.dry_run;
+  if (simulacaoMei) { body.dry_run = true; body.confirmar = false; }
 
   if (!body?.dados) {
     return NextResponse.json({ error: "Campo obrigatório: dados." }, { status: 400 });
@@ -65,7 +70,7 @@ export async function POST(req: Request) {
       confirmar: Boolean(body.confirmar),
       idempotencyKey: typeof body.idempotency_key === "string" ? body.idempotency_key : undefined,
     });
-    return NextResponse.json(corpo, { status: ok ? 200 : status || 502 });
+    return NextResponse.json(simulacaoMei ? { ...corpo, simulacao_mei: true } : corpo, { status: ok ? 200 : status || 502 });
   } catch (e) {
     const status = e instanceof QuestorError ? e.status : 502;
     return NextResponse.json({ erro: e instanceof Error ? e.message : "Falha ao criar a empresa no Questor." }, { status });

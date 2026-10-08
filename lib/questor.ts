@@ -345,6 +345,7 @@ export interface DadosCadastroEmpresa {
   numeroregist?: string;
   inscrmunic?: string;
   inscrestad?: string;
+  apelidoestab?: string; // MEI: código financeiro do salão (53278 = avulso)
   socios: SocioCadastroEmpresa[];
 }
 
@@ -400,7 +401,8 @@ export interface DadosCadastroAvulso {
 }
 
 export async function criarCadastroAvulso(
-  dados: DadosCadastroAvulso
+  dados: DadosCadastroAvulso,
+  opts: { dryRun?: boolean } = {}
 ): Promise<{ ok: boolean; status: number; corpo: Record<string, unknown> }> {
   // Converte o formulário do Núcleo para o PessoaFinanceiroIn da API.
   const numero = parseInt(String(dados.numero).replace(/\D/g, ""), 10);
@@ -424,7 +426,7 @@ export async function criarCadastroAvulso(
     // Mesmos parâmetros de cobrança que o Access gravava (caixa 2, vencimento dia 10).
     contrato: { codigocaixaconta: 2, diavcto: 10 },
   };
-  return post<Record<string, unknown>>(`/cadastro/pessoa-financeiro?dry_run=false`, corpo);
+  return post<Record<string, unknown>>(`/cadastro/pessoa-financeiro?dry_run=${opts.dryRun ? "true" : "false"}`, corpo);
 }
 
 /**
