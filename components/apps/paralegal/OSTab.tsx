@@ -792,7 +792,7 @@ export default function OSTab() {
             </div>
 
             <h3 style={{ fontSize: 12 }}>Dados da OS — Nº {modal.editando ? modal.editando.id : "(gerado ao salvar)"}</h3>
-            <label><span>Título</span><input value={modal.dados.titulo} onChange={(e) => setCampo("titulo", e.target.value)} placeholder="Descrição curta da OS" /></label>
+            <label><span>Título *</span><select required value={modal.dados.titulo} onChange={(e) => setCampo("titulo", e.target.value)} style={{ border: "1px solid var(--pl-border)", borderRadius: 8, padding: "9px 12px", fontSize: 13.5, width: "100%" }}><option value="">Selecione...</option>{TIPOS_OS.map((t) => <option key={t} value={t}>{t}</option>)}{modal.dados.titulo && !TIPOS_OS.includes(modal.dados.titulo) && <option value={modal.dados.titulo}>{modal.dados.titulo}</option>}</select></label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 4 }}>
               <label style={{ marginBottom: 0 }}>
                 <span>Cód. financeiro</span>
@@ -802,7 +802,7 @@ export default function OSTab() {
                 <span>Tipo</span>
                 <select value={modal.dados.tipo} onChange={(e) => setCampo("tipo", e.target.value)} style={{ border: "1px solid var(--pl-border)", borderRadius: 8, padding: "9px 12px", fontSize: 13.5, width: "100%" }}>
                   <option value="">Selecione...</option>
-                  {TIPOS_OS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {["Mensal", "Avulso"].map((t) => <option key={t} value={t}>{t}</option>)}{modal.dados.tipo && !["Mensal", "Avulso"].includes(modal.dados.tipo) && <option value={modal.dados.tipo}>{modal.dados.tipo}</option>}
                 </select>
               </label>
               <label style={{ marginBottom: 0 }}><span>Cód. empresa (Questor)</span>{tipoDocOS === "cpf"

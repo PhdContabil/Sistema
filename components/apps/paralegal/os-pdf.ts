@@ -137,12 +137,13 @@ export async function gerarDocPdfOS(d: DadosOSPdf, publico: "geral" | "financeir
   }
 
   // Tipo da OS (ex.: ABERTURA) centralizado entre a logo e o COMUNICADO.
-  if (d.tipo && d.tipo.trim()) {
+  const tipoOS = (["mensal","avulso",""].includes(String(d.tipo ?? "").trim().toLowerCase()) ? String(d.titulo ?? "") : String(d.tipo ?? "")).trim();
+  if (tipoOS) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(0, 0, 0);
     const larguraTitulo = largura - 2 * (logoLargura + 60);
-    const linhasTitulo = doc.splitTextToSize(d.tipo.trim().toUpperCase(), larguraTitulo) as string[];
+    const linhasTitulo = doc.splitTextToSize(tipoOS.toUpperCase(), larguraTitulo) as string[];
     doc.text(linhasTitulo.slice(0, 2), margemX + largura / 2, linhasTitulo.length > 1 ? y - 6 : y, { align: "center" });
   }
 

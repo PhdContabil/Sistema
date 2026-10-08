@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 
   const itens = lista
     .filter((o) => Number(o.id) > desde)
-    .filter((o) => ["abertura", "troca"].includes(String(o.tipo ?? "").trim().toLowerCase()))
+    .filter((o) => ["abertura", "troca"].includes((["mensal","avulso",""].includes(String(o.tipo ?? "").trim().toLowerCase()) ? String(o.titulo ?? "") : String(o.tipo ?? "")).trim().toLowerCase()))
     .filter((o) => Number(String(o.questor ?? "").replace(/\D/g, "")) > 0)
     .filter((o) => String(o.cnpj ?? "").replace(/\D/g, "").length === 14)
     .sort((a, b) => Number(a.id) - Number(b.id))
