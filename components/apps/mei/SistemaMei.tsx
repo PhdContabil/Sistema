@@ -29,6 +29,7 @@ interface Chaves { leitura: boolean; questor: boolean; mei: boolean; credenciais
 
 export default function SistemaMei() {
   const [tela, setTela] = useState("Tarefas");
+  const [grupo, setGrupo] = useState("");
   const [mei, setMei] = useState<Mei[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -58,16 +59,26 @@ export default function SistemaMei() {
           <b>Modo validação:</b> {chaves.liberados?.length ? <>só grava de verdade: <b>{chaves.liberados.join(", ")}</b>. O resto</> : "nenhuma tela grava de verdade; tudo"} vai para a API com <code>dry_run</code> (ela executa e desfaz) ou é simulado. A trava fica em <code>MEI_GRAVACAO_LIBERADA</code> no Vercel ("sim" ou lista: cadastro, os, nota, tarefas, senhas, ficha, contratos).
         </div>
       )}
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
-        {MENU.map((g) => (
-          <div key={g.grupo}>
-            <div style={{ fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 4 }}>{g.grupo}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {g.itens.map((i) => <button key={i} style={i === tela ? st.btnP : st.btn} onClick={() => abrir(i)}>{i}</button>)}
-            </div>
-          </div>
-        ))}
+      {/* Menu em dois níveis: o grupo abre os sub-botões; o sub-botão abre a tela. */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        {MENU.map((g) => {
+          const ativo = g.grupo === grupo;
+          return (
+            <button key={g.grupo} onClick={() => setGrupo(ativo ? "" : g.grupo)}
+              style={{ ...(g.itens.includes(tela) ? st.btnP : st.btn), fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {g.grupo}<span style={{ fontSize: 10, opacity: 0.7 }}>{ativo ? "▲" : "▼"}</span>
+            </button>
+          );
+        })}
       </div>
+      {grupo && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14, padding: "8px 10px", background: "var(--accent-soft)", borderRadius: 10 }}>
+          {MENU.find((g) => g.grupo === grupo)?.itens.map((i) => (
+            <button key={i} style={i === tela ? st.btnP : st.btn} onClick={() => { abrir(i); setGrupo(""); }}>{i}</button>
+          ))}
+        </div>
+      )}
+      {!grupo && <div style={{ ...st.mut, marginBottom: 12 }}>Tela atual: <b>{tela}</b></div>}
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
         <span style={st.mut}>{carregando ? "Carregando carteira MEI…" : `${mei.length} MEI · ${ativos} ativos`}</span>
         <button style={st.btn} onClick={() => carregar(true)} disabled={carregando}>Atualizar dados</button>
