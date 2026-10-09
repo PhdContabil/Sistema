@@ -111,7 +111,8 @@ export async function chamar(
     url.searchParams.set("dry_run", "false");
   }
   const h = cabecalhos(metodo, caminho, opts.usuario ?? null);
-  if (opts.idempotencia) h["Idempotency-Key"] = opts.idempotencia;
+  // A simulação não pode reaproveitar a mesma chave da gravação real (a API devolveria a resposta simulada guardada).
+  if (opts.idempotencia) h["Idempotency-Key"] = (dryRunForcado ? "sim-" : "") + opts.idempotencia;
   if (opts.corpo !== undefined) h["Content-Type"] = "application/json";
   const tentativas = metodo === "GET" ? 4 : 1;
   let status = 0;
