@@ -165,7 +165,6 @@ function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => v
   return (
     <Modal titulo={`Nota — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
       {m.bloqueado && <div style={{ ...st.aviso, color: "var(--div)" }}>Empresa BLOQUEADA — no Access a emissão fica desabilitada.</div>}
-      <div style={st.aviso}>Como no Access: <b>1)</b> o robô abre o Emissor Nacional neste computador, faz login com a senha da empresa e preenche tomador, serviço, descrição e valor — DPS simplificada se a data é hoje, completa se é outra data. Ele <b>para antes de emitir</b>: você confere e clica em Emitir no portal. <b>2)</b> Com o número que o portal gerou, lance no Questor (saída no MEI e entrada no salão).</div>
       <div style={st.grid}>
         <Campo label="Tomador (salão)"><input style={st.input} readOnly value={`${m.salao} ${m.salaoCnpj}`} /></Campo>
         <Campo label="Número da NFS-e (do portal) *"><input style={st.input} value={d.numero} onChange={(e) => setD({ ...d, numero: e.target.value.replace(/\D/g, "") })} /></Campo>

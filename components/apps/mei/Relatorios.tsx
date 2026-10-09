@@ -23,7 +23,6 @@ export function DadosMei({ mei }: { mei: Mei[] }) {
         <SelectSalao mei={mei} valor={sal} onChange={setSal} />
         <button style={st.btnP} onClick={() => baixarCsv("dados_mei.csv", cab, L.map(linha))}>Exportar (CSV/Excel)</button>
       </div>
-      <div style={st.aviso}>Mesmas colunas da exportação “Dados MEI” do Access (Con_completa). As senhas não saem mais na planilha: ficam protegidas na API e aparecem só na ficha, com registro de quem viu.</div>
       <Tabela total={L.length} cab={["Cód.", "Razão", "CNPJ", "Salão", "Cidade", "I.E.", "I.M.", "CPF sócio", "E-mail", "Situação", "Bloqueio"]}
         linhas={L.slice(0, 200).map((m) => [m.cod, m.razao, m.cnpj, m.salao, m.cidade, m.ie, m.im, m.cpf, m.email, situacao(m), m.bloqueado ? "BLOQUEADO" : ""])} />
     </div>
@@ -50,7 +49,6 @@ export function ValoresMensal({ mei }: { mei: Mei[] }) {
         <SelectSalao mei={mei} valor={sal} onChange={setSal} />
         <button style={st.btn} onClick={() => imprimir("Valores Mensalidade", `<table><tr><th>Salão</th><th class="dir">Valor</th><th>Tipo</th></tr>${L.map((g) => `<tr><td>${esc(g.salao)}</td><td class="dir">${brl(g.valor)}</td><td>${g.tipo}</td></tr>`).join("")}</table>`)}>Imprimir</button>
       </div>
-      <div style={st.aviso}>Como no Access: maior mensalidade vigente (serviço 72 = sem NF, 102 = NF) por salão, só MEIs ativos.</div>
       <Tabela cab={["Salão", "Valor", "Tipo", "MEIs"]} linhas={L.map((g) => [g.salao, brl(g.valor), g.tipo, g.qtd])} />
     </div>
   );
@@ -79,7 +77,6 @@ export function SalaoMei({ mei }: { mei: Mei[] }) {
         <button style={st.btn} onClick={() => baixarCsv("salao_x_mei.csv", ["Salão", "Cód.", "MEI", "CNPJ", "Início", "Encerramento"], L.map((m) => [m.salao, m.cod, m.razao, m.cnpj, dt(m.inicio), m.ativo ? "" : dt(m.fim)]))}>Exportar CSV</button>
         <span style={st.mut}>{L.length} MEI(s) em {grupos.size} salão(ões)</span>
       </div>
-      <div style={st.aviso}>MEIs que estiveram ativos em algum momento do período (início ≤ data final e encerramento ≥ data inicial), agrupados por salão com a contagem — igual ao relatório do Access.</div>
       <Tabela cab={["Salão", "Qtd."]} linhas={[...grupos].map(([s, ms]) => [s, ms.length])} />
     </div>
   );

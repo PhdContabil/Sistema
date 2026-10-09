@@ -123,7 +123,6 @@ export function SenhasLista({ tipo, mei }: { tipo: "PREFEITURA" | "EMISSOR_NACIO
         <button style={st.btn} onClick={() => baixarCsv(tipo === "PREFEITURA" ? "senhas_prefeitura.csv" : "senhas_nacional.csv", ["Cód.", "Razão", "CNPJ", "Usuário", "Tem senha", "Cidade"],
           L.map((m) => { const c = porCod.get(m.cod); return [m.cod, m.razao, c?.documento || m.cnpj, c?.usuario ?? "", c?.tem_senha ? "sim" : "", m.cidade]; }))}>Exportar CSV</button>
       </div>
-      <div style={st.aviso}>A exportação não traz as senhas: pela regra nova da API, cada senha só aparece ao clicar em “Ver senha” e a visualização fica registrada.</div>
       {erro && <div style={{ ...st.aviso, color: "var(--div)" }}>{erro}</div>}
       <Mensagem msg={msg} />
       <Tabela total={L.length} cab={["Cód.", "Razão", "CNPJ", "Usuário", "Senha", "Cidade", ""]}

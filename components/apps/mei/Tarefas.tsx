@@ -152,9 +152,6 @@ function ObsTarefa({ t, fechar, aoSalvar }: { t: Tarefa; fechar: () => void; aoS
         <button style={st.btnP} onClick={salvar}>Salvar observação</button>
         {t.status !== "Encerrado" && <button style={st.btn} onClick={baixar}>Baixar tarefa</button>}
       </div>
-      {t.servico_id === 6 && (
-        <div style={st.aviso}>Serviço 6 (guia DAS): no Access o botão “Emitir Guia” abre o PGMEI com o robô (Selenium) usando o código de acesso do Simples Nacional da empresa. Esse robô roda na máquina do usuário e ainda não foi migrado. Por enquanto, emita a guia no Access e baixe a tarefa aqui.</div>
-      )}
       <Mensagem msg={msg} />
     </Modal>
   );
@@ -212,7 +209,6 @@ function Programacao({ ativos, resp, serv, fechar, aoSalvar }: { ativos: Mei[]; 
   }
   return (
     <Modal titulo="Programação de tarefas" fechar={fechar} largura={720}>
-      <div style={st.aviso}>Regra do Access: a competência de cada tarefa é o mês anterior ao mês marcado (janeiro gera dezembro do ano anterior) e a data é o dia do “prazo interno” do serviço. Não duplica empresa + serviço + competência.</div>
       <div style={st.grid}>
         <Campo label="Ano"><input style={st.input} value={ano} onChange={(e) => setAno(e.target.value.replace(/\D/g, "").slice(0, 4))} /></Campo>
         <Campo label="Serviço"><select style={st.input} value={d.servico_id} onChange={(e) => setD({ ...d, servico_id: e.target.value })}><option value="">Selecione…</option>{serv.map((s) => <option key={s.id} value={s.id}>{s.descricao}{s.dia_prazo_interno ? ` (dia ${s.dia_prazo_interno})` : " (sem prazo interno)"}</option>)}</select></Campo>

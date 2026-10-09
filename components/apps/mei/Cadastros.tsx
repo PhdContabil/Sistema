@@ -68,7 +68,6 @@ export function Servicos() {
 
   return (
     <div style={st.card}>
-      <div style={st.aviso}>Serviços de tarefa (tabela “servico” do Access). O serviço 6 é a emissão da guia DAS. A “competência” define se a tarefa é do mês atual, do anterior ou do ano anterior.</div>
       <div style={st.bar}><button style={st.btnP} onClick={() => { setEd({ descricao: "", ativo: true }); setMsg(null); }}>Novo serviço</button></div>
       <Mensagem msg={msg} />
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
@@ -107,7 +106,6 @@ export function TabelaPreco() {
   const L = dados.filter((s) => (s.codigo + " " + s.descricao).toLowerCase().includes(q.toLowerCase()));
   return (
     <div style={st.card}>
-      <div style={st.aviso}>Serviços do escritório no Questor (SERVICOESCRIT, códigos 2000 a 2100), como na tela “Tabela de preço” do Access.</div>
       <div style={st.bar}><Campo label="Pesquisar"><input style={st.input} value={q} onChange={(e) => setQ(e.target.value)} /></Campo></div>
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
       <Tabela cab={["Código", "Descrição", "Valor"]} linhas={L.map((s) => [s.codigo, s.descricao, s.valor != null ? brl(s.valor) : "—"])} />

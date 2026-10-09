@@ -54,11 +54,6 @@ export default function SistemaMei() {
 
   return (
     <div>
-      {chaves && !chaves.gravacao && (
-        <div style={{ ...st.aviso, borderLeft: "4px solid var(--accent)" }}>
-          <b>Modo validação:</b> {chaves.liberados?.length ? <>só grava de verdade: <b>{chaves.liberados.join(", ")}</b>. O resto</> : "nenhuma tela grava de verdade; tudo"} vai para a API com <code>dry_run</code> (ela executa e desfaz) ou é simulado. A trava fica em <code>MEI_GRAVACAO_LIBERADA</code> no Vercel ("sim" ou lista: cadastro, os, nota, tarefas, senhas, ficha, contratos).
-        </div>
-      )}
       {/* Menu em dois níveis: o grupo abre os sub-botões; o sub-botão abre a tela. */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         {MENU.map((g) => {
@@ -88,7 +83,7 @@ export default function SistemaMei() {
       {ficha ? <Ficha m={ficha} voltar={() => setFicha(null)} mudou={() => carregar(true)} /> : (
         <>
           {tela === "Tarefas" && <Tarefas mei={mei} />}
-          {tela === "Cliente Mensal" && <div className="controle-app"><div style={st.aviso}>Cadastro de MEI novo no Questor (formCadastroQuestor): código na faixa 2001–3999, natureza 2135, enquadramento 4 (MEI), salão e senha do Portal Nacional. A consulta de CNPJ usa a BrasilAPI (o Access tentava antes o SERPRO/CCMEI com certificado digital — ainda não migrado).</div><CadastroEmpresaTab modo="mei" /></div>}
+          {tela === "Cliente Mensal" && <div className="controle-app"><CadastroEmpresaTab modo="mei" /></div>}
           {tela === "Cliente Avulso" && <div className="controle-app"><AvulsoTab modo="mei" /></div>}
           {tela === "Usuários" && <Responsaveis />}
           {tela === "Serviços" && <Servicos />}

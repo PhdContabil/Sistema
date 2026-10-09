@@ -161,7 +161,6 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
   return (
     <Modal titulo="Encerramento" fechar={fechar}>
       <p style={st.mut}><b>{m.cod} - {m.razao}</b> · CNPJ {m.cnpj}</p>
-      <div style={st.aviso}>Como no Access: grava a data de encerramento no estabelecimento, dá baixa no cadastro financeiro e encerra a mensalidade (serviço 72/102 ligado a este código). Depois gera o e-mail “Comunicado de Saída” para Anna Caroline e Débora (abre no Outlook para conferir e enviar).</div>
       <Campo label="Data de encerramento"><input type="date" style={st.input} value={data} onChange={(e) => setData(e.target.value)} /></Campo>
       <div style={{ ...st.bar, marginTop: 10 }}>
         <button style={st.btnD} onClick={salvar}>Salvar encerramento</button>
