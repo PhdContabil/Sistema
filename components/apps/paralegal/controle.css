@@ -351,3 +351,12 @@ html[data-theme="dark"] .controle-app .pl-btn.primary {
 }
 html[data-theme="dark"] .controle-app .pl-btn.primary:hover { background: var(--pl-primary); opacity: 0.85; }
 html[data-theme="dark"] .controle-app .pl-btn.danger:hover { color: #0b1220; }
+
+/* Botão de fechar do modal (o clique fora não fecha mais) */
+.controle-app .pl-modal { position: relative; }
+.controle-app .pl-modal-fechar {
+  position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--pl-border, #e2e8f0); background: transparent; font-size: 20px; line-height: 1;
+  cursor: pointer; color: inherit;
+}
+.controle-app .pl-modal-fechar:hover { background: rgba(0,0,0,.06); }

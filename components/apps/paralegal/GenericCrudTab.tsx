@@ -152,8 +152,9 @@ export default function GenericCrudTab<T extends { id: string }>({
       </div>
 
       {modal && (
-        <div className="pl-modal-bg" onClick={() => !salvando && setModal(null)}>
+        <div className="pl-modal-bg">
           <div className="pl-modal" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="pl-modal-fechar" title="Fechar" aria-label="Fechar" disabled={salvando} onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) setModal(null); }}>×</button>
             <h3>{modal.editando ? "Editar" : nomeNovo}</h3>
 
             {campos.map((c) => (

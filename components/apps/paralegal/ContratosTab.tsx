@@ -197,8 +197,9 @@ export default function ContratosTab() {
       </div>
 
       {modal && (
-        <div className="pl-modal-bg" onClick={() => !salvando && setModal(null)}>
+        <div className="pl-modal-bg">
           <div className="pl-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <button type="button" className="pl-modal-fechar" title="Fechar" aria-label="Fechar" disabled={salvando} onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) setModal(null); }}>×</button>
             <h3>{modal.editando ? "Editar contrato" : "Novo contrato"}</h3>
 
             <h3 style={{ fontSize: 13 }}>Gerar a partir de modelo</h3>

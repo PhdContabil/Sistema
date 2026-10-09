@@ -155,8 +155,9 @@ export default function EmpresasTab({ onRecadastrar }: EmpresasTabProps) {
       )}
 
       {detalhe && (
-        <div className="pl-modal-bg" onClick={() => setDetalhe(null)}>
+        <div className="pl-modal-bg">
           <div className="pl-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
+            <button type="button" className="pl-modal-fechar" title="Fechar" aria-label="Fechar" onClick={() => setDetalhe(null)}>×</button>
             {detalhe.carregando && <p>Carregando…</p>}
             {detalhe.erro && <div className="pl-banner error">{detalhe.erro}</div>}
             {detalhe.dados && (
