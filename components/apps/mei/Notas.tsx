@@ -78,34 +78,85 @@ export default function Notas({ mei }: { mei: Mei[] }) {
 const DISCRIMINACAO = "NOTA PELO PRESTADOR. Serviços prestados de beleza, conforme resolução CGSN nº 140 de 22 de maio de 2018, cota parte profissional parceiro.";
 
 /** emitirnota: prepara a nota (número = última + 1, série = última ou "S", tomador = salão). */
+interface ResultadoNota {
+  ok?: boolean; dry_run?: boolean; ja_lancada?: boolean; numeronf?: number; serie?: string;
+  saida?: { codigoempresa: number; chave: number; numeronf: number; serie: string; cfop: number; tabela: number };
+  entrada?: { codigoempresa: number; codigoestab: number; chave: number; cfop: number; tabela: number; atividade_mei?: string } | null;
+  iss?: { codigocampo: number; valor: string } | null; salao?: { codigopessoafin: number; nome: string } | null; avisos?: string[];
+}
+
+/** emitirnota: lança no Questor a NFS-e já emitida no Portal Nacional (saída no MEI + entrada no salão + ISS). */
 function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
-  const [prox, setProx] = useState<{ numero: number; serie: string } | null>(null);
-  const [d, setD] = useState({ data, valor: "", obs: DISCRIMINACAO });
+  const [d, setD] = useState({ data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
+  const [sugestao, setSugestao] = useState("");
   const [erro, setErro] = useState("");
+  const [res, setRes] = useState<{ r: ResultadoNota; simulacao: boolean } | null>(null);
+  const [soSaida, setSoSaida] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   useEffect(() => {
     api<{ dados: Nota[] }>("GET", "/fiscal/lancamentos", { query: { tipo: "saida", codigoempresa: m.cod, data_inicio: "2000-01-01", data_fim: "2100-12-31" } }).then((r) => {
-      if (r.status !== 200) { setErro(mensagemErro(r)); return; }
+      if (r.status !== 200) return;
       const L = (r.dados.dados ?? []).sort((a, b) => a.datalctofis.localeCompare(b.datalctofis) || a.chave - b.chave);
       const ult = L[L.length - 1];
-      setProx({ numero: (ult?.numeronf ?? 0) + 1, serie: ult?.serienf || "S" });
-    }).catch((e) => setErro(e.message));
+      setSugestao(`última lançada: nº ${ult?.numeronf ?? "—"} série ${ult?.serienf ?? "—"} em ${dt(ult?.datalctofis)}`);
+      setD((x) => ({ ...x, serie: x.serie || ult?.serienf || "S" }));
+    }).catch(() => null);
   }, [m.cod]);
+
+  async function lancar(lancarEntrada = true) {
+    setErro(""); setRes(null);
+    const valor = d.valor.replace(/\./g, "").replace(",", ".");
+    if (!d.numero || !Number(valor) || !d.data) { setErro("Informe o número da nota emitida no portal, a data e o valor."); return; }
+    if (!confirm(`Lançar no Questor a NF ${d.numero} série ${d.serie || "(última)"} de ${dt(d.data)}, valor R$ ${d.valor}?${lancarEntrada ? "" : " (SÓ A SAÍDA, sem entrada no salão)"}`)) return;
+    setEnviando(true);
+    try {
+      const r = await api<ResultadoNota & { detail?: unknown }>("POST", "/fiscal/nota-servico", {
+        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: lancarEntrada },
+        idempotencia: `nota-mei-${m.cod}-${d.numero}-${d.serie}-${d.data}`,
+      });
+      if (r.status >= 300) {
+        setErro(mensagemErro(r));
+        // Salão é empresa mas o CNPJ do MEI não está em PESSOA: a API recusa tudo (409); dá para lançar só a saída.
+        if (r.status === 409 && /pessoa/i.test(JSON.stringify(r.dados))) setSoSaida(true);
+        return;
+      }
+      setRes({ r: r.dados, simulacao: r.dryRunForcado || !!r.dados.dry_run });
+    } catch (e) { setErro(e instanceof Error ? e.message : "Falha ao lançar."); }
+    finally { setEnviando(false); }
+  }
+
   return (
-    <Modal titulo={`Nota — ${m.cod} - ${m.razao}`} fechar={fechar} largura={720}>
+    <Modal titulo={`Nota — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
       {m.bloqueado && <div style={{ ...st.aviso, color: "var(--div)" }}>Empresa BLOQUEADA — no Access a emissão fica desabilitada.</div>}
+      <div style={st.aviso}>1) Emita a nota no <b>Emissor Nacional NFS-e</b> (o robô do Access ainda não foi migrado). 2) Informe aqui o <b>número que o portal gerou</b> e lance no Questor: saída no MEI e entrada no salão, com CFOP e ISS como no Access.</div>
       <div style={st.grid}>
         <Campo label="Tomador (salão)"><input style={st.input} readOnly value={`${m.salao} ${m.salaoCnpj}`} /></Campo>
-        <Campo label="Número"><input style={st.input} readOnly value={prox?.numero ?? (erro ? "" : "…")} /></Campo>
-        <Campo label="Série"><input style={st.input} readOnly value={prox?.serie ?? ""} /></Campo>
-        <Campo label="Data"><input type="date" style={st.input} value={d.data} onChange={(e) => setD({ ...d, data: e.target.value })} /></Campo>
-        <Campo label="Valor"><input style={st.input} value={d.valor} onChange={(e) => setD({ ...d, valor: e.target.value })} placeholder="0,00" /></Campo>
+        <Campo label="Número da NFS-e (do portal) *"><input style={st.input} value={d.numero} onChange={(e) => setD({ ...d, numero: e.target.value.replace(/\D/g, "") })} /></Campo>
+        <Campo label="Série"><input style={st.input} value={d.serie} maxLength={4} onChange={(e) => setD({ ...d, serie: e.target.value.toUpperCase() })} /></Campo>
+        <Campo label="Data *"><input type="date" style={st.input} value={d.data} onChange={(e) => setD({ ...d, data: e.target.value })} /></Campo>
+        <Campo label="Valor *"><input style={st.input} value={d.valor} onChange={(e) => setD({ ...d, valor: e.target.value })} placeholder="0,00" /></Campo>
       </div>
-      <Campo label="Discriminação do serviço"><textarea style={{ ...st.input, minHeight: 80 }} value={d.obs} onChange={(e) => setD({ ...d, obs: e.target.value })} /></Campo>
+      {sugestao && <p style={st.mut}>Referência: {sugestao}. O portal numera por conta própria — use o número da nota emitida.</p>}
+      <Campo label="Discriminação do serviço (para o portal)"><textarea style={{ ...st.input, minHeight: 70 }} value={d.obs} onChange={(e) => setD({ ...d, obs: e.target.value })} /></Campo>
+      <div style={{ ...st.bar, marginTop: 10 }}>
+        <button style={st.btnP} disabled={enviando || m.bloqueado} onClick={() => lancar(true)}>{enviando ? "Lançando…" : "Lançar no Questor"}</button>
+        <button style={st.btn} onClick={() => navigator.clipboard?.writeText(d.obs)}>Copiar discriminação</button>
+        {soSaida && <button style={st.btnD} onClick={() => lancar(false)}>Lançar só a saída</button>}
+      </div>
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
-      <div style={{ ...st.aviso, marginTop: 12 }}>
-        <b>Ainda não dá para salvar daqui.</b> No Access, “Salvar” faz duas coisas: (1) o robô (Selenium) abre o Emissor Nacional NFS-e com a senha da empresa e preenche a nota — DPS simplificada se a data é hoje, completa se é outra data; (2) lança a nota no Questor: saída no MEI (CFOP 9000002, tabela 225) e entrada no salão (CFOP 8000310 para atividades 06.01/06.02/06.05, senão 8000419; tabela 802; ISS campo 231 quando o salão é do município 563).
-        Para a web falta: a rota <code>POST /fiscal/nota-servico</code> na API (lançamento) e o robô rodando como serviço num PC da PHD. Até lá, emita pelo Access.
-      </div>
+      {res && (
+        <div style={{ ...st.card, marginTop: 10 }}>
+          <p style={{ margin: "0 0 8px", fontWeight: 600, color: res.simulacao ? "var(--text)" : "var(--ok)" }}>
+            {res.r.ja_lancada ? "Esta nota já estava lançada — nada foi gravado." : res.simulacao ? "SIMULAÇÃO (dry_run): a API executou e desfez — nada foi gravado." : "Nota lançada no Questor."}
+          </p>
+          <Tabela cab={["Lado", "Empresa", "Chave", "CFOP", "Tabela", "Detalhe"]} linhas={[
+            ["Saída (MEI)", res.r.saida?.codigoempresa ?? "", res.r.saida?.chave ?? "", res.r.saida?.cfop ?? "", res.r.saida?.tabela ?? "", `NF ${res.r.numeronf} série ${res.r.serie}`],
+            ["Entrada (salão)", res.r.entrada?.codigoempresa ?? "—", res.r.entrada?.chave ?? "", res.r.entrada?.cfop ?? "", res.r.entrada?.tabela ?? "", res.r.salao?.nome ?? ""],
+            ["ISS (campo 231)", "", "", "", "", res.r.iss ? res.r.iss.valor : "não lançado"],
+          ]} />
+          {(res.r.avisos ?? []).filter((a) => !/dry_run/i.test(a)).map((a, i) => <p key={i} style={st.mut}>• {a}</p>)}
+        </div>
+      )}
     </Modal>
   );
 }

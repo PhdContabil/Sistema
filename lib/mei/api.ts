@@ -40,6 +40,7 @@ const GRAVACAO: [string, RegExp][] = [
   ["POST", /^\/empresas\/\d+\/(encerrar|reativar)$/],
   ["POST", /^\/cadastro\/(servico-fixo|servico-variavel|empresa|pessoa-financeiro)$/],
   ["PATCH", /^\/cadastro\/(estabelecimento|socio)\/\d+\/\d+$/],
+  ["POST", /^\/fiscal\/nota-servico$/],
 ];
 
 export function rotaPermitida(metodo: string, caminho: string): boolean {
