@@ -21,7 +21,10 @@ create table if not exists lucros_distribuidos_log (
   idempotency_key text not null,
   chave_questor integer,              -- CODIGOOUTRORENDIMENTOPAGO devolvido pela API
   resposta jsonb,
-  erro text
+  erro text,
+  origem text not null default 'nucleo', -- nucleo | access (histórico importado)
+  id_access integer,                  -- ID da linha em LogOperacoes_lucros_distribuidos (SharePoint)
+  teste boolean not null default false -- lançamento de teste do Access
 );
 
 create index if not exists idx_lucros_log_empresa_comp
@@ -36,5 +39,9 @@ create index if not exists idx_lucros_log_chave
 create unique index if not exists uq_lucros_log_lancado
   on lucros_distribuidos_log (idempotency_key)
   where operacao = 'lancamento' and status = 'lancado';
+
+-- Reimportar o histórico do Access não duplica: o mesmo ID só entra uma vez.
+create unique index if not exists uq_lucros_log_access
+  on lucros_distribuidos_log (id_access) where origem = 'access';
 
 alter table lucros_distribuidos_log enable row level security;

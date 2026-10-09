@@ -454,7 +454,7 @@ export default function LucrosDistribuidos({
                 <td>{l.operacao === "lancamento" ? "1º lançamento" : l.operacao === "ajuste" ? "Alterado" : "Excluído"}</td>
                 <td>{formatBRL(l.rendimento)}</td><td>{formatBRL(l.imposto)}</td>
                 <td><span className="badge badge-soft">{l.status === "erro" ? "Erro" : l.status === "excluido" ? "Excluído depois" : "OK"}</span></td>
-                <td style={{ textAlign: "left" }}>{l.responsavel}</td>
+                <td style={{ textAlign: "left" }}>{l.responsavel}{l.origem === "access" && <> <span className="badge badge-soft">Access</span></>}{l.teste && <> <span className="badge badge-soft">teste</span></>}</td>
               </tr>
             ))}
           </tbody>
