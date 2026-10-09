@@ -3,7 +3,7 @@
 // Notas MEI (menu_mei): profissionais do salão, notas do período, Exportar Notas, Exportar DAS,
 // relatório rel_notas e a tela de emissão (emitirnota).
 import { useEffect, useMemo, useState } from "react";
-import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, mensagemErro, AVULSO, type Mei } from "./ui";
+import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, type Mei } from "./ui";
 
 interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
@@ -87,21 +87,57 @@ interface ResultadoNota {
 
 /** emitirnota: lança no Questor a NFS-e já emitida no Portal Nacional (saída no MEI + entrada no salão + ISS). */
 function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
-  const [d, setD] = useState({ data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
+  const [d, setD] = useState({ data: data > hojeISO() ? hojeISO() : data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
+  const [robo, setRobo] = useState<{ id?: string; status: string; passos: { msg: string }[]; erro?: string } | null>(null);
   const [sugestao, setSugestao] = useState("");
   const [erro, setErro] = useState("");
   const [res, setRes] = useState<{ r: ResultadoNota; simulacao: boolean } | null>(null);
   const [soSaida, setSoSaida] = useState(false);
   const [enviando, setEnviando] = useState(false);
   useEffect(() => {
-    api<{ dados: Nota[] }>("GET", "/fiscal/lancamentos", { query: { tipo: "saida", codigoempresa: m.cod, data_inicio: "2000-01-01", data_fim: "2100-12-31" } }).then((r) => {
-      if (r.status !== 200) return;
+    api<{ dados: Nota[] }>("GET", "/fiscal/lancamentos", { query: { tipo: "saida", codigoempresa: m.cod, data_inicio: new Date(Date.now() - 91 * 864e5).toISOString().slice(0, 10), data_fim: hojeISO() } }).then((r) => {
+      if (r.status !== 200) { setSugestao("não consegui consultar as últimas notas"); return; }
       const L = (r.dados.dados ?? []).sort((a, b) => a.datalctofis.localeCompare(b.datalctofis) || a.chave - b.chave);
       const ult = L[L.length - 1];
-      setSugestao(`última lançada: nº ${ult?.numeronf ?? "—"} série ${ult?.serienf ?? "—"} em ${dt(ult?.datalctofis)}`);
+      setSugestao(ult ? `última lançada: nº ${ult.numeronf} série ${ult.serienf ?? "—"} em ${dt(ult.datalctofis)}` : "nenhuma nota nos últimos 3 meses");
       setD((x) => ({ ...x, serie: x.serie || ult?.serienf || "S" }));
     }).catch(() => null);
   }, [m.cod]);
+
+  // Robô (igual ao "Salvar" do Access): abre o Emissor Nacional no PC de quem emite e preenche a nota.
+  async function preencherPortal() {
+    setErro("");
+    const valor = Number(d.valor.replace(/\./g, "").replace(",", "."));
+    if (!valor || !d.data) { setErro("Informe a data e o valor antes de preencher no portal."); return; }
+    if (!m.salaoCnpj) { setErro("Salão sem CNPJ no cadastro — não dá para preencher o tomador."); return; }
+    try { await fetch("http://localhost:3199/status"); } catch {
+      setErro("O robô não está aberto neste computador. Abra \"iniciar-robo-nucleo.bat\" na pasta MEI System e tente de novo.");
+      return;
+    }
+    setRobo({ status: "buscando senha", passos: [] });
+    const rc = await fetch(`/api/mei/nota/credenciais?cod=${m.cod}`);
+    const jc = await rc.json();
+    if (!rc.ok) { setRobo(null); setErro(jc.error ?? "Falha ao buscar a senha."); return; }
+    const r = await fetch("http://localhost:3199/preparar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: m.salaoCnpj, descricao: d.obs,
+      municipio: m.cidade, uf: m.uf, codigoativmunic: (m.ativMunic || "").split(" ")[0], creds: jc.creds,
+    }) });
+    const j = await r.json();
+    if (!r.ok) { setRobo(null); setErro(j.erro ?? "O robô recusou."); return; }
+    setRobo({ ...j, passos: [{ msg: `Login: ${jc.origem}` }, ...(j.passos ?? [])] });
+    const id = j.id;
+    const t = setInterval(async () => {
+      try {
+        const s = await (await fetch(`http://localhost:3199/jobs/${id}`)).json();
+        setRobo({ ...s, passos: [{ msg: `Login: ${jc.origem}` }, ...(s.passos ?? [])] });
+        if (!["preparando", "login", "preenchendo"].includes(s.status)) clearInterval(t);
+      } catch { clearInterval(t); }
+    }, 1500);
+  }
+  async function cancelarRobo() {
+    if (robo?.id) await fetch(`http://localhost:3199/jobs/${robo.id}/cancelar`, { method: "POST" }).catch(() => null);
+    setRobo(null);
+  }
 
   async function lancar(lancarEntrada = true) {
     setErro(""); setRes(null);
@@ -128,7 +164,7 @@ function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => v
   return (
     <Modal titulo={`Nota — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
       {m.bloqueado && <div style={{ ...st.aviso, color: "var(--div)" }}>Empresa BLOQUEADA — no Access a emissão fica desabilitada.</div>}
-      <div style={st.aviso}>1) Emita a nota no <b>Emissor Nacional NFS-e</b> (o robô do Access ainda não foi migrado). 2) Informe aqui o <b>número que o portal gerou</b> e lance no Questor: saída no MEI e entrada no salão, com CFOP e ISS como no Access.</div>
+      <div style={st.aviso}>Como no Access: <b>1)</b> o robô abre o Emissor Nacional neste computador, faz login com a senha da empresa e preenche tomador, serviço, descrição e valor — DPS simplificada se a data é hoje, completa se é outra data. Ele <b>para antes de emitir</b>: você confere e clica em Emitir no portal. <b>2)</b> Com o número que o portal gerou, lance no Questor (saída no MEI e entrada no salão).</div>
       <div style={st.grid}>
         <Campo label="Tomador (salão)"><input style={st.input} readOnly value={`${m.salao} ${m.salaoCnpj}`} /></Campo>
         <Campo label="Número da NFS-e (do portal) *"><input style={st.input} value={d.numero} onChange={(e) => setD({ ...d, numero: e.target.value.replace(/\D/g, "") })} /></Campo>
@@ -139,11 +175,20 @@ function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => v
       {sugestao && <p style={st.mut}>Referência: {sugestao}. O portal numera por conta própria — use o número da nota emitida.</p>}
       <Campo label="Discriminação do serviço (para o portal)"><textarea style={{ ...st.input, minHeight: 70 }} value={d.obs} onChange={(e) => setD({ ...d, obs: e.target.value })} /></Campo>
       <div style={{ ...st.bar, marginTop: 10 }}>
-        <button style={st.btnP} disabled={enviando || m.bloqueado} onClick={() => lancar(true)}>{enviando ? "Lançando…" : "Lançar no Questor"}</button>
+        <button style={st.btnP} disabled={m.bloqueado || (!!robo && ["buscando senha", "preparando", "login", "preenchendo"].includes(robo.status))} onClick={preencherPortal}>1) Preencher no Emissor Nacional (robô)</button>
+        {robo && <button style={st.btn} onClick={cancelarRobo}>Cancelar robô</button>}
+        <button style={st.btn} disabled={enviando || m.bloqueado} onClick={() => lancar(true)}>{enviando ? "Lançando…" : "2) Lançar no Questor"}</button>
         <button style={st.btn} onClick={() => navigator.clipboard?.writeText(d.obs)}>Copiar discriminação</button>
         {soSaida && <button style={st.btnD} onClick={() => lancar(false)}>Lançar só a saída</button>}
       </div>
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
+      {robo && (
+        <div style={{ ...st.card, marginTop: 10 }}>
+          <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Robô: {({ "buscando senha": "buscando a senha…", preparando: "abrindo o Chrome…", login: "fazendo login…", preenchendo: "preenchendo a nota…", aguardando_confirmacao: "PRONTO — confira na janela do Chrome e clique em EMITIR lá. Depois informe o número da nota acima e lance no Questor.", erro: "erro", cancelada: "cancelado", fechada: "janela do Chrome fechada" } as Record<string, string>)[robo.status] ?? robo.status}</p>
+          {robo.erro && <p style={{ color: "var(--div)", fontSize: 13 }}>{robo.erro}</p>}
+          {robo.passos.slice(-6).map((p, i) => <p key={i} style={{ ...st.mut, margin: "2px 0" }}>• {p.msg}</p>)}
+        </div>
+      )}
       {res && (
         <div style={{ ...st.card, marginTop: 10 }}>
           <p style={{ margin: "0 0 8px", fontWeight: 600, color: res.simulacao ? "var(--text)" : "var(--ok)" }}>

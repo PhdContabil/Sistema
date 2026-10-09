@@ -8,7 +8,8 @@
 //  - serviço 72/102 no Salão herda o último valor fixo que o salão já paga; os demais vêm da tabela de preço;
 //  - 72/102 => SERVICOFIXO mensal; demais => SERVICOVARIAVEL (data = início dos trabalhos).
 import { useCallback, useEffect, useState } from "react";
-import { api, ler, st, Campo, Mensagem, Tabela, Modal, brl, dt, hojeISO, resumoGravacao, mensagemErro, AVULSO, type Mei } from "./ui";
+import "@/components/apps/paralegal/controle.css";
+import { api, ler, brl, dt, hojeISO, resumoGravacao, mensagemErro, AVULSO, type Mei } from "./ui";
 import { gerarDocPdfOS, nomeArquivoPdfOS, pdfParaBase64 } from "@/components/apps/paralegal/os-pdf";
 
 interface ClienteFin { codigocliente: number; nome: string; inscrfederal?: string; codigoempresa?: number | null; tipologradouro?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; nomemunic?: string | null; siglaestado?: string | null; cep?: string | null; telefone?: string | null; email?: string | null }
@@ -94,35 +95,45 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
     setMsg(r.ok ? { ok: true, texto: `E-mail enviado para ${(j.para ?? []).join(", ")}.` } : { ok: false, texto: j.error ?? "Falha ao enviar." });
   }
 
-  if (editando) return <FormOS os={editando === "nova" ? null : editando} mei={mei} servicos={servicos} fechar={() => { setEditando(null); carregar(); }} />;
-
   return (
-    <div style={st.card}>
-      <div style={st.bar}>
-        <Campo label="Pesquisar"><input style={{ ...st.input, minWidth: 240 }} value={f.q} onChange={(e) => { setPagina(0); setF({ ...f, q: e.target.value }); }} placeholder="Razão social, CNPJ…" /></Campo>
-        <Campo label="Data de"><input type="date" style={st.input} value={f.de} onChange={(e) => { setPagina(0); setF({ ...f, de: e.target.value }); }} /></Campo>
-        <Campo label="até"><input type="date" style={st.input} value={f.ate} onChange={(e) => { setPagina(0); setF({ ...f, ate: e.target.value }); }} /></Campo>
-        <Campo label="Tipo"><select style={st.input} value={f.tipo} onChange={(e) => { setPagina(0); setF({ ...f, tipo: e.target.value }); }}><option value="">Todos</option>{TIPOS.map((t) => <option key={t}>{t}</option>)}</select></Campo>
-        <button style={st.btnP} onClick={() => setEditando("nova")}>Gerar O.S.</button>
-        <span style={st.mut}>{total} O.S.</span>
+    <div className="controle-app">
+      <div className="pl-toolbar">
+        <input type="text" placeholder="Buscar por razão social, CNPJ…" value={f.q} onChange={(e) => { setPagina(0); setF({ ...f, q: e.target.value }); }} />
+        <input type="date" title="Data de" value={f.de} onChange={(e) => { setPagina(0); setF({ ...f, de: e.target.value }); }} style={{ maxWidth: 160 }} />
+        <input type="date" title="Data até" value={f.ate} onChange={(e) => { setPagina(0); setF({ ...f, ate: e.target.value }); }} style={{ maxWidth: 160 }} />
+        <select value={f.tipo} onChange={(e) => { setPagina(0); setF({ ...f, tipo: e.target.value }); }} style={{ maxWidth: 170 }}><option value="">Todos os tipos</option>{TIPOS.map((t) => <option key={t}>{t}</option>)}</select>
+        <button className="pl-btn" onClick={carregar}>↻ Atualizar</button>
+        <button className="pl-btn primary" onClick={() => setEditando("nova")}>+ Nova OS</button>
       </div>
-      {erro && <div style={{ ...st.aviso, color: "var(--div)" }}>{erro}</div>}
-      <Mensagem msg={msg} />
-      <Tabela cab={["O.S.", "Data", "Empresa", "Tipo", "Cód. Questor", "Cód. fin.", "Total", ""]}
-        linhas={lista.map((o) => [o.nos, dt(o.data), o.razao, o.tipo, o.questor ?? "", o.codigo ?? "", brl(Number(o.valortt ?? 0)),
-          <span key="b" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button style={st.btn} onClick={() => setEditando(o)}>Editar</button>
-            <button style={st.btn} onClick={() => baixarPdf(o, "financeiro")}>PDF Fin.</button>
-            <button style={st.btn} onClick={() => baixarPdf(o, "geral")}>PDF Geral</button>
-            <button style={st.btn} onClick={() => email(o, "financeiro")}>E-mail Fin.</button>
-            <button style={st.btn} onClick={() => email(o, "geral")}>E-mail Geral</button>
-          </span>])} />
-      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
-        <button style={st.btn} disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>‹ Anterior</button>
-        <span style={st.mut}>Página {pagina + 1} de {Math.max(1, Math.ceil(total / POR_PAGINA))}</span>
-        <button style={st.btn} disabled={(pagina + 1) * POR_PAGINA >= total} onClick={() => setPagina((p) => p + 1)}>Próxima ›</button>
+      {erro && <div className="pl-banner error">{erro}</div>}
+      {msg && <div className={`pl-banner${msg.ok ? "" : " error"}`}>{msg.texto}</div>}
+      <div className="pl-table-wrap">
+        <table className="pl-grid">
+          <thead><tr><th style={{ whiteSpace: "nowrap" }}>Nº OS</th><th>Tipo</th><th>Razão social</th><th>CNPJ/CPF</th><th>Data</th><th>Cód. Questor</th><th>Cód. fin.</th><th>Total</th><th></th></tr></thead>
+          <tbody>
+            {lista.map((o) => (
+              <tr key={o.nos}>
+                <td>{o.nos}</td><td>{o.tipo}</td><td>{o.razao}</td><td style={{ whiteSpace: "nowrap" }}>{o.cnpj}</td><td>{dt(o.data)}</td>
+                <td>{o.questor ?? ""}</td><td>{o.codigo ?? ""}</td><td>{brl(Number(o.valortt ?? 0))}</td>
+                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="pl-btn" onClick={() => setEditando(o)}>Editar</button>{" "}
+                  <button className="pl-btn" onClick={() => baixarPdf(o, "financeiro")}>PDF Fin.</button>{" "}
+                  <button className="pl-btn" onClick={() => baixarPdf(o, "geral")}>PDF Geral</button>{" "}
+                  <button className="pl-btn" onClick={() => email(o, "financeiro")}>✉ Fin.</button>{" "}
+                  <button className="pl-btn" onClick={() => email(o, "geral")}>✉ Geral</button>
+                </td>
+              </tr>
+            ))}
+            {!lista.length && <tr><td colSpan={9} style={{ textAlign: "center", padding: 20 }}>Nenhuma O.S.</td></tr>}
+          </tbody>
+        </table>
       </div>
-      <p style={st.mut}>Excluir O.S. só com perfil de administrador da API (como combinado).</p>
+      <div className="pl-toolbar" style={{ marginTop: 10 }}>
+        <button className="pl-btn" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>‹ Anterior</button>
+        <span style={{ fontSize: 13 }}>Página {pagina + 1} de {Math.max(1, Math.ceil(total / POR_PAGINA))} · {total} O.S.</span>
+        <button className="pl-btn" disabled={(pagina + 1) * POR_PAGINA >= total} onClick={() => setPagina((p) => p + 1)}>Próxima ›</button>
+      </div>
+      {editando && <FormOS os={editando === "nova" ? null : editando} mei={mei} servicos={servicos} fechar={() => { setEditando(null); carregar(); }} />}
     </div>
   );
 }
@@ -219,62 +230,89 @@ function FormOS({ os, mei, servicos, fechar }: { os: OS | null; mei: Mei[]; serv
     } finally { setSalvando(false); }
   }
 
-  const input = (k: keyof OS, label: string, tipo = "text") => (
-    <Campo label={label}><input type={tipo} style={st.input} value={String(o[k] ?? "")} onChange={(e) => set(k, e.target.value)} /></Campo>
+  const campo = (k: keyof OS, label: string, tipo = "text", somenteLeitura = false) => (
+    <label style={{ marginBottom: 0 }}><span>{label}</span><input type={tipo} readOnly={somenteLeitura} value={String(o[k] ?? "")} onChange={(e) => set(k, e.target.value)} /></label>
   );
+  const grade = (n: number, filhos: React.ReactNode) => <div style={{ display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 10, marginBottom: 10 }}>{filhos}</div>;
 
   return (
-    <div style={st.card}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <button style={st.btn} onClick={fechar}>← Voltar</button>
-        <h3 style={{ margin: 0, fontSize: 16 }}>{nova ? "Nova O.S." : `O.S. ${o.nos}`}</h3>
-      </div>
-      {nova && (
-        <div style={{ marginBottom: 12 }}>
-          <Campo label="Cliente (cadastro financeiro)"><input style={{ ...st.input, minWidth: 320 }} value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome (3+ letras), CPF/CNPJ ou código financeiro" /></Campo>
-          {achados.length > 0 && <Tabela cab={["Cód. fin.", "Nome", "CPF/CNPJ", "Cód. empresa", ""]} linhas={achados.slice(0, 20).map((c) => [c.codigocliente, c.nome, c.inscrfederal ?? "", c.codigoempresa ?? "—", <button key="s" style={st.btn} onClick={() => escolherCliente(c)}>Selecionar</button>])} />}
+    <div className="pl-modal-bg">
+      <div className="pl-modal" style={{ maxWidth: 760 }}>
+        <button type="button" className="pl-modal-fechar" title="Fechar" aria-label="Fechar" disabled={salvando} onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) fechar(); }}>×</button>
+        <h3>{nova ? "Nova OS" : `Editar OS ${o.nos}`}</h3>
+
+        {nova && (
+          <>
+            <h3 style={{ fontSize: 12 }}>Cliente (cadastro financeiro)</h3>
+            <div style={{ position: "relative", marginBottom: 16 }}>
+              <label style={{ marginBottom: 0 }}><span>Buscar cliente</span>
+                <input value={busca} placeholder="Nome (3+ letras), CPF/CNPJ ou código financeiro…" onChange={(e) => setBusca(e.target.value)} />
+              </label>
+              {achados.length > 0 && (
+                <div className="pl-dropdown" style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid var(--pl-border)", borderRadius: 8, maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 20px rgba(0,0,0,.12)" }}>
+                  {achados.slice(0, 30).map((c) => (
+                    <div key={c.codigocliente} onClick={() => escolherCliente(c)} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--pl-border)" }}>
+                      <strong>{c.nome}</strong>
+                      <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{c.inscrfederal ?? ""} · Cód. financeiro {c.codigocliente}{c.codigoempresa ? ` · Questor ${c.codigoempresa}` : " · Avulso"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <h3 style={{ fontSize: 12 }}>Dados da OS — Nº {o.nos ?? "(gerado ao salvar)"}</h3>
+        {grade(3, <>
+          {campo("data", "Data", "date")}
+          <label style={{ marginBottom: 0 }}><span>Tipo</span><select value={o.tipo ?? ""} onChange={(e) => set("tipo", e.target.value)}>{[...new Set([...TIPOS, o.tipo ?? ""])].filter(Boolean).map((t) => <option key={t}>{t}</option>)}</select></label>
+          {campo("datainicio", "Início dos trabalhos *", "date")}
+        </>)}
+        {grade(3, <>{campo("codigo", "Cód. financeiro", "text", true)}{campo("questor", "Cód. empresa (Questor)", "text", true)}{campo("cnpj", "CNPJ/CPF")}</>)}
+        <label><span>Razão social</span><input value={o.razao ?? ""} onChange={(e) => set("razao", e.target.value)} /></label>
+        {m && <p className="pl-cnae-selecionado" style={{ marginTop: -4 }}>Salão: {m.salao}{m.bloqueado ? " · BLOQUEADO" : ""} · {m.ativo ? "empresa ativa" : "empresa inativa"}</p>}
+
+        <h3 style={{ fontSize: 12 }}>Endereço</h3>
+        {grade(3, <>{campo("logradouro", "Logradouro")}{campo("numero", "Número")}{campo("complemento", "Complemento")}</>)}
+        {grade(3, <>{campo("bairro", "Bairro")}{campo("cidade", "Cidade *")}{campo("cep", "CEP")}</>)}
+
+        <h3 style={{ fontSize: 12 }}>Contato</h3>
+        {grade(3, <>{campo("contato", "Contato")}{campo("email", "E-mail")}{campo("telefone", "Telefone")}</>)}
+        {grade(3, <>{campo("celular", "Celular")}{campo("indicacao", "Indicação")}{campo("tratadocom", "Tratado com")}</>)}
+        {grade(3, <>{campo("usuario", "Colaborador")}</>)}
+
+        <h3 style={{ fontSize: 12 }}>Serviços</h3>
+        {nova && (
+          <div style={{ display: "flex", gap: 16, fontSize: 13, marginBottom: 10 }}>
+            <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="radio" style={{ width: "auto" }} checked={cobranca === "salao"} disabled={!podeSalao} onChange={() => setCobranca("salao")} /> Cobrar no Salão{podeSalao ? ` (${codSalao})` : " (indisponível)"}</span>
+            <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="radio" style={{ width: "auto" }} checked={cobranca === "profissional"} onChange={() => setCobranca("profissional")} /> Cobrar no Profissional{o.codigo ? ` (${o.codigo})` : ""}</span>
+          </div>
+        )}
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 10, marginBottom: 8 }}>
+            <label style={{ marginBottom: 0 }}><span>Serviço {i + 1}{i === 0 && nova ? " *" : ""}</span>
+              <select value={String(servs[i] ?? "")} onChange={(e) => escolherServico(i, e.target.value)}>
+                <option value="">—</option>
+                {servs[i] && !servicos.some((s) => String(s.codigo) === String(servs[i])) && <option value={String(servs[i])}>{servs[i]}</option>}
+                {servicos.filter((s) => /^MEI\s*-/i.test(s.descricao) || FIXOS.includes(s.codigo) || String(s.codigo) === String(servs[i])).map((s) => <option key={s.codigo} value={s.codigo}>{s.codigo} - {s.descricao}{FIXOS.includes(s.codigo) ? " (mensal)" : ""}</option>)}
+              </select>
+            </label>
+            <label style={{ marginBottom: 0 }}><span>Valor</span><input value={vals[i] ?? ""} onChange={(e) => set(`valorserv${i + 1}` as keyof OS, num(e.target.value))} /></label>
+          </div>
+        ))}
+        <label><span>Valor total</span><input value={brl(totalCalc)} readOnly disabled /></label>
+        <label><span>Observações gerais <small style={{ opacity: 0.7 }}>(só no PDF Geral)</small></span><textarea rows={2} value={o.obsgerais ?? ""} onChange={(e) => set("obsgerais", e.target.value)} /></label>
+        <label><span>Observações financeiro <small style={{ opacity: 0.7 }}>(só no PDF Financeiro)</small></span><textarea rows={2} value={o.obs ?? ""} onChange={(e) => set("obs", e.target.value)} /></label>
+
+        {msg && <div className={`pl-banner${msg.ok ? "" : " error"}`} style={{ marginTop: 8 }}>{msg.texto}</div>}
+        {linhas.map((l, i) => <p key={i} style={{ fontSize: 13, margin: "4px 0" }}>{l}</p>)}
+        {salvo && <div className="pl-banner" style={{ marginTop: 8 }}>O.S. {salvo.nos} salva. Feche e use a lista para imprimir ou mandar por e-mail ao Financeiro.</div>}
+
+        <div className="pl-toolbar" style={{ marginTop: 8 }}>
+          <button className="pl-btn" onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) fechar(); }} disabled={salvando}>Cancelar</button>
+          <button className="pl-btn primary" onClick={salvar} disabled={salvando}>{salvando ? "Salvando…" : "Salvar"}</button>
         </div>
-      )}
-      <div style={st.grid}>
-        {input("data", "Data", "date")}
-        <Campo label="Tipo"><select style={st.input} value={o.tipo ?? ""} onChange={(e) => set("tipo", e.target.value)}>{[...new Set([...TIPOS, o.tipo ?? ""])].filter(Boolean).map((t) => <option key={t}>{t}</option>)}</select></Campo>
-        {input("datainicio", "Início dos trabalhos *", "date")}
-        <Campo label="Cód. financeiro"><input style={st.input} readOnly value={o.codigo ?? ""} /></Campo>
-        <Campo label="Cód. Questor"><input style={st.input} readOnly value={o.questor ?? ""} /></Campo>
-        {input("razao", "Razão social")}{input("cnpj", "CNPJ/CPF")}
-        {input("logradouro", "Logradouro")}{input("numero", "Número")}{input("complemento", "Complemento")}{input("bairro", "Bairro")}
-        {input("cidade", "Cidade *")}{input("cep", "CEP")}
-        {input("contato", "Contato")}{input("email", "E-mail")}{input("telefone", "Telefone")}{input("celular", "Celular")}
-        {input("indicacao", "Indicação")}{input("tratadocom", "Tratado com")}{input("usuario", "Colaborador")}
       </div>
-      {m && <p style={st.mut}>Salão: <b>{m.salao}</b>{m.bloqueado ? " · BLOQUEADO" : ""} · {m.ativo ? "empresa ativa" : "empresa inativa"}</p>}
-      {nova && (
-        <div style={st.bar}>
-          <label style={{ fontSize: 13 }}><input type="radio" checked={cobranca === "salao"} disabled={!podeSalao} onChange={() => setCobranca("salao")} /> Cobrar no Salão{podeSalao ? ` (${codSalao})` : " (indisponível)"}</label>
-          <label style={{ fontSize: 13 }}><input type="radio" checked={cobranca === "profissional"} onChange={() => setCobranca("profissional")} /> Cobrar no Profissional{o.codigo ? ` (${o.codigo})` : ""}</label>
-        </div>
-      )}
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 10, marginBottom: 8 }}>
-          <Campo label={`Serviço ${i + 1}${i === 0 && nova ? " *" : ""}`}>
-            <select style={st.input} value={String(servs[i] ?? "")} onChange={(e) => escolherServico(i, e.target.value)}>
-              <option value="">—</option>
-              {servs[i] && !servicos.some((s) => String(s.codigo) === String(servs[i])) && <option value={String(servs[i])}>{servs[i]}</option>}
-              {servicos.filter((s) => /^MEI\s*-/i.test(s.descricao) || FIXOS.includes(s.codigo) || String(s.codigo) === String(servs[i])).map((s) => <option key={s.codigo} value={s.codigo}>{s.codigo} - {s.descricao}{FIXOS.includes(s.codigo) ? " (mensal)" : ""}</option>)}
-            </select>
-          </Campo>
-          <Campo label="Valor"><input style={st.input} value={vals[i] ?? ""} onChange={(e) => set(`valorserv${i + 1}` as keyof OS, num(e.target.value))} /></Campo>
-        </div>
-      ))}
-      <p style={{ fontWeight: 600 }}>Total: {brl(totalCalc)}</p>
-      <Campo label="Observações (financeiro)"><textarea style={{ ...st.input, minHeight: 60 }} value={o.obs ?? ""} onChange={(e) => set("obs", e.target.value)} /></Campo>
-      <Campo label="Observações gerais"><textarea style={{ ...st.input, minHeight: 60 }} value={o.obsgerais ?? ""} onChange={(e) => set("obsgerais", e.target.value)} /></Campo>
-      <div style={{ ...st.bar, marginTop: 10 }}>
-        <button style={st.btnP} disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "Salvar O.S."}</button>
-      </div>
-      <Mensagem msg={msg} />
-      {linhas.map((l, i) => <p key={i} style={{ fontSize: 13, margin: "4px 0" }}>{l}</p>)}
-      {salvo && <Modal titulo={`O.S. ${salvo.nos} salva`} fechar={fechar}><p>Volte à lista para imprimir ou mandar por e-mail (no Access, a O.S. nova vai por e-mail para o Financeiro).</p><button style={st.btnP} onClick={fechar}>Ir para a lista</button></Modal>}
     </div>
   );
 }

@@ -834,6 +834,13 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
                 <label>Data de emissão do RG
                   <input type="date" value={s.datarg} onChange={(e) => editarSocio(s.id, { datarg: e.target.value })} />
                 </label>
+                <label>Faz declaração de pessoa física com a PHD?
+                  <select value={s.declarafisicaescrit} onChange={(e) => editarSocio(s.id, { declarafisicaescrit: e.target.value })}>
+                    <option value="">selecione</option>
+                    <option value="1">Sim</option>
+                    <option value="0">Não</option>
+                  </select>
+                </label>
                 <label>Nome da mãe
                   <input type="text" required value={s.nomemae} onChange={(e) => editarSocio(s.id, { nomemae: e.target.value })} />
                 </label>
@@ -845,13 +852,6 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
                 </label>
                 <label>CPF do pai
                   <input type="text" required placeholder="000.000.000-00" maxLength={14} value={s.cpfpai} onChange={(e) => editarSocio(s.id, { cpfpai: mascararCpf(e.target.value) })} />
-                </label>
-                <label>Faz declaração de pessoa física com a PHD?
-                  <select value={s.declarafisicaescrit} onChange={(e) => editarSocio(s.id, { declarafisicaescrit: e.target.value })}>
-                    <option value="">selecione</option>
-                    <option value="1">Sim</option>
-                    <option value="0">Não</option>
-                  </select>
                 </label>
                 <label>Quantidade de cotas
                   <input type="number" min={0} step={1} value={s.quantcotas} onChange={(e) => editarSocio(s.id, { quantcotas: e.target.value })} />
