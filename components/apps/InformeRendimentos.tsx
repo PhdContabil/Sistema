@@ -246,13 +246,13 @@ export default function InformeRendimentos({
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>
                 <td>{l.competencia.split("-").reverse().join("/")}</td>
-                <td>{ROTULO_TIPO[l.tipo as TipoInforme] ?? l.tipo}</td>
-                <td>{l.regime === "real" ? "Real" : "Presumido"}</td>
+                <td>{l.tipo === "historico" ? "Histórico" : (ROTULO_TIPO[l.tipo as TipoInforme] ?? l.tipo)}</td>
+                <td>{l.regime === "real" ? "Real" : l.regime === "presumido" ? "Presumido" : "—"}</td>
                 <td>{formatBRL(l.rendimento)}</td><td>{formatBRL(l.demais_receitas)}</td>
                 <td>{formatBRL(l.dividendos)}</td><td>{formatBRL(l.retencao)}</td>
-                <td>{formatBRL(l.pis)}</td><td>{formatBRL(l.cofins)}</td>
+                <td>{l.origem === "access" ? "—" : formatBRL(l.pis)}</td><td>{l.origem === "access" ? "—" : formatBRL(l.cofins)}</td>
                 <td><span className="badge badge-soft">{l.status === "lancado" ? "Lançado" : "Erro"}</span></td>
-                <td style={{ textAlign: "left" }}>{l.responsavel}</td>
+                <td style={{ textAlign: "left" }}>{l.responsavel}{l.origem === "access" && <> <span className="badge badge-soft">Access</span></>}{l.teste && <> <span className="badge badge-soft">teste</span></>}</td>
               </tr>
             ))}
           </tbody>

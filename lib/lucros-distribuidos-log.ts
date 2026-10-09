@@ -33,6 +33,8 @@ export interface LinhaLogLucro {
   responsavel: string;
   chave_questor: number | null;
   erro: string | null;
+  origem?: "nucleo" | "access";
+  teste?: boolean;
 }
 
 /**
@@ -107,7 +109,7 @@ export async function marcarExcluido(codigoempresa: number, chaveQuestor: number
   if (error) console.error("[lucros-distribuidos/log]", error.message);
 }
 
-export async function listarLog(limite = 100): Promise<LinhaLogLucro[]> {
+export async function listarLog(limite = 2000): Promise<LinhaLogLucro[]> {
   const sb = db();
   if (!sb) return [];
   const { data, error } = await sb

@@ -11,7 +11,7 @@ create table if not exists informe_rendimentos_log (
   nome_empresa text,
   competencia text not null,          -- "AAAA-MM"
   tipo text not null default 'rendimentos', -- rendimentos | alugueis | ganho-capital
-  regime text not null,               -- presumido | real
+  regime text,                        -- presumido | real (nulo no histórico do Access, que não guardava o regime)
   rendimento numeric(14,2) not null default 0,
   demais_receitas numeric(14,2) not null default 0,
   dividendos numeric(14,2) not null default 0,
@@ -22,7 +22,10 @@ create table if not exists informe_rendimentos_log (
   responsavel text not null,          -- e-mail de quem lançou
   idempotency_key text not null,
   resposta jsonb,                     -- o que a API do Questor devolveu (linhas e SEQ)
-  erro text
+  erro text,
+  origem text not null default 'nucleo', -- nucleo | access (histórico importado)
+  id_access integer,                  -- ID da linha em LogOperacoes (SharePoint), só no histórico
+  teste boolean not null default false -- lançamento de teste do Access
 );
 
 create index if not exists idx_informe_log_empresa_comp
@@ -33,5 +36,9 @@ create index if not exists idx_informe_log_criado_em
 -- Um mesmo lançamento (mesma chave) só pode constar como "lancado" uma vez.
 create unique index if not exists uq_informe_log_lancado
   on informe_rendimentos_log (idempotency_key) where status = 'lancado';
+
+-- Reimportar o histórico do Access não duplica: o mesmo ID só entra uma vez.
+create unique index if not exists uq_informe_log_access
+  on informe_rendimentos_log (id_access) where origem = 'access';
 
 alter table informe_rendimentos_log enable row level security;

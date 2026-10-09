@@ -22,7 +22,7 @@ export interface LinhaLog {
   nome_empresa: string | null;
   competencia: string;
   tipo: string;
-  regime: string;
+  regime: string | null;
   rendimento: number;
   demais_receitas: number;
   dividendos: number;
@@ -32,6 +32,8 @@ export interface LinhaLog {
   status: "lancado" | "erro";
   responsavel: string;
   erro: string | null;
+  origem?: "nucleo" | "access";
+  teste?: boolean;
 }
 
 /**
@@ -84,7 +86,7 @@ export async function registrarLog(l: {
   if (error) console.error("[informe-rendimentos/log]", error.message);
 }
 
-export async function listarLog(limite = 100): Promise<LinhaLog[]> {
+export async function listarLog(limite = 1000): Promise<LinhaLog[]> {
   const sb = db();
   if (!sb) return [];
   const { data, error } = await sb
