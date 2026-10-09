@@ -2,7 +2,7 @@ import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 
 /** Nome do app em lib/modules.ts — é a chave dos overrides de permissão. */
-export const APP_INFORME = "Informe de Rendimentos";
+export const APP_INFORME = "Sistema Contábil";
 
 /**
  * O informe grava no fiscal do cliente: fica com quem tem o módulo Contábil

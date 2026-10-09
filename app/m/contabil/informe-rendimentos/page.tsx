@@ -15,8 +15,8 @@ export default async function Page() {
   const email = await exigirContabil();
   if (!email) {
     return (
-      <Workspace moduleId="contabil" appName="Informe de Rendimentos">
-        <AcessoNegado moduloNome="Informe de Rendimentos" />
+      <Workspace moduleId="contabil" appName="Sistema Contábil">
+        <AcessoNegado moduloNome="Sistema Contábil" />
       </Workspace>
     );
   }
@@ -41,11 +41,11 @@ export default async function Page() {
   try { log = await listarLog(100); } catch { /* o log é acessório: a tela funciona sem ele */ }
 
   return (
-    <Workspace moduleId="contabil" appName="Informe de Rendimentos">
+    <Workspace moduleId="contabil" appName="Sistema Contábil">
       <div className="app-head">
         <div className="app-ic mono" style={{ background: m.color }}>IR</div>
         <div>
-          <h1>Informe de Rendimentos</h1>
+          <h1>Sistema Contábil</h1>
           <div className="desc">
             Rendimentos, aluguéis e ganho de capital lançados no Questor Fiscal. O regime (Presumido ou Real) vem do Tareffa.
           </div>
