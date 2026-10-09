@@ -12,7 +12,26 @@ const WRITE_KEY = process.env.QUESTOR_WRITE_KEY ?? "";
 const MEI_KEY = process.env.MEI_API_KEY ?? "";
 const CRED_KEY = process.env.MEI_CRED_KEY ?? "";
 
-export const gravacaoLiberada = () => process.env.MEI_GRAVACAO_LIBERADA === "sim";
+/**
+ * Trava por recurso. MEI_GRAVACAO_LIBERADA = "sim" libera tudo; ou uma lista separada por vírgula,
+ * ex.: "cadastro,os". Recursos: cadastro (cliente mensal/avulso), os, nota, tarefas, senhas,
+ * ficha (alterar dados/encerrar/reativar), contratos.
+ */
+export function gravacaoLiberada(recurso?: string): boolean {
+  const v = (process.env.MEI_GRAVACAO_LIBERADA ?? "").toLowerCase().split(",").map((s) => s.trim());
+  if (v.includes("sim")) return true;
+  return !!recurso && v.includes(recurso);
+}
+
+/** Qual recurso da trava uma rota da API usa. */
+export function recursoDaRota(caminho: string): string {
+  if (/^\/cadastro\/(empresa|pessoa-financeiro)$/.test(caminho)) return "cadastro";
+  if (/^\/mei\/os/.test(caminho) || /^\/cadastro\/servico-(fixo|variavel)$/.test(caminho)) return "os";
+  if (/^\/fiscal\/nota-servico$/.test(caminho)) return "nota";
+  if (/^\/mei\/credenciais/.test(caminho)) return "senhas";
+  if (/^\/cadastro\/(estabelecimento|socio)\//.test(caminho) || /^\/empresas\/\d+\//.test(caminho)) return "ficha";
+  return "tarefas";
+}
 
 // Rotas permitidas (lista branca). Método + regex do caminho.
 const LEITURA: RegExp[] = [
@@ -25,6 +44,7 @@ const LEITURA: RegExp[] = [
   /^\/lookups(\/[a-z-]+)?$/,
   /^\/empresas\/(cadastro|contatos|existe|historico|cnae|servicos-detalhe)$/,
   /^\/cadastro\/(proximo-codigo|faixas)$/,
+  /^\/mei\/os(\/\d+)?$/,
 ];
 const GRAVACAO: [string, RegExp][] = [
   ["POST", /^\/mei\/tarefas$/],
@@ -41,6 +61,8 @@ const GRAVACAO: [string, RegExp][] = [
   ["POST", /^\/cadastro\/(servico-fixo|servico-variavel|empresa|pessoa-financeiro)$/],
   ["PATCH", /^\/cadastro\/(estabelecimento|socio)\/\d+\/\d+$/],
   ["POST", /^\/fiscal\/nota-servico$/],
+  ["POST", /^\/mei\/os$/],
+  ["PATCH", /^\/mei\/os\/\d+$/],
 ];
 
 export function rotaPermitida(metodo: string, caminho: string): boolean {
@@ -76,7 +98,7 @@ export async function chamar(
   const url = new URL(BASE + caminho);
   for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
   let dryRunForcado = false;
-  if (metodo !== "GET" && !gravacaoLiberada()) {
+  if (metodo !== "GET" && !gravacaoLiberada(recursoDaRota(caminho))) {
     url.searchParams.set("dry_run", "true");
     dryRunForcado = true;
   }
@@ -109,4 +131,5 @@ export async function chamar(
 
 export const chavesConfiguradas = () => ({
   leitura: !!KEY, questor: !!WRITE_KEY, mei: !!MEI_KEY, credenciais: !!CRED_KEY, gravacao: gravacaoLiberada(),
+  liberados: ["cadastro", "os", "nota", "tarefas", "senhas", "ficha", "contratos"].filter((r) => gravacaoLiberada(r)),
 });

@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: d?.mei ? "Sistema MEI restrito à T.I." : "Sem acesso ao Paralegal." }, { status: 403 });
   }
   // Trava do Sistema MEI (MEI_GRAVACAO_LIBERADA != "sim" => só simula).
-  const simulacaoMei = !!d.mei && !gravacaoLiberada();
+  const simulacaoMei = !!d.mei && !gravacaoLiberada("cadastro");
 
   const faltando = OBRIGATORIOS.filter((k) => d[k] === undefined || d[k] === null || String(d[k]).trim() === "");
   if (faltando.length) {

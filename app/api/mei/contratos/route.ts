@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     ? ["codigoempresa", "codigoestab", "codigosocio", "modelo_codigo", "contrato", "data_emissao", "data_inicio", "data_assinado"]
     : ["modelo", "conteudo", "ativo"];
   const dados = Object.fromEntries(Object.entries(b.dados ?? {}).filter(([k]) => permitidos.includes(k)));
-  if (!gravacaoLiberada()) return NextResponse.json({ simulacao: true, acao: b.acao, tabela, dados: { ...dados, codigo: b.codigo } });
+  if (!gravacaoLiberada("contratos")) return NextResponse.json({ simulacao: true, acao: b.acao, tabela, dados: { ...dados, codigo: b.codigo } });
   const db = supabaseAdmin().from(tabela);
   const agora = new Date().toISOString();
   const r = b.acao === "criar"

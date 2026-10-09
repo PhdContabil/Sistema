@@ -208,7 +208,7 @@ interface CadastroEmpresaTabProps {
 export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }: CadastroEmpresaTabProps = {}) {
   const ehMei = modo === "mei";
   const [dados, setDados] = useState(ehMei ? { ...DADOS_VAZIO, codigonaturjurid: "2135", tipoenquad: "4" } : { ...DADOS_VAZIO });
-  const [meiExtra, setMeiExtra] = useState({ salao: "", usuarioNacional: "", senhaNacional: "" });
+  const [meiExtra, setMeiExtra] = useState({ salao: "", usuarioNacional: "", senhaNacional: "", ativmunic: "" });
   const [socios, setSocios] = useState<Socio[]>(() => [novoSocio(1)]);
   const socioIdRef = useRef(1);
 
@@ -513,6 +513,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
   }
 
   function validarAntesDeEnviar(): string | null {
+    // Access (formCadastroQuestor): atividade municipal obrigatória no MEI — define CFOP e ISS das notas.
+    if (ehMei && !meiExtra.ativmunic.trim()) return "Informe a atividade municipal (ex.: 00000601 cabeleireiro, 00008494, 00008516, 00008567).";
     if (!cnaeSelecionado) return "Selecione um CNAE na busca antes de continuar.";
     // A API do Questor recusa (422) CEP que não tenha exatamente 8 dígitos.
     if (somenteDigitos(dados.cependerestab).length !== 8) return "Informe o CEP da empresa completo (8 dígitos).";
@@ -534,7 +536,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
     const r = await fetch("/api/paralegal/cadastro-empresa", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dados: ehMei ? { ...dadosMontados, apelidoestab: meiExtra.salao || "53278" } : dadosMontados, dry_run: dryRun, confirmar, idempotency_key: dryRun ? undefined : idempotencyKeyRef.current, mei: ehMei }),
+      body: JSON.stringify({ dados: ehMei ? { ...dadosMontados, apelidoestab: meiExtra.salao || "53278", codigoativmunic: meiExtra.ativmunic.trim() } : dadosMontados, dry_run: dryRun, confirmar, idempotency_key: dryRun ? undefined : idempotencyKeyRef.current, mei: ehMei }),
     });
     const corpo = await r.json();
     return { ok: r.ok, corpo };
@@ -642,6 +644,17 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
               <>
                 <label>Salão (cód. financeiro — vazio = avulso 53278)
                   <input type="text" value={meiExtra.salao} onChange={(e) => setMeiExtra({ ...meiExtra, salao: e.target.value.replace(/\D/g, "") })} />
+                </label>
+                <label>Atividade municipal (obrigatória)
+                  <input type="text" list="mei-ativmunic" placeholder="ex.: 00000601" value={meiExtra.ativmunic} onChange={(e) => setMeiExtra({ ...meiExtra, ativmunic: e.target.value.replace(/[^\d.]/g, "") })} />
+                  <datalist id="mei-ativmunic">
+                    <option value="00000601">06.01 Barbearia, cabeleireiros, manicuros, pedicuros</option>
+                    <option value="00008494">8494 (São Paulo) — 06.01</option>
+                    <option value="00008516">8516 (São Paulo) — 06.02 Esteticistas</option>
+                    <option value="00008567">8567 (São Paulo) — 06.05</option>
+                    <option value="00000602">06.02 Esteticistas, tratamento de pele</option>
+                    <option value="00000605">06.05 Centros de emagrecimento, spa</option>
+                  </datalist>
                 </label>
                 <label>Portal Nacional — usuário
                   <input type="text" value={meiExtra.usuarioNacional} onChange={(e) => setMeiExtra({ ...meiExtra, usuarioNacional: e.target.value })} />

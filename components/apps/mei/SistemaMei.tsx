@@ -25,7 +25,7 @@ const MENU: { grupo: string; itens: string[] }[] = [
   { grupo: "Migração", itens: ["Situação"] },
 ];
 
-interface Chaves { leitura: boolean; questor: boolean; mei: boolean; credenciais: boolean; gravacao: boolean }
+interface Chaves { leitura: boolean; questor: boolean; mei: boolean; credenciais: boolean; gravacao: boolean; liberados?: string[] }
 
 export default function SistemaMei() {
   const [tela, setTela] = useState("Tarefas");
@@ -55,7 +55,7 @@ export default function SistemaMei() {
     <div>
       {chaves && !chaves.gravacao && (
         <div style={{ ...st.aviso, borderLeft: "4px solid var(--accent)" }}>
-          <b>Modo validação:</b> nenhuma tela grava de verdade. Toda gravação vai para a API com <code>dry_run</code> (ela executa e desfaz) ou é simulada. Para liberar, configurar <code>MEI_GRAVACAO_LIBERADA=sim</code> no Vercel.
+          <b>Modo validação:</b> {chaves.liberados?.length ? <>só grava de verdade: <b>{chaves.liberados.join(", ")}</b>. O resto</> : "nenhuma tela grava de verdade; tudo"} vai para a API com <code>dry_run</code> (ela executa e desfaz) ou é simulado. A trava fica em <code>MEI_GRAVACAO_LIBERADA</code> no Vercel ("sim" ou lista: cadastro, os, nota, tarefas, senhas, ficha, contratos).
         </div>
       )}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>

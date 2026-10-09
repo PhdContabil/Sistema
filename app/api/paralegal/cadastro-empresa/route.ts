@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: body?.mei ? "Sistema MEI restrito à T.I." : "Sem acesso ao Paralegal." }, { status: 403 });
   }
   // Trava do Sistema MEI: enquanto MEI_GRAVACAO_LIBERADA != "sim", o "Confirmar" vira simulação.
-  const simulacaoMei = !!body.mei && !gravacaoLiberada() && !body.dry_run;
+  const simulacaoMei = !!body.mei && !gravacaoLiberada("cadastro") && !body.dry_run;
   if (simulacaoMei) { body.dry_run = true; body.confirmar = false; }
 
   if (!body?.dados) {
