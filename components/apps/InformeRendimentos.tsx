@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
 import { ROTULO_TIPO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
+import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
 import type { LinhaLog } from "@/lib/informe-rendimentos-log";
 
 interface Resultado {
@@ -56,6 +57,9 @@ export default function InformeRendimentos({
   const [log, setLog] = useState<LinhaLog[]>(logInicial);
   const [filtroLog, setFiltroLog] = useState("");
   const logVisivel = log.filter((l) => !filtroLog.trim() || `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.responsavel}`.toLowerCase().includes(filtroLog.trim().toLowerCase()));
+  const [paginaLog, setPaginaLog] = useState(0);
+  const paginaAtual = Math.min(paginaLog, Math.max(0, Math.ceil(logVisivel.length / LINHAS_POR_PAGINA) - 1));
+  const logPagina = logVisivel.slice(paginaAtual * LINHAS_POR_PAGINA, (paginaAtual + 1) * LINHAS_POR_PAGINA);
 
   // "1415 · NOME" (valor do datalist) ou só o código digitado.
   const codigo = useMemo(() => {
@@ -232,7 +236,7 @@ export default function InformeRendimentos({
       )}
 
       <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de lançamentos ({logVisivel.length})</h3>
-      <input style={{ ...entrada, margin: "0 0 8px", maxWidth: 360 }} placeholder="Filtrar por empresa, sócio ou responsável" value={filtroLog} onChange={(e) => setFiltroLog(e.target.value)} />
+      <input style={{ ...entrada, margin: "0 0 8px", maxWidth: 360 }} placeholder="Filtrar por empresa, sócio ou responsável" value={filtroLog} onChange={(e) => { setFiltroLog(e.target.value); setPaginaLog(0); }} />
       <div className="table-wrap">
         <table className="grid">
           <thead>
@@ -244,7 +248,7 @@ export default function InformeRendimentos({
           </thead>
           <tbody>
             {logVisivel.length === 0 && <tr><td colSpan={13} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
-            {logVisivel.map((l) => (
+            {logPagina.map((l) => (
               <tr key={l.id} title={l.erro ?? undefined}>
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>
@@ -261,6 +265,7 @@ export default function InformeRendimentos({
           </tbody>
         </table>
       </div>
+      <PaginacaoLog total={logVisivel.length} pagina={paginaAtual} onPagina={setPaginaLog} />
     </>
   );
 }
