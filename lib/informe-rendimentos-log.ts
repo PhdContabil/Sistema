@@ -21,6 +21,7 @@ export interface LinhaLog {
   codigoempresa: number;
   nome_empresa: string | null;
   competencia: string;
+  tipo: string;
   regime: string;
   rendimento: number;
   demais_receitas: number;
@@ -40,7 +41,7 @@ export interface LinhaLog {
  */
 export function chaveIdempotencia(e: EntradaInforme, regime: string): string {
   const v = [e.rendimento, e.demaisReceitas, e.dividendos, e.retencao].map((n) => n.toFixed(2)).join("|");
-  const h = createHash("sha1").update(`${e.codigoempresa}|${e.competencia}|${regime}|${v}`).digest("hex").slice(0, 20);
+  const h = createHash("sha1").update(`${e.tipo}|${e.codigoempresa}|${e.competencia}|${regime}|${v}`).digest("hex").slice(0, 20);
   return `informe:${e.codigoempresa}:${e.competencia}:${h}`;
 }
 
@@ -65,6 +66,7 @@ export async function registrarLog(l: {
     codigoempresa: l.entrada.codigoempresa,
     nome_empresa: l.nomeEmpresa,
     competencia: l.entrada.competencia,
+    tipo: l.entrada.tipo,
     regime: l.plano.regime,
     rendimento: l.entrada.rendimento,
     demais_receitas: l.entrada.demaisReceitas,

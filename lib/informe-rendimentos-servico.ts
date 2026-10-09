@@ -3,7 +3,7 @@
 // Compartilhado por /calcular e /lancar para os dois decidirem igual.
 
 import {
-  InformeInvalido, montarPlano, validarEntrada, ROTULO_REGIME,
+  InformeInvalido, montarPlano, validarEntrada, ROTULO_REGIME, ehTipoInforme,
   type EntradaInforme, type PlanoInforme, type Regime,
 } from "./informe-rendimentos";
 import { obterRegimeEmpresa } from "./tareffa-regime";
@@ -47,6 +47,7 @@ export async function prepararInforme(corpo: Record<string, unknown>): Promise<I
   let entrada: EntradaInforme;
   try {
     entrada = validarEntrada({
+      tipo: ehTipoInforme(corpo.tipo) ? corpo.tipo : "rendimentos",
       codigoempresa: Number(corpo.codigoempresa),
       competencia: String(corpo.competencia ?? ""),
       rendimento: numero(corpo.rendimento),
@@ -82,7 +83,13 @@ export async function prepararInforme(corpo: Record<string, unknown>): Promise<I
     );
   }
 
-  const plano = montarPlano(entrada, r.regime);
+  let plano: PlanoInforme;
+  try {
+    plano = montarPlano(entrada, r.regime);
+  } catch (e) {
+    if (e instanceof InformeInvalido) throw new ErroInforme(e.message, 422);
+    throw e;
+  }
   const realLiberado = process.env.INFORME_LUCRO_REAL_LIBERADO === "1";
   const bloqueado = r.regime === "real" && !realLiberado;
 

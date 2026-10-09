@@ -10,6 +10,7 @@ create table if not exists informe_rendimentos_log (
   codigoempresa integer not null,
   nome_empresa text,
   competencia text not null,          -- "AAAA-MM"
+  tipo text not null default 'rendimentos', -- rendimentos | alugueis | ganho-capital
   regime text not null,               -- presumido | real
   rendimento numeric(14,2) not null default 0,
   demais_receitas numeric(14,2) not null default 0,

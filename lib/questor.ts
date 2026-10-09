@@ -569,6 +569,7 @@ export async function lancarInformeRendimentos(
     {
       codigoempresa: plano.codigoempresa,
       competencia: plano.competencia,
+      tipo: plano.tipo,
       regime: plano.regime,
       ecf: plano.ecf.map(({ rotulo: _r, ...l }) => l),
       f100: plano.f100.map(({ rotulo: _r, ...l }) => l),

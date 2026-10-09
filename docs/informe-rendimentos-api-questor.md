@@ -24,6 +24,7 @@ Corpo (campos em minúsculas, nomes das colunas do Questor):
   "codigoempresa": 1415,
   "competencia": "2026-08",
   "regime": "real",
+  "tipo": "rendimentos",
   "usuario": "julia@phdcontabil.com.br",
   "ecf": [
     {
@@ -47,6 +48,16 @@ Corpo (campos em minúsculas, nomes das colunas do Questor):
 ```
 
 `seq` **não** vem no corpo: a API calcula.
+
+`tipo` ∈ {`rendimentos`, `alugueis`, `ganho-capital`} é informativo (vai para o
+log da API): os três usam **este mesmo endpoint**, porque no Access os
+formulários de Rendimentos, Aluguéis e Ganho de Capital gravavam as mesmas
+tabelas, com os mesmos códigos. No ganho de capital só há linha de ECF
+(operação 45058).
+
+> Correção em relação ao Access: nos formulários de Aluguéis e Ganho de Capital
+> o `SEQ` da ECF era fixo em 1 (só o de Rendimentos calculava `max+1`). Aqui o
+> `seq` é sempre calculado pela API.
 
 ## O que a API deve fazer
 
@@ -116,4 +127,6 @@ Também é preciso rodar `docs/informe-rendimentos-migration.sql` no Supabase
 ## Fora desta primeira entrega
 
 - PDF do relatório (`rel_rendimento`, hoje salvo em `T:\Robo Tareffa\`).
-- Telas de aluguel, ganho de capital e lucros distribuídos (mesmo padrão).
+- Tela de lucros distribuídos (usa `OUTRORENDIMENTOPAGO` e
+  `INFORMERENDIMENTOOUTREND`; terá endpoint próprio). O campo "Observação" sai.
+- Aluguéis no Lucro Real: o Núcleo recusa (sem regra de CST/conta definida).

@@ -96,7 +96,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Lançamentos, balancetes, demonstrações e SPED Contábil.",
     apps: [
       { name: "Consolidação Departamental", desc: "O que cada empresa movimentou x o que foi contabilizado, mês a mês.", href: "/m/contabil/consolidacao" },
-      { name: "Informe de Rendimentos", desc: "Receitas financeiras, dividendos e IRRF lançados no Questor Fiscal, por regime (Presumido e Real).", href: "/m/contabil/informe-rendimentos" },
+      { name: "Informe de Rendimentos", desc: "Rendimentos, aluguéis e ganho de capital lançados no Questor Fiscal, por regime (Presumido e Real).", href: "/m/contabil/informe-rendimentos" },
       { name: "Lançamentos", desc: "Registro de partidas dobradas e lotes." },
       { name: "Balancete", desc: "Verificação de saldos e conferência." },
       { name: "Balanço Patrimonial", desc: "Demonstrações contábeis do período." },

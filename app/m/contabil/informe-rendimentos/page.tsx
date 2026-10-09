@@ -47,7 +47,7 @@ export default async function Page() {
         <div>
           <h1>Informe de Rendimentos</h1>
           <div className="desc">
-            Receitas financeiras, dividendos e IRRF lançados no Questor Fiscal. O regime (Presumido ou Real) vem do Tareffa.
+            Rendimentos, aluguéis e ganho de capital lançados no Questor Fiscal. O regime (Presumido ou Real) vem do Tareffa.
           </div>
         </div>
       </div>

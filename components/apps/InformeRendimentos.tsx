@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
-import type { PlanoInforme } from "@/lib/informe-rendimentos";
+import { ROTULO_TIPO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
 import type { LinhaLog } from "@/lib/informe-rendimentos-log";
 
 interface Resultado {
@@ -41,6 +41,7 @@ export default function InformeRendimentos({
   logInicial: LinhaLog[];
   erroServidor: string | null;
 }) {
+  const [tipo, setTipo] = useState<TipoInforme>("rendimentos");
   const [busca, setBusca] = useState("");
   const [competencia, setCompetencia] = useState(mesAnterior());
   const [rendimento, setRendimento] = useState("");
@@ -63,7 +64,7 @@ export default function InformeRendimentos({
   const nomeEscolhida = empresas.find((e) => e.codigo === codigo)?.nome ?? "";
 
   function corpo() {
-    return { codigoempresa: codigo, competencia, rendimento, demaisReceitas: demais, dividendos, retencao };
+    return { tipo, codigoempresa: codigo, competencia, rendimento, demaisReceitas: demais, dividendos, retencao };
   }
 
   async function chamar(url: string, body: object) {
@@ -117,6 +118,17 @@ export default function InformeRendimentos({
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", alignItems: "end" }}>
+          <label style={campo}>
+            Tipo
+            <select style={entrada} value={tipo}
+              onChange={(e) => {
+                const t = e.target.value as TipoInforme;
+                setTipo(t); setRes(null); setErro(null); setOk(null);
+                if (t === "ganho-capital") { setRendimento(""); setDividendos(""); setRetencao(""); }
+              }}>
+              {(Object.keys(ROTULO_TIPO) as TipoInforme[]).map((t) => <option key={t} value={t}>{ROTULO_TIPO[t]}</option>)}
+            </select>
+          </label>
           <label style={{ ...campo, gridColumn: "span 2" }}>
             Empresa (código ou nome)
             <input style={entrada} list="informe-empresas" placeholder="Ex.: 1415" value={busca}
@@ -134,10 +146,10 @@ export default function InformeRendimentos({
         {codigo && <div style={{ fontSize: 12, color: "var(--muted, #667)", marginTop: 6 }}>{codigo} · {nomeEscolhida}</div>}
 
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", marginTop: 14 }}>
-          {money(rendimento, setRendimento, "Rendimentos (receita financeira)")}
-          {money(demais, setDemais, "Demais receitas")}
-          {money(dividendos, setDividendos, "Dividendos")}
-          {money(retencao, setRetencao, "Retenção (IRRF)")}
+          {tipo !== "ganho-capital" && money(rendimento, setRendimento, tipo === "alugueis" ? "Aluguéis (rendimento)" : "Rendimentos (receita financeira)")}
+          {money(demais, setDemais, tipo === "ganho-capital" ? "Ganho de capital (demais receitas)" : "Demais receitas")}
+          {tipo !== "ganho-capital" && money(dividendos, setDividendos, "Dividendos")}
+          {tipo !== "ganho-capital" && money(retencao, setRetencao, "Retenção (IRRF)")}
         </div>
 
         <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
@@ -155,6 +167,7 @@ export default function InformeRendimentos({
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
             <strong>{res.nomeEmpresa ?? nomeEscolhida}</strong>
+            <span className="badge badge-soft">{ROTULO_TIPO[res.plano.tipo]}</span>
             <span className="badge badge-soft">{res.regimeDescricao}</span>
             <span style={{ fontSize: 12, color: "var(--muted, #667)" }}>regime lido do Tareffa</span>
           </div>
@@ -221,18 +234,19 @@ export default function InformeRendimentos({
         <table className="grid">
           <thead>
             <tr>
-              <th style={{ textAlign: "left" }}>Quando</th><th style={{ textAlign: "left" }}>Empresa</th><th>Comp.</th><th>Regime</th>
+              <th style={{ textAlign: "left" }}>Quando</th><th style={{ textAlign: "left" }}>Empresa</th><th>Comp.</th><th>Tipo</th><th>Regime</th>
               <th>Rendim.</th><th>Demais</th><th>Dividendos</th><th>Retenção</th><th>PIS</th><th>COFINS</th>
               <th>Status</th><th style={{ textAlign: "left" }}>Responsável</th>
             </tr>
           </thead>
           <tbody>
-            {log.length === 0 && <tr><td colSpan={12} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
+            {log.length === 0 && <tr><td colSpan={13} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
             {log.map((l) => (
               <tr key={l.id} title={l.erro ?? undefined}>
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>
                 <td>{l.competencia.split("-").reverse().join("/")}</td>
+                <td>{ROTULO_TIPO[l.tipo as TipoInforme] ?? l.tipo}</td>
                 <td>{l.regime === "real" ? "Real" : "Presumido"}</td>
                 <td>{formatBRL(l.rendimento)}</td><td>{formatBRL(l.demais_receitas)}</td>
                 <td>{formatBRL(l.dividendos)}</td><td>{formatBRL(l.retencao)}</td>

@@ -7,7 +7,7 @@ import {
 } from "./informe-rendimentos.ts";
 
 const base: EntradaInforme = {
-  codigoempresa: 1415, competencia: "2026-08",
+  tipo: "rendimentos", codigoempresa: 1415, competencia: "2026-08",
   rendimento: 10.85, demaisReceitas: 0, dividendos: 0, retencao: 0,
 };
 
@@ -99,4 +99,35 @@ test("validação", () => {
   assert.throws(() => validarEntrada({ ...base, rendimento: -1 }), InformeInvalido);
   assert.throws(() => validarEntrada({ ...base, rendimento: Number.NaN }), InformeInvalido);
   assert.throws(() => validarEntrada({ ...base, rendimento: 0 }), InformeInvalido);
+});
+
+test("ganho de capital: só demais receitas (ECF 45058), sem F100, nos dois regimes", () => {
+  const e: EntradaInforme = { ...base, tipo: "ganho-capital", rendimento: 99, dividendos: 99, retencao: 99, demaisReceitas: 1500 };
+  for (const r of ["presumido", "real"] as const) {
+    const p = montarPlano(e, r);
+    assert.equal(p.f100.length, 0);
+    assert.equal(p.ecf.length, 1);
+    assert.equal(p.ecf[0].codigooperacaofis, 45058);
+    assert.equal(p.ecf[0].valoroutraoperacaofis, 1500);
+  }
+});
+
+test("ganho de capital: exige valor", () => {
+  assert.throws(() => montarPlano({ ...base, tipo: "ganho-capital", rendimento: 10, demaisReceitas: 0 }, "presumido"), InformeInvalido);
+});
+
+test("aluguéis no Presumido: igual ao rendimento do Access (CST 8, conta 2859)", () => {
+  const p = montarPlano({ ...base, tipo: "alugueis" }, "presumido");
+  assert.equal(p.tipo, "alugueis");
+  assert.equal(p.ecf[0].codigooperacaofis, 45040);
+  assert.equal(p.f100[0].cst, 8);
+  assert.equal(p.f100[0].contactb, 2859);
+});
+
+test("aluguéis no Real: recusa (regra não definida)", () => {
+  assert.throws(() => montarPlano({ ...base, tipo: "alugueis" }, "real"), InformeInvalido);
+});
+
+test("tipo inválido", () => {
+  assert.throws(() => validarEntrada({ ...base, tipo: "outro" as never }), InformeInvalido);
 });

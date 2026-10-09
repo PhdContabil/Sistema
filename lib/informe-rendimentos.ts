@@ -12,6 +12,25 @@
 
 export type Regime = "presumido" | "real";
 
+/**
+ * Os três formulários do Access (Informe de Rendimentos, Aluguéis e Ganho de
+ * Capital) faziam os MESMOS lançamentos no Questor — só mudava o título e, no
+ * ganho de capital, o único campo usado era "Demais receitas". Aqui viram um só
+ * motor com o tipo registrado no log (no Access os três caíam no mesmo
+ * LogOperacoes, sem como distinguir).
+ */
+export type TipoInforme = "rendimentos" | "alugueis" | "ganho-capital";
+
+export const ROTULO_TIPO: Record<TipoInforme, string> = {
+  rendimentos: "Informe de Rendimentos",
+  alugueis: "Aluguéis",
+  "ganho-capital": "Ganho de Capital",
+};
+
+export function ehTipoInforme(v: unknown): v is TipoInforme {
+  return v === "rendimentos" || v === "alugueis" || v === "ganho-capital";
+}
+
 /** Lê a descrição do regime do Tareffa. Devolve null para o que não é suportado. */
 export function regimeDeDescricao(desc: string | null | undefined): Regime | null {
   const t = (desc ?? "")
@@ -30,6 +49,7 @@ export const ROTULO_REGIME: Record<Regime, string> = {
 // ------------------------------------------------------------------ entrada
 
 export interface EntradaInforme {
+  tipo: TipoInforme;
   codigoempresa: number;
   /** YYYY-MM */
   competencia: string;
@@ -84,6 +104,7 @@ export interface LancamentoF100 {
 }
 
 export interface PlanoInforme {
+  tipo: TipoInforme;
   regime: Regime;
   codigoempresa: number;
   competencia: string;
@@ -151,6 +172,7 @@ export function validarEntrada(e: EntradaInforme, hoje = new Date()): EntradaInf
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(e.competencia)) {
     throw new InformeInvalido("Competência inválida (use AAAA-MM).");
   }
+  if (!ehTipoInforme(e.tipo)) throw new InformeInvalido("Tipo de informe inválido.");
   const atual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
   if (e.competencia > atual) throw new InformeInvalido("A competência não pode ser futura.");
 
@@ -163,6 +185,12 @@ export function validarEntrada(e: EntradaInforme, hoje = new Date()): EntradaInf
     const v = Number(e[k] ?? 0);
     if (!Number.isFinite(v) || v < 0) throw new InformeInvalido(`${nome} inválido.`);
     (out as unknown as Record<string, number>)[k] = reais(centavos(v));
+  }
+  if (out.tipo === "ganho-capital") {
+    // No Access o formulário só tinha "Demais receitas"; o resto do código era
+    // cópia do rendimento e nunca rodava.
+    out.rendimento = 0; out.dividendos = 0; out.retencao = 0;
+    if (out.demaisReceitas <= 0) throw new InformeInvalido("Informe o valor do ganho de capital (maior que zero).");
   }
   if (out.rendimento + out.demaisReceitas + out.dividendos + out.retencao <= 0) {
     throw new InformeInvalido("Informe ao menos um valor maior que zero.");
@@ -183,6 +211,12 @@ export function validarEntrada(e: EntradaInforme, hoje = new Date()): EntradaInf
  */
 export function montarPlano(entrada: EntradaInforme, regime: Regime): PlanoInforme {
   const e = validarEntrada(entrada);
+  if (e.tipo === "alugueis" && regime === "real") {
+    // O Access lançava aluguel como o rendimento do Presumido (CST 08, conta
+    // 2859). Para o Real não há regra definida (CST, conta contábil, incidência):
+    // melhor recusar do que gravar errado na escrituração.
+    throw new InformeInvalido("Aluguéis em Lucro Real: a regra (CST e conta contábil) ainda não foi definida. Nada foi calculado.");
+  }
   const dataEcf = primeiroDiaDoMes(e.competencia);
   const dataF100 = ultimoDiaDoMes(e.competencia);
   const avisos: string[] = [];
@@ -246,7 +280,7 @@ export function montarPlano(entrada: EntradaInforme, regime: Regime): PlanoInfor
   }
 
   return {
-    regime, codigoempresa: e.codigoempresa, competencia: e.competencia, ecf, f100,
+    tipo: e.tipo, regime, codigoempresa: e.codigoempresa, competencia: e.competencia, ecf, f100,
     totais: { pis, cofins, base: baseTrib }, avisos,
   };
 }
