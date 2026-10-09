@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
 import { ISENCOES, sugerirIrrf, type PlanoLucro } from "@/lib/lucros-distribuidos";
+import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
+import FiltrosLog, { FILTRO_VAZIO, aplicarFiltro, type FiltroLog } from "./FiltrosLog";
 import type { LinhaLogLucro } from "@/lib/lucros-distribuidos-log";
 import type { LucroLancadoQuestor } from "@/lib/questor";
 
@@ -70,8 +72,11 @@ export default function LucrosDistribuidos({
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [log, setLog] = useState<LinhaLogLucro[]>(logInicial);
-  const [filtroLog, setFiltroLog] = useState("");
-  const logVisivel = log.filter((l) => !filtroLog.trim() || `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.nome_socio ?? ""} ${l.responsavel}`.toLowerCase().includes(filtroLog.trim().toLowerCase()));
+  const [filtroLog, setFiltroLog] = useState<FiltroLog>(FILTRO_VAZIO);
+  const logVisivel = aplicarFiltro(log, filtroLog, (l) => `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.nome_socio ?? ""} ${l.responsavel}`, (l) => l.operacao);
+  const [paginaLog, setPaginaLog] = useState(0);
+  const paginaAtual = Math.min(paginaLog, Math.max(0, Math.ceil(logVisivel.length / LINHAS_POR_PAGINA) - 1));
+  const logPagina = logVisivel.slice(paginaAtual * LINHAS_POR_PAGINA, (paginaAtual + 1) * LINHAS_POR_PAGINA);
 
   // Lançamentos já gravados no Questor (de onde se ajusta e se exclui).
   const [inicio, setInicio] = useState(`${new Date().getFullYear()}-01-01`);
@@ -437,7 +442,9 @@ export default function LucrosDistribuidos({
       )}
 
       <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de operações ({logVisivel.length})</h3>
-      <input style={{ ...entrada, margin: "0 0 8px", maxWidth: 360 }} placeholder="Filtrar por empresa, sócio ou responsável" value={filtroLog} onChange={(e) => setFiltroLog(e.target.value)} />
+      <FiltrosLog filtro={filtroLog} onChange={(f) => { setFiltroLog(f); setPaginaLog(0); }} rotuloTipo="Operação" placeholder="Buscar por empresa, sócio ou responsável"
+        opcoesTipo={[{ valor: "lancamento", rotulo: "1º lançamento" }, { valor: "ajuste", rotulo: "Alterado" }, { valor: "exclusao", rotulo: "Excluído" }]}
+        total={log.length} exibidas={logVisivel.length} />
       <div className="table-wrap">
         <table className="grid">
           <thead>
@@ -448,7 +455,7 @@ export default function LucrosDistribuidos({
           </thead>
           <tbody>
             {logVisivel.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center" }}>Nenhuma operação ainda.</td></tr>}
-            {logVisivel.map((l) => (
+            {logPagina.map((l) => (
               <tr key={l.id} title={l.erro ?? undefined}>
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>
@@ -463,6 +470,7 @@ export default function LucrosDistribuidos({
           </tbody>
         </table>
       </div>
+      <PaginacaoLog total={logVisivel.length} pagina={paginaAtual} onPagina={setPaginaLog} />
     </>
   );
 }
