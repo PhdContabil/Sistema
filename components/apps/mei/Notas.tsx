@@ -100,7 +100,8 @@ function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => v
       const L = (r.dados.dados ?? []).sort((a, b) => a.datalctofis.localeCompare(b.datalctofis) || a.chave - b.chave);
       const ult = L[L.length - 1];
       setSugestao(ult ? `última lançada: nº ${ult.numeronf} série ${ult.serienf ?? "—"} em ${dt(ult.datalctofis)}` : "nenhuma nota nos últimos 3 meses");
-      setD((x) => ({ ...x, serie: x.serie || ult?.serienf || "S" }));
+      // Como no Access: número = última nota + 1 e série = a da última (pode ajustar se o portal gerar outro).
+      setD((x) => ({ ...x, serie: x.serie || ult?.serienf || "S", numero: x.numero || String((ult?.numeronf ?? 0) + 1) }));
     }).catch(() => null);
   }, [m.cod]);
 
