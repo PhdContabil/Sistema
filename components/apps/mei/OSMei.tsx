@@ -225,6 +225,19 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
     } finally { setSalvando(false); }
   }
 
+  async function excluir() {
+    if (!o.nos) return;
+    if (!confirm(`Excluir a O.S. ${o.nos} (${o.razao})? A cobrança já lançada no Questor não é desfeita.`)) return;
+    setSalvando(true);
+    try {
+      const r = await api("DELETE", `/mei/os/${o.nos}`);
+      const x = resumoGravacao(r);
+      if (r.status === 403) { setMsg({ ok: false, texto: "A API só permite excluir O.S. com a chave de administrador (MEI_ADMIN_KEY), que ainda não está configurada no Núcleo." }); return; }
+      setMsg(x);
+      if (x.ok && !r.dryRunForcado) fechar();
+    } finally { setSalvando(false); }
+  }
+
   const campo = (k: keyof OS, label: string, tipo = "text", somenteLeitura = false) => (
     <label style={{ marginBottom: 0 }}><span>{label}</span><input type={tipo} readOnly={somenteLeitura} value={String(o[k] ?? "")} onChange={(e) => set(k, e.target.value)} /></label>
   );
@@ -305,6 +318,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
 
         <div className="pl-toolbar" style={{ marginTop: 8 }}>
           <button className="pl-btn" onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) fechar(); }} disabled={salvando}>Cancelar</button>
+          {!nova && <button className="pl-btn danger" onClick={excluir} disabled={salvando}>Excluir</button>}
           {(!nova || salvo) && (
             <>
               <button className="pl-btn" onClick={() => baixarPdf({ ...o, ...(salvo ?? {}) }, "financeiro")}>PDF Financeiro</button>

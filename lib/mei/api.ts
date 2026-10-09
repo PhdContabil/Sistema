@@ -106,6 +106,9 @@ export async function chamar(
   if (metodo !== "GET" && !gravacaoLiberada(recursoDaRota(caminho))) {
     url.searchParams.set("dry_run", "true");
     dryRunForcado = true;
+  } else if (metodo === "DELETE" && caminho.startsWith("/mei/os/")) {
+    // Na API o DELETE de O.S. é simulação por padrão; liberado, apaga de verdade.
+    url.searchParams.set("dry_run", "false");
   }
   const h = cabecalhos(metodo, caminho, opts.usuario ?? null);
   if (opts.idempotencia) h["Idempotency-Key"] = opts.idempotencia;
