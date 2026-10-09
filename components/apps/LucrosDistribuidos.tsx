@@ -70,6 +70,8 @@ export default function LucrosDistribuidos({
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [log, setLog] = useState<LinhaLogLucro[]>(logInicial);
+  const [filtroLog, setFiltroLog] = useState("");
+  const logVisivel = log.filter((l) => !filtroLog.trim() || `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.nome_socio ?? ""} ${l.responsavel}`.toLowerCase().includes(filtroLog.trim().toLowerCase()));
 
   // Lançamentos já gravados no Questor (de onde se ajusta e se exclui).
   const [inicio, setInicio] = useState(`${new Date().getFullYear()}-01-01`);
@@ -434,7 +436,8 @@ export default function LucrosDistribuidos({
         </div>
       )}
 
-      <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de operações</h3>
+      <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de operações ({logVisivel.length})</h3>
+      <input style={{ ...entrada, margin: "0 0 8px", maxWidth: 360 }} placeholder="Filtrar por empresa, sócio ou responsável" value={filtroLog} onChange={(e) => setFiltroLog(e.target.value)} />
       <div className="table-wrap">
         <table className="grid">
           <thead>
@@ -444,8 +447,8 @@ export default function LucrosDistribuidos({
             </tr>
           </thead>
           <tbody>
-            {log.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center" }}>Nenhuma operação ainda.</td></tr>}
-            {log.map((l) => (
+            {logVisivel.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center" }}>Nenhuma operação ainda.</td></tr>}
+            {logVisivel.map((l) => (
               <tr key={l.id} title={l.erro ?? undefined}>
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>

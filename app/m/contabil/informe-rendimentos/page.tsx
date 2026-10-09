@@ -40,8 +40,8 @@ export default async function Page() {
       erro = e instanceof Error ? e.message : "Falha ao consultar a API Questor.";
     }
   }
-  try { log = await listarLog(100); } catch { /* o log é acessório: a tela funciona sem ele */ }
-  try { logLucros = await listarLogLucros(100); } catch { /* idem */ }
+  try { log = await listarLog(1000); } catch { /* o log é acessório: a tela funciona sem ele */ }
+  try { logLucros = await listarLogLucros(2000); } catch { /* idem */ }
 
   return (
     <Workspace moduleId="contabil" appName="Sistema Contábil">

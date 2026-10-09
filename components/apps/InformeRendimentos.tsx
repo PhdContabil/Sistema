@@ -54,6 +54,8 @@ export default function InformeRendimentos({
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [log, setLog] = useState<LinhaLog[]>(logInicial);
+  const [filtroLog, setFiltroLog] = useState("");
+  const logVisivel = log.filter((l) => !filtroLog.trim() || `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.responsavel}`.toLowerCase().includes(filtroLog.trim().toLowerCase()));
 
   // "1415 · NOME" (valor do datalist) ou só o código digitado.
   const codigo = useMemo(() => {
@@ -229,7 +231,8 @@ export default function InformeRendimentos({
         </div>
       )}
 
-      <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Últimos lançamentos</h3>
+      <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de lançamentos ({logVisivel.length})</h3>
+      <input style={{ ...entrada, margin: "0 0 8px", maxWidth: 360 }} placeholder="Filtrar por empresa, sócio ou responsável" value={filtroLog} onChange={(e) => setFiltroLog(e.target.value)} />
       <div className="table-wrap">
         <table className="grid">
           <thead>
@@ -240,8 +243,8 @@ export default function InformeRendimentos({
             </tr>
           </thead>
           <tbody>
-            {log.length === 0 && <tr><td colSpan={13} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
-            {log.map((l) => (
+            {logVisivel.length === 0 && <tr><td colSpan={13} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
+            {logVisivel.map((l) => (
               <tr key={l.id} title={l.erro ?? undefined}>
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>
