@@ -8,6 +8,7 @@ import type { ConsolidacaoResponse, SocioItem } from "./contabil";
 import type { PerfilResponse } from "./dissidio-tipos";
 import type { FuncionariosAtivosResponse } from "./trabalhista";
 import type { PlanoInforme } from "./informe-rendimentos";
+import type { PlanoLucro, PlanoAjuste } from "./lucros-distribuidos";
 
 const BASE = process.env.QUESTOR_API_URL ?? "https://phdfibra.dyndns.org";
 const KEY = process.env.QUESTOR_API_KEY;
@@ -575,6 +576,115 @@ export async function lancarInformeRendimentos(
       f100: plano.f100.map(({ rotulo: _r, ...l }) => l),
       usuario: opts.usuario,
     },
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Lucros Distribuídos (escrita) — módulo Contábil.
+//
+// Contrato PROPOSTO, ainda sem implementação na API do Questor: ver
+// docs/lucros-distribuidos-api-questor.md. Enquanto a API não tiver os
+// endpoints, a resposta é 404 e a tela mostra isso em português, sem gravar.
+// ---------------------------------------------------------------------------
+
+async function enviar<T>(
+  method: "PATCH" | "DELETE",
+  path: string,
+  body: unknown,
+  opts?: { idempotencyKey?: string }
+): Promise<{ ok: boolean; status: number; corpo: T }> {
+  if (!WRITE_KEY) {
+    throw new QuestorError("QUESTOR_WRITE_KEY não configurada no servidor. Defina a variável de ambiente (chave de escrita, separada da QUESTOR_API_KEY de leitura).", 500);
+  }
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Write-Key": WRITE_KEY,
+      ...(opts?.idempotencyKey ? { "Idempotency-Key": opts.idempotencyKey } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+  let corpo: T;
+  try {
+    corpo = (await res.json()) as T;
+  } catch {
+    corpo = {} as T;
+  }
+  return { ok: res.ok, status: res.status, corpo };
+}
+
+export interface RespostaLucroQuestor {
+  ok?: boolean;
+  dry_run?: boolean;
+  /** CODIGOOUTRORENDIMENTOPAGO definido pela API. */
+  chave?: number;
+  /** SEQ da linha da DP (INFORMERENDIMENTOOUTREND). */
+  seq?: number;
+  avisos?: string[];
+  repetido?: boolean;
+  detail?: string;
+  erro?: string;
+}
+
+/** Um lançamento existente no Questor (OUTRORENDIMENTOPAGO + sócio + empresa). */
+export interface LucroLancadoQuestor {
+  codigoempresa: number;
+  nomeestab: string | null;
+  chave: number;
+  codigosocio: number;
+  nomesocio: string | null;
+  competencia: string;
+  datalctofis: string;
+  valorrendpago: number;
+  basecalcirrf: number | null;
+  valorimposto: number | null;
+  tipoisencao: number | null;
+}
+
+export async function listarLucrosDistribuidos(params: {
+  codigoempresa?: number; inicio: string; fim: string;
+}): Promise<LucroLancadoQuestor[]> {
+  const qs = new URLSearchParams({ inicio: params.inicio, fim: params.fim });
+  if (params.codigoempresa) qs.set("codigoempresa", String(params.codigoempresa));
+  const r = await get<{ dados?: LucroLancadoQuestor[] }>(`/contabil/lucros-distribuidos?${qs.toString()}`);
+  return r.dados ?? [];
+}
+
+export function lancarLucroDistribuido(
+  plano: PlanoLucro,
+  opts: { dryRun: boolean; idempotencyKey: string; usuario: string }
+) {
+  return post<RespostaLucroQuestor>(
+    `/contabil/lucros-distribuidos?dry_run=${opts.dryRun ? "true" : "false"}`,
+    { fiscal: plano.fiscal, dp: plano.dp, usuario: opts.usuario },
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}
+
+export function ajustarLucroDistribuido(
+  plano: PlanoAjuste,
+  opts: { dryRun: boolean; idempotencyKey: string; usuario: string }
+) {
+  const e = plano.entrada;
+  return enviar<RespostaLucroQuestor>(
+    "PATCH",
+    `/contabil/lucros-distribuidos/${e.codigoempresa}/${e.chave}?dry_run=${opts.dryRun ? "true" : "false"}`,
+    { codigosocio: e.codigosocio, data_atual: e.dataAtual, fiscal: plano.fiscal, dp: plano.dp, usuario: opts.usuario },
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}
+
+export function excluirLucroDistribuido(
+  alvo: { codigoempresa: number; chave: number; codigosocio: number; dataAtual: string },
+  opts: { idempotencyKey: string; usuario: string }
+) {
+  return enviar<RespostaLucroQuestor>(
+    "DELETE",
+    `/contabil/lucros-distribuidos/${alvo.codigoempresa}/${alvo.chave}`,
+    { codigosocio: alvo.codigosocio, data_atual: alvo.dataAtual, usuario: opts.usuario },
     { idempotencyKey: opts.idempotencyKey }
   );
 }

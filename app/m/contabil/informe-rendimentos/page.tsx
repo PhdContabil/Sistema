@@ -1,8 +1,9 @@
 import Workspace from "@/components/Workspace";
-import InformeRendimentos from "@/components/apps/InformeRendimentos";
+import SistemaContabil from "@/components/apps/SistemaContabil";
 import { getModule } from "@/lib/modules";
 import { getEmpresas, hasApiKey } from "@/lib/questor";
 import { listarLog, type LinhaLog } from "@/lib/informe-rendimentos-log";
+import { listarLog as listarLogLucros, type LinhaLogLucro } from "@/lib/lucros-distribuidos-log";
 import { exigirContabil } from "@/app/api/contabil/informe-rendimentos/_auth";
 import AcessoNegado from "@/components/AcessoNegado";
 
@@ -23,6 +24,7 @@ export default async function Page() {
 
   let empresas: Array<{ codigo: number; nome: string }> = [];
   let log: LinhaLog[] = [];
+  let logLucros: LinhaLogLucro[] = [];
   let erro: string | null = null;
 
   if (!hasApiKey()) {
@@ -39,6 +41,7 @@ export default async function Page() {
     }
   }
   try { log = await listarLog(100); } catch { /* o log é acessório: a tela funciona sem ele */ }
+  try { logLucros = await listarLogLucros(100); } catch { /* idem */ }
 
   return (
     <Workspace moduleId="contabil" appName="Sistema Contábil">
@@ -47,11 +50,11 @@ export default async function Page() {
         <div>
           <h1>Sistema Contábil</h1>
           <div className="desc">
-            Rendimentos, aluguéis e ganho de capital lançados no Questor Fiscal. O regime (Presumido ou Real) vem do Tareffa.
+            Informe de rendimentos, aluguéis e ganho de capital (regime vem do Tareffa) e lucros distribuídos, lançados no Questor.
           </div>
         </div>
       </div>
-      <InformeRendimentos empresas={empresas} logInicial={log} erroServidor={erro} />
+      <SistemaContabil empresas={empresas} logInforme={log} logLucros={logLucros} erroServidor={erro} />
     </Workspace>
   );
 }
