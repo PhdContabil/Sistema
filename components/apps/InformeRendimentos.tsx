@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
 import { ROTULO_TIPO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
 import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
+import FiltrosLog, { FILTRO_VAZIO, aplicarFiltro, type FiltroLog } from "./FiltrosLog";
 import type { LinhaLog } from "@/lib/informe-rendimentos-log";
 
 interface Resultado {
@@ -55,8 +56,8 @@ export default function InformeRendimentos({
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [log, setLog] = useState<LinhaLog[]>(logInicial);
-  const [filtroLog, setFiltroLog] = useState("");
-  const logVisivel = log.filter((l) => !filtroLog.trim() || `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.responsavel}`.toLowerCase().includes(filtroLog.trim().toLowerCase()));
+  const [filtroLog, setFiltroLog] = useState<FiltroLog>(FILTRO_VAZIO);
+  const logVisivel = aplicarFiltro(log, filtroLog, (l) => `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.responsavel}`, (l) => l.tipo);
   const [paginaLog, setPaginaLog] = useState(0);
   const paginaAtual = Math.min(paginaLog, Math.max(0, Math.ceil(logVisivel.length / LINHAS_POR_PAGINA) - 1));
   const logPagina = logVisivel.slice(paginaAtual * LINHAS_POR_PAGINA, (paginaAtual + 1) * LINHAS_POR_PAGINA);
@@ -236,7 +237,9 @@ export default function InformeRendimentos({
       )}
 
       <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de lançamentos ({logVisivel.length})</h3>
-      <input style={{ ...entrada, margin: "0 0 8px", maxWidth: 360 }} placeholder="Filtrar por empresa, sócio ou responsável" value={filtroLog} onChange={(e) => { setFiltroLog(e.target.value); setPaginaLog(0); }} />
+      <FiltrosLog filtro={filtroLog} onChange={(f) => { setFiltroLog(f); setPaginaLog(0); }} rotuloTipo="Tipo" placeholder="Buscar por empresa, código ou responsável"
+        opcoesTipo={[...Object.entries(ROTULO_TIPO).map(([valor, rotulo]) => ({ valor, rotulo })), { valor: "historico", rotulo: "Histórico" }]}
+        total={log.length} exibidas={logVisivel.length} />
       <div className="table-wrap">
         <table className="grid">
           <thead>
