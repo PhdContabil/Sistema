@@ -7,6 +7,7 @@ import type {
 import type { ConsolidacaoResponse, SocioItem } from "./contabil";
 import type { PerfilResponse } from "./dissidio-tipos";
 import type { FuncionariosAtivosResponse } from "./trabalhista";
+import type { PlanoInforme } from "./informe-rendimentos";
 
 const BASE = process.env.QUESTOR_API_URL ?? "https://phdfibra.dyndns.org";
 const KEY = process.env.QUESTOR_API_KEY;
@@ -532,4 +533,48 @@ export async function buscarClientesFinanceiro(params: { cpf_cnpj?: string; nome
   if (params.incluirEmpresas) qs.set("incluir_empresas", "true");
   const resp = await get<{ total?: number; dados?: ClienteFinanceiro[] }>(`/financeiro/clientes?${qs.toString()}`);
   return resp.dados ?? [];
+}
+// ---------------------------------------------------------------------------
+// Informe de Rendimentos (escrita) — módulo Contábil.
+//
+// Contrato PROPOSTO, ainda sem implementação na API do Questor: ver
+// docs/informe-rendimentos-api-questor.md. Se o caminho ou o formato mudarem,
+// ajustar só esta função. Enquanto a API não tiver o endpoint, a resposta é
+// 404 e a tela mostra isso em português, sem gravar nada.
+// ---------------------------------------------------------------------------
+
+export interface RespostaInformeQuestor {
+  ok?: boolean;
+  dry_run?: boolean;
+  /** Linhas que seriam (ou foram) gravadas, já com o SEQ definido pela API. */
+  ecf?: Array<Record<string, unknown>>;
+  f100?: Array<Record<string, unknown>>;
+  avisos?: string[];
+  /** true quando a mesma Idempotency-Key já tinha sido gravada: nada novo foi escrito. */
+  repetido?: boolean;
+  detail?: string;
+  erro?: string;
+}
+
+export function hasWriteKey(): boolean {
+  return Boolean(WRITE_KEY);
+}
+
+export async function lancarInformeRendimentos(
+  plano: PlanoInforme,
+  opts: { dryRun: boolean; idempotencyKey: string; usuario: string }
+): Promise<{ ok: boolean; status: number; corpo: RespostaInformeQuestor }> {
+  return post<RespostaInformeQuestor>(
+    `/contabil/informe-rendimentos?dry_run=${opts.dryRun ? "true" : "false"}`,
+    {
+      codigoempresa: plano.codigoempresa,
+      competencia: plano.competencia,
+      tipo: plano.tipo,
+      regime: plano.regime,
+      ecf: plano.ecf.map(({ rotulo: _r, ...l }) => l),
+      f100: plano.f100.map(({ rotulo: _r, ...l }) => l),
+      usuario: opts.usuario,
+    },
+    { idempotencyKey: opts.idempotencyKey }
+  );
 }

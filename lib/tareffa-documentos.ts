@@ -96,6 +96,11 @@ async function token(): Promise<string> {
   throw new TareffaError("Tareffa não configurado: faltam TAREFFA_CLIENT_ID, TAREFFA_CLIENT_SECRET, TAREFFA_EMAIL e TAREFFA_SENHA.");
 }
 
+/** Token do Tareffa para outros módulos do servidor (ex.: consulta de regime tributário). */
+export { token as tokenTareffa };
+/** Descarta o token em cache — para quem recebeu 401 e vai tentar de novo. */
+export function invalidarTokenTareffa(): void { cache = null; }
+
 async function lerJson(r: Response, etapa: string): Promise<Record<string, unknown>> {
   const texto = await r.text().catch(() => "");
   if (!r.ok) {
