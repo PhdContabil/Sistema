@@ -332,7 +332,7 @@ function Periodo({ de, ate, onChange }: { de: string; ate: string; onChange: (de
     ["Este ano", `${h.getFullYear()}-01-01`, `${h.getFullYear()}-12-31`],
   ];
   const pilula: React.CSSProperties = { border: "1px solid var(--pl-border, #e2e8f0)", borderRadius: 999, padding: "6px 12px", fontSize: 12.5, background: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
-  const campo: React.CSSProperties = { border: "none", outline: "none", background: "transparent", fontSize: 12.5, width: 118, padding: 0, colorScheme: "light" };
+  const campo: React.CSSProperties = { flex: "none", minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, width: 118, padding: 0, colorScheme: "light" };
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       {atalhos.map(([nome, a, b]) => {
