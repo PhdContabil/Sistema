@@ -99,8 +99,7 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
     <div className="controle-app">
       <div className="pl-toolbar">
         <input type="text" placeholder="Buscar por razão social, CNPJ…" value={f.q} onChange={(e) => { setPagina(0); setF({ ...f, q: e.target.value }); }} />
-        <input type="date" title="Data de" value={f.de} onChange={(e) => { setPagina(0); setF({ ...f, de: e.target.value }); }} style={{ maxWidth: 160 }} />
-        <input type="date" title="Data até" value={f.ate} onChange={(e) => { setPagina(0); setF({ ...f, ate: e.target.value }); }} style={{ maxWidth: 160 }} />
+        <Periodo de={f.de} ate={f.ate} onChange={(de, ate) => { setPagina(0); setF({ ...f, de, ate }); }} />
         <select value={f.tipo} onChange={(e) => { setPagina(0); setF({ ...f, tipo: e.target.value }); }} style={{ maxWidth: 170 }}><option value="">Todos os tipos</option>{TIPOS.map((t) => <option key={t}>{t}</option>)}</select>
         <button className="pl-btn" onClick={carregar}>↻ Atualizar</button>
         <button className="pl-btn primary" onClick={() => setEditando("nova")}>+ Nova OS</button>
@@ -113,15 +112,11 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
           <tbody>
             {lista.map((o) => (
               <tr key={o.nos}>
-                <td>{o.nos}</td><td>{o.tipo}</td><td>{o.razao}</td><td style={{ whiteSpace: "nowrap" }}>{o.cnpj}</td><td>{dt(o.data)}</td>
-                <td>{o.questor ?? ""}</td><td>{o.codigo ?? ""}</td><td>{brl(Number(o.valortt ?? 0))}</td>
-                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  <button className="pl-btn" onClick={() => setEditando(o)}>Editar</button>{" "}
-                  <button className="pl-btn" onClick={() => baixarPdf(o, "financeiro")}>PDF Fin.</button>{" "}
-                  <button className="pl-btn" onClick={() => baixarPdf(o, "geral")}>PDF Geral</button>{" "}
-                  <button className="pl-btn" onClick={() => email(o, "financeiro")}>✉ Fin.</button>{" "}
-                  <button className="pl-btn" onClick={() => email(o, "geral")}>✉ Geral</button>
-                </td>
+                <td>{o.nos}</td><td>{o.tipo}</td>
+                <td title={o.razao ?? ""} style={{ whiteSpace: "nowrap", maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis" }}>{o.razao}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{o.cnpj}</td><td style={{ whiteSpace: "nowrap" }}>{dt(o.data)}</td>
+                <td>{o.questor ?? ""}</td><td>{o.codigo ?? ""}</td><td style={{ whiteSpace: "nowrap" }}>{brl(Number(o.valortt ?? 0))}</td>
+                <td style={{ textAlign: "right" }}><button className="pl-btn" onClick={() => setEditando(o)}>Editar</button></td>
               </tr>
             ))}
             {!lista.length && <tr><td colSpan={9} style={{ textAlign: "center", padding: 20 }}>Nenhuma O.S.</td></tr>}
@@ -133,12 +128,12 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
         <span style={{ fontSize: 13 }}>Página {pagina + 1} de {Math.max(1, Math.ceil(total / POR_PAGINA))} · {total} O.S.</span>
         <button className="pl-btn" disabled={(pagina + 1) * POR_PAGINA >= total} onClick={() => setPagina((p) => p + 1)}>Próxima ›</button>
       </div>
-      {editando && <FormOS os={editando === "nova" ? null : editando} mei={mei} servicos={servicos} fechar={() => { setEditando(null); carregar(); }} />}
+      {editando && <FormOS os={editando === "nova" ? null : editando} mei={mei} servicos={servicos} fechar={() => { setEditando(null); carregar(); }} baixarPdf={baixarPdf} email={email} />}
     </div>
   );
 }
 
-function FormOS({ os, mei, servicos, fechar }: { os: OS | null; mei: Mei[]; servicos: ServEscrit[]; fechar: () => void }) {
+function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null; mei: Mei[]; servicos: ServEscrit[]; fechar: () => void; baixarPdf: (o: OS, p: "financeiro" | "geral") => Promise<void>; email: (o: OS, p: "financeiro" | "geral") => Promise<void> }) {
   const nova = !os;
   const [o, setO] = useState<OS>(os ?? vazio());
   const [busca, setBusca] = useState("");
@@ -310,9 +305,46 @@ function FormOS({ os, mei, servicos, fechar }: { os: OS | null; mei: Mei[]; serv
 
         <div className="pl-toolbar" style={{ marginTop: 8 }}>
           <button className="pl-btn" onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) fechar(); }} disabled={salvando}>Cancelar</button>
+          {(!nova || salvo) && (
+            <>
+              <button className="pl-btn" onClick={() => baixarPdf({ ...o, ...(salvo ?? {}) }, "financeiro")}>PDF Financeiro</button>
+              <button className="pl-btn" onClick={() => baixarPdf({ ...o, ...(salvo ?? {}) }, "geral")}>PDF Geral</button>
+              <button className="pl-btn" onClick={() => email({ ...o, ...(salvo ?? {}) }, "financeiro")}>✉ Financeiro</button>
+              <button className="pl-btn" onClick={() => email({ ...o, ...(salvo ?? {}) }, "geral")}>✉ Geral</button>
+            </>
+          )}
           <button className="pl-btn primary" onClick={salvar} disabled={salvando}>{salvando ? "Salvando…" : "Salvar"}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Seletor de período moderno: atalhos (este mês, mês passado, 30 dias, ano) + datas em "pílula". */
+function Periodo({ de, ate, onChange }: { de: string; ate: string; onChange: (de: string, ate: string) => void }) {
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const h = new Date();
+  const atalhos: [string, string, string][] = [
+    ["Tudo", "", ""],
+    ["Este mês", iso(new Date(h.getFullYear(), h.getMonth(), 1)), iso(new Date(h.getFullYear(), h.getMonth() + 1, 0))],
+    ["Mês passado", iso(new Date(h.getFullYear(), h.getMonth() - 1, 1)), iso(new Date(h.getFullYear(), h.getMonth(), 0))],
+    ["30 dias", iso(new Date(Date.now() - 30 * 864e5)), iso(h)],
+    ["Este ano", `${h.getFullYear()}-01-01`, `${h.getFullYear()}-12-31`],
+  ];
+  const pilula: React.CSSProperties = { border: "1px solid var(--pl-border, #e2e8f0)", borderRadius: 999, padding: "6px 12px", fontSize: 12.5, background: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
+  const campo: React.CSSProperties = { border: "none", outline: "none", background: "transparent", fontSize: 12.5, width: 118, padding: 0, colorScheme: "light" };
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      {atalhos.map(([nome, a, b]) => {
+        const ativo = de === a && ate === b;
+        return <button key={nome} type="button" onClick={() => onChange(a, b)} style={{ ...pilula, background: ativo ? "var(--pl-primary, #12488c)" : "#fff", color: ativo ? "#fff" : "inherit", borderColor: ativo ? "transparent" : undefined }}>{nome}</button>;
+      })}
+      <span style={{ ...pilula, cursor: "default", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span style={{ opacity: 0.6 }}>📅</span>
+        <input type="date" value={de} onChange={(e) => onChange(e.target.value, ate)} style={campo} aria-label="De" />
+        <span style={{ opacity: 0.5 }}>→</span>
+        <input type="date" value={ate} onChange={(e) => onChange(de, e.target.value)} style={campo} aria-label="Até" />
+      </span>
     </div>
   );
 }
