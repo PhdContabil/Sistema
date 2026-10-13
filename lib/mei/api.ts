@@ -106,13 +106,13 @@ export async function chamar(
   if (metodo !== "GET" && !gravacaoLiberada(recursoDaRota(caminho))) {
     url.searchParams.set("dry_run", "true");
     dryRunForcado = true;
-  } else if (metodo === "DELETE" && caminho.startsWith("/mei/os/")) {
-    // Na API o DELETE de O.S. é simulação por padrão; liberado, apaga de verdade.
+  } else if (metodo !== "GET" && !url.searchParams.has("dry_run") && (caminho.startsWith("/mei/") || caminho.startsWith("/cadastro/servico-"))) {
+    // Algumas rotas da API (ex.: O.S.) simulam por padrão; com a área liberada, grava de verdade.
     url.searchParams.set("dry_run", "false");
   }
   const h = cabecalhos(metodo, caminho, opts.usuario ?? null);
   // A simulação não pode reaproveitar a mesma chave da gravação real (a API devolveria a resposta simulada guardada).
-  if (opts.idempotencia) h["Idempotency-Key"] = (dryRunForcado ? "sim-" : "") + opts.idempotencia;
+  if (opts.idempotencia) h["Idempotency-Key"] = (dryRunForcado ? "sim-" : "r2-") + opts.idempotencia;
   if (opts.corpo !== undefined) h["Content-Type"] = "application/json";
   const tentativas = metodo === "GET" ? 4 : 1;
   let status = 0;
@@ -135,6 +135,9 @@ export async function chamar(
   if (!status) return { status: 502, json: { erro: txt }, dryRunForcado };
   let json: unknown;
   try { json = JSON.parse(txt); } catch { json = { erro: txt.slice(0, 300) }; }
+  // Se a própria API respondeu que simulou, não mostra "Gravado".
+  const j = json as { dry_run?: unknown; simulacao?: unknown } | null;
+  if (j && (j.dry_run === true || j.simulacao === true)) dryRunForcado = true;
   return { status, json, dryRunForcado };
 }
 

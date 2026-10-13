@@ -171,7 +171,10 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
   const set = (k: keyof OS, v: unknown) => setO((x) => ({ ...x, [k]: v }));
 
   function escolherCliente(c: ClienteFin) {
-    setO((x) => ({ ...x, codigo: c.codigocliente, questor: c.codigoempresa ?? null, razao: c.nome, cnpj: c.inscrfederal ?? "",
+    // Cód. Questor: vem do vínculo no financeiro; se o cliente é novo e ainda não tem, procura o MEI pelo CNPJ/CPF.
+    const doc = String(c.inscrfederal ?? "").replace(/\D/g, "");
+    const questor = c.codigoempresa ?? (doc ? mei.find((m) => m.cnpj.replace(/\D/g, "") === doc || String(m.cpf ?? "").replace(/\D/g, "") === doc)?.cod ?? null : null);
+    setO((x) => ({ ...x, codigo: c.codigocliente, questor, razao: c.nome, cnpj: c.inscrfederal ?? "",
       logradouro: [c.tipologradouro, c.logradouro].filter(Boolean).join(" "), numero: c.numero ?? "", complemento: c.complemento ?? "", bairro: c.bairro ?? "",
       cidade: c.nomemunic ?? "", cep: c.cep ?? "", email: c.email ?? "", celular: c.telefone ?? "" }));
     setAchados([]); setBusca(""); setCobranca("profissional");
@@ -365,13 +368,13 @@ function Periodo({ de, ate, onChange }: { de: string; ate: string; onChange: (de
     ["30 dias", iso(new Date(Date.now() - 30 * 864e5)), iso(h)],
     ["Este ano", `${h.getFullYear()}-01-01`, `${h.getFullYear()}-12-31`],
   ];
-  const pilula: React.CSSProperties = { border: "1px solid var(--pl-border, #e2e8f0)", borderRadius: 999, padding: "6px 12px", fontSize: 12.5, background: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
-  const campo: React.CSSProperties = { flex: "none", minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, width: 118, padding: 0, colorScheme: "light" };
+  const pilula: React.CSSProperties = { border: "1px solid var(--pl-border, #e2e8f0)", borderRadius: 999, padding: "6px 12px", fontSize: 12.5, background: "var(--pl-card, #fff)", color: "var(--pl-ink, inherit)", cursor: "pointer", whiteSpace: "nowrap" };
+  const campo: React.CSSProperties = { flex: "none", minWidth: 0, border: "none", outline: "none", background: "transparent", color: "var(--pl-ink, inherit)", fontSize: 12.5, width: 118, padding: 0, colorScheme: "light dark" };
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       {atalhos.map(([nome, a, b]) => {
         const ativo = de === a && ate === b;
-        return <button key={nome} type="button" onClick={() => onChange(a, b)} style={{ ...pilula, background: ativo ? "var(--pl-primary, #12488c)" : "#fff", color: ativo ? "#fff" : "inherit", borderColor: ativo ? "transparent" : undefined }}>{nome}</button>;
+        return <button key={nome} type="button" onClick={() => onChange(a, b)} style={{ ...pilula, background: ativo ? "var(--pl-primary, #12488c)" : "var(--pl-card, #fff)", color: ativo ? "var(--pl-card, #fff)" : "var(--pl-ink, inherit)", fontWeight: ativo ? 600 : 400, borderColor: ativo ? "transparent" : undefined }}>{nome}</button>;
       })}
       <span style={{ ...pilula, cursor: "default", display: "inline-flex", alignItems: "center", gap: 6 }}>
         <span style={{ opacity: 0.6 }}>📅</span>
