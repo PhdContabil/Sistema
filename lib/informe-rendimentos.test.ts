@@ -55,7 +55,7 @@ test("Presumido: F100 sem incidência (CST 8), conta 2859, como o Access", () =>
   assert.deepEqual(p.totais, { pis: 0, cofins: 0, base: 0 });
 });
 
-test("Real: F100 tributável (CST 2, 0,65% e 4%), débito 4.3.05.02, conta 2659", () => {
+test("Real: F100 tributável (CST 2, 0,65% e 4%), débito 4.3.05.02, conta 2859", () => {
   const p = montarPlano(base, "real");
   const f = p.f100[0];
   assert.equal(f.cst, 2);
@@ -68,7 +68,7 @@ test("Real: F100 tributável (CST 2, 0,65% e 4%), débito 4.3.05.02, conta 2659"
   assert.equal(f.tipodebito, "4.3.05.02");
   assert.equal(f.tipodebitocofins, "4.3.05.02");
   assert.equal(f.compensacred, 1);
-  assert.equal(f.contactb, 2659);
+  assert.equal(f.contactb, 2859);
   assert.deepEqual(p.totais, { pis: 0.07, cofins: 0.43, base: 10.85 });
   assert.ok(p.avisos.some((a) => a.includes("45040")), "avisa que os códigos da ECF não foram confirmados");
 });

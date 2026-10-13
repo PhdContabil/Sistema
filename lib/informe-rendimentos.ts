@@ -131,8 +131,8 @@ const DEBITO_NAO_CUMULATIVO = "4.3.05.02";
 const CONTA = {
   /** Receitas — Presumido, como o Access gravava. */
   rendimentoPresumido: 2859,
-  /** 4.1.05.001.002 Receitas Aplicações Mercado Aberto (tela do Questor, Lucro Real). */
-  rendimentoReal: 2659,
+  /** 4.1.05.001.002 Receitas Aplicações Mercado Aberto — conferida na tela F100 do Questor (Lucro Real, 08/2026): conta 2859, a mesma do Presumido. */
+  rendimentoReal: 2859,
   dividendos: 2893,
 } as const;
 
