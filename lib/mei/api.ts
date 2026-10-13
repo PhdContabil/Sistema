@@ -80,6 +80,8 @@ function cabecalhos(metodo: string, caminho: string, usuario: string | null): Re
     if (CRED_KEY) h["X-Mei-Key"] = CRED_KEY;
   } else if (metodo === "DELETE" && caminho.startsWith("/mei/os/")) {
     // Excluir O.S. exige o perfil de administrador da API (X-Admin-Key).
+    // A rota também passa pela checagem do perfil MEI, então vão as duas chaves.
+    if (MEI_KEY) h["X-Mei-Key"] = MEI_KEY;
     if (ADMIN_KEY) h["X-Admin-Key"] = ADMIN_KEY;
   } else if (caminho.startsWith("/mei/") && metodo !== "GET") {
     if (MEI_KEY) h["X-Mei-Key"] = MEI_KEY;

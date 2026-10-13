@@ -274,7 +274,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
                 <input value={busca} placeholder="Nome (3+ letras), CPF/CNPJ ou código financeiro…" onChange={(e) => setBusca(e.target.value)} />
               </label>
               {achados.length > 0 && (
-                <div className="pl-dropdown" style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid var(--pl-border)", borderRadius: 8, maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 20px rgba(0,0,0,.12)" }}>
+                <div className="pl-dropdown" style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "var(--pl-card, #fff)", color: "var(--pl-ink, inherit)", border: "1px solid var(--pl-border)", borderRadius: 8, maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 20px rgba(0,0,0,.12)" }}>
                   {achados.slice(0, 30).map((c) => (
                     <div key={c.codigocliente} onClick={() => escolherCliente(c)} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--pl-border)" }}>
                       <strong>{c.nome}</strong>

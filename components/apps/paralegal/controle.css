@@ -360,3 +360,8 @@ html[data-theme="dark"] .controle-app .pl-btn.danger:hover { color: #0b1220; }
   cursor: pointer; color: inherit;
 }
 .controle-app .pl-modal-fechar:hover { background: rgba(0,0,0,.06); }
+
+/* Selects e opções legíveis no tema escuro (Sistema MEI e Controle) */
+html[data-theme="dark"] .controle-app select,
+html[data-theme="dark"] .controle-app select option { background: var(--pl-card); color: var(--pl-ink); border-color: var(--pl-border); }
+

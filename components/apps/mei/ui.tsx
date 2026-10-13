@@ -43,7 +43,7 @@ export function mensagemErro(r: RespostaApi): string {
   const d = r.dados as { detail?: unknown; erro?: string; error?: string } | null;
   const det = d?.detail;
   const txt = typeof det === "string" ? det : det ? JSON.stringify(det) : d?.erro || d?.error || "";
-  if (r.status === 401 && /Chave MEI/i.test(txt)) return "A API exige a chave do perfil MEI (X-Mei-Key), que ainda não foi configurada no Núcleo (MEI_API_KEY / MEI_CRED_KEY).";
+  if (r.status === 401 || r.status === 403) return `Sem permissão na API (${r.status})${txt ? ": " + txt : ""}`;
   return `Erro ${r.status}${txt ? ": " + txt : ""}`;
 }
 
