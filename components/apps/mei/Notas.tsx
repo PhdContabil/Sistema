@@ -86,7 +86,7 @@ interface ResultadoNota {
 }
 
 /** emitirnota: lança no Questor a NFS-e já emitida no Portal Nacional (saída no MEI + entrada no salão + ISS). */
-function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
+export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
   const [d, setD] = useState({ data: data > hojeISO() ? hojeISO() : data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
   const [roboEstado, setRoboEstado] = useState<RoboEstado>("ok");
   const [robo, setRobo] = useState<{ id?: string; status: string; passos: { msg: string }[]; erro?: string } | null>(null);

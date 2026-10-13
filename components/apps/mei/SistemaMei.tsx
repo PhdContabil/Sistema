@@ -10,7 +10,8 @@ import { Clientes, Ficha } from "./Clientes";
 import { Responsaveis, Servicos, TabelaPreco } from "./Cadastros";
 import { DadosMei, ValoresMensal, SalaoMei } from "./Relatorios";
 import { SenhasLista } from "./Senhas";
-import Notas from "./Notas";
+import Notas, { EmitirNota } from "./Notas";
+import Painel from "./Painel";
 import OSMei from "./OSMei";
 import Contratos from "./Contratos";
 import CadastroEmpresaTab from "@/components/apps/paralegal/CadastroEmpresaTab";
@@ -18,7 +19,7 @@ import AvulsoTab from "@/components/apps/paralegal/AvulsoTab";
 import "@/components/apps/paralegal/controle.css";
 
 const MENU: { grupo: string; itens: string[] }[] = [
-  { grupo: "Painel", itens: ["Tarefas"] },
+  { grupo: "Painel", itens: ["Início", "Tarefas"] },
   { grupo: "Cadastros", itens: ["Cliente Mensal", "Cliente Avulso", "Usuários", "Serviços"] },
   { grupo: "Gestão de serviços", itens: ["Gerar O.S.", "Tabela de preço", "Contratos PHD", "Notas MEI"] },
   { grupo: "Controle e relatórios", itens: ["Ficha / Clientes", "Senhas Prefeitura", "Senhas Nacional", "Valores Mensal", "Dados MEI", "Salão x MEI", "Consulta financeiro", "Controle BI"] },
@@ -28,7 +29,8 @@ const MENU: { grupo: string; itens: string[] }[] = [
 interface Chaves { leitura: boolean; questor: boolean; mei: boolean; credenciais: boolean; gravacao: boolean; liberados?: string[] }
 
 export default function SistemaMei() {
-  const [tela, setTela] = useState("Tarefas");
+  const [tela, setTela] = useState("Início");
+  const [emitir, setEmitir] = useState<Mei | null>(null);
   const [grupo, setGrupo] = useState("");
   const [mei, setMei] = useState<Mei[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -73,15 +75,18 @@ export default function SistemaMei() {
           ))}
         </div>
       )}
-      {!grupo && <div style={{ ...st.mut, marginBottom: 12 }}>Tela atual: <b>{tela}</b></div>}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        <Busca mei={mei} abrir={(m) => { setFicha(m); setGrupo(""); }} />
+        {!grupo && <span style={st.mut}>Tela: <b>{ficha ? "Ficha MEI" : tela}</b></span>}
+        <span style={{ flex: 1 }} />
         <span style={st.mut}>{carregando ? "Carregando carteira MEI…" : `${mei.length} MEI · ${ativos} ativos`}</span>
         <button style={st.btn} onClick={() => carregar(true)} disabled={carregando}>Atualizar dados</button>
       </div>
       {erro && <div style={{ ...st.aviso, color: "var(--div)" }}>{erro}</div>}
 
-      {ficha ? <Ficha m={ficha} voltar={() => setFicha(null)} mudou={() => carregar(true)} /> : (
+      {ficha ? <Ficha m={ficha} voltar={() => setFicha(null)} mudou={() => carregar(true)} emitirNota={setEmitir} /> : (
         <>
+          {tela === "Início" && <Painel mei={mei} ir={abrir} abrirFicha={setFicha} />}
           {tela === "Tarefas" && <Tarefas mei={mei} />}
           {tela === "Cliente Mensal" && <div className="controle-app"><CadastroEmpresaTab modo="mei" /></div>}
           {tela === "Cliente Avulso" && <div className="controle-app"><AvulsoTab modo="mei" /></div>}
@@ -101,6 +106,47 @@ export default function SistemaMei() {
           {tela === "Controle BI" && <div style={st.card}><p>O “Controle BI” do Access é o mesmo painel Power BI que já está no Núcleo.</p><Link href="/m/mei/painel" style={st.btnP}>Abrir Painel MEI</Link></div>}
           {tela === "Situação" && <Situacao chaves={chaves} />}
         </>
+      )}
+      {emitir && <EmitirNota m={emitir} data={new Date().toISOString().slice(0, 10)} fechar={() => setEmitir(null)} />}
+    </div>
+  );
+}
+
+/** Busca única: código, razão social, CNPJ ou CPF do titular — abre direto a ficha. */
+function Busca({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }) {
+  const [q, setQ] = useState("");
+  const [foco, setFoco] = useState(false);
+  const [sel, setSel] = useState(0);
+  const termo = q.trim().toLowerCase();
+  const dig = termo.replace(/\D/g, "");
+  const achados = termo.length < 2 ? [] : mei.filter((m) =>
+    String(m.cod) === termo || m.razao.toLowerCase().includes(termo)
+    || (dig.length >= 3 && (m.cnpj.replace(/\D/g, "").includes(dig) || String(m.cpf ?? "").replace(/\D/g, "").includes(dig))))
+    .sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.razao.localeCompare(b.razao)).slice(0, 8);
+  const escolher = (m: Mei) => { abrir(m); setQ(""); setFoco(false); };
+  return (
+    <div style={{ position: "relative", flex: "1 1 320px", maxWidth: 520 }}>
+      <input value={q} placeholder="Buscar MEI por nome, código, CNPJ ou CPF…" aria-label="Buscar MEI"
+        onChange={(e) => { setQ(e.target.value); setSel(0); }} onFocus={() => setFoco(true)} onBlur={() => setTimeout(() => setFoco(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, achados.length - 1)); }
+          if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
+          if (e.key === "Enter" && achados[sel]) escolher(achados[sel]);
+          if (e.key === "Escape") setQ("");
+        }}
+        style={{ ...st.input, width: "100%", padding: "9px 12px 9px 34px", borderRadius: 10, fontSize: 14 }} />
+      <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", opacity: 0.5, pointerEvents: "none" }}>⌕</span>
+      {foco && termo.length >= 2 && (
+        <div style={{ position: "absolute", zIndex: 30, top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--card, var(--bg))", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)", overflow: "hidden" }}>
+          {achados.length === 0 ? <div style={{ ...st.mut, padding: 12 }}>Nenhum MEI encontrado.</div> : achados.map((m, i) => (
+            <button key={m.cod} onMouseDown={() => escolher(m)} onMouseEnter={() => setSel(i)}
+              style={{ display: "flex", width: "100%", gap: 10, alignItems: "center", padding: "9px 12px", border: "none", background: i === sel ? "var(--accent-soft)" : "transparent", cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit", fontSize: 13 }}>
+              <span style={{ fontVariantNumeric: "tabular-nums", minWidth: 42, color: "var(--muted)" }}>{m.cod}</span>
+              <span style={{ flex: 1 }}><b>{m.razao}</b><br /><span style={st.mut}>{m.cnpj}{m.salao ? ` · ${m.salao}` : ""}</span></span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: m.ativo ? "#15803d" : "#b91c1c" }}>{m.ativo ? (m.bloqueado ? "Bloqueado" : "Ativo") : "Inativo"}</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
