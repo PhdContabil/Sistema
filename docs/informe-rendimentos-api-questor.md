@@ -40,7 +40,7 @@ Corpo (campos em minúsculas, nomes das colunas do Questor):
       "cst": 2, "aliqpis": 0.65, "basecalculo": 10.85, "aliqcofins": 4,
       "valorpis": 0.07, "valorcofins": 0.43, "cstcofins": 2,
       "tipodebitocofins": "4.3.05.02", "tipodebito": "4.3.05.02",
-      "compensacred": 1, "origemcredito": 0, "contactb": 2659,
+      "compensacred": 1, "origemcredito": 0, "contactb": 2859,
       "origemdado": 2, "detalhardimob": 0
     }
   ]
@@ -68,7 +68,7 @@ tabelas, com os mesmos códigos. No ganho de capital só há linha de ECF
    - `codigooperacaofis` ∈ {45040, 45058, 45118}; `tipoimposto` = 3; `operacao` = 1
    - `cst` e `cstcofins` ∈ {2, 8}
    - `tipodebito` e `tipodebitocofins` ∈ {`4.3.15.999`, `4.3.05.02`}
-   - `contactb` ∈ {2859, 2659, 2893}
+   - `contactb` ∈ {2859, 2893}
    - `indoper` = 2, `origemdado` = 2
    - Se `cst` = 2: `aliqpis` = 0,65, `aliqcofins` = 4 e os valores batem com
      `round(base × alíquota, 2)`; se `cst` = 8: alíquotas e valores = 0.
@@ -118,9 +118,9 @@ Também é preciso rodar `docs/informe-rendimentos-migration.sql` no Supabase
       para empresas do Lucro Real (no Presumido vieram do Access).
 - [ ] Confirmar se "Demais receitas" tem incidência de PIS/COFINS no Lucro Real
       (hoje gera só a ECF, como no Presumido).
-- [ ] Conferir um lançamento real de Lucro Real feito à mão no Questor contra o
-      que a tela simula (CST 02, 0,65% / 4,00%, débito `4.3.05.02`, conta 2659,
-      compensa crédito = Sim).
+- [x] Conferido contra a tela F100 do Questor (Lucro Real, 31/08/2026, valor 10,85):
+      CST 02, PIS 0,65% = 0,07, COFINS 4,00% = 0,43, débito `4.3.05.02`,
+      compensa crédito = Sim, conta EFD **2859** (4.1.05.001.002).
 - [ ] Confirmar a regra vigente de PIS/COFINS sobre receita financeira no regime
       não cumulativo com a legislação/contador responsável.
 
