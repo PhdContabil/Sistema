@@ -37,11 +37,26 @@ function Revelar({ id }: { id: number }) {
   return senha === null ? <button style={st.btn} onClick={ver} title="A visualização fica registrada no log">Ver senha</button> : <code>{senha}</code>;
 }
 
+/** Máscara de documento: só números, no tamanho certo, já formatado. */
+export function mascaraDoc(tipo: string, v: string): string {
+  const d = v.replace(/\D/g, "");
+  if (tipo === "CPF") {
+    const c = d.slice(0, 11);
+    return c.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
+  }
+  const c = d.slice(0, 14);
+  return c.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+const ehDoc = (rotulo?: string) => rotulo === "CNPJ" || rotulo === "CPF";
+const docOk = (rotulo: string | undefined, v: string) => !ehDoc(rotulo) || !v || v.replace(/\D/g, "").length === (rotulo === "CPF" ? 11 : 14);
+
 function Editor({ cred, codigoempresa, tipoFixo, fechar, aoSalvar }: { cred: Partial<Credencial> | null; codigoempresa?: number; tipoFixo?: TipoCred; fechar: () => void; aoSalvar: () => void }) {
-  const [d, setD] = useState({ tipo: (cred?.tipo ?? tipoFixo ?? "PREFEITURA") as TipoCred, codigoempresa: String(cred?.codigoempresa ?? codigoempresa ?? ""), usuario: cred?.usuario ?? "", documento: cred?.documento ?? "", cod_acesso: cred?.cod_acesso ?? "", senha: "" });
+  const [d, setD] = useState({ tipo: (cred?.tipo ?? tipoFixo ?? "PREFEITURA") as TipoCred, codigoempresa: String(cred?.codigoempresa ?? codigoempresa ?? ""), usuario: cred?.usuario ?? "", documento: cred?.documento ? mascaraDoc(TIPOS.find((x) => x.tipo === (cred?.tipo ?? tipoFixo ?? "PREFEITURA"))?.doc ?? "CNPJ", cred.documento) : "", cod_acesso: cred?.cod_acesso ?? "", senha: "" });
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const t = TIPOS.find((x) => x.tipo === d.tipo)!;
   async function salvar() {
+    if (!docOk(t.usuario, d.usuario)) { setMsg({ ok: false, texto: `${t.usuario} incompleto.` }); return; }
+    if (!docOk(t.doc, d.documento)) { setMsg({ ok: false, texto: `${t.doc} incompleto.` }); return; }
     const corpo: Record<string, unknown> = { usuario: d.usuario || null, documento: d.documento || null, cod_acesso: d.cod_acesso || null };
     if (d.senha) corpo.senha = d.senha;
     const r = cred?.id
@@ -55,8 +70,8 @@ function Editor({ cred, codigoempresa, tipoFixo, fechar, aoSalvar }: { cred: Par
       <div style={st.grid}>
         {!cred?.id && !tipoFixo && <Campo label="Tipo"><select style={st.input} value={d.tipo} onChange={(e) => setD({ ...d, tipo: e.target.value as TipoCred })}>{TIPOS.map((x) => <option key={x.tipo} value={x.tipo}>{x.nome}</option>)}</select></Campo>}
         <Campo label="Cód. empresa"><input style={st.input} value={d.codigoempresa} disabled={!!cred?.id || !!codigoempresa} onChange={(e) => setD({ ...d, codigoempresa: e.target.value.replace(/\D/g, "") })} /></Campo>
-        <Campo label={t.usuario}><input style={st.input} value={d.usuario} onChange={(e) => setD({ ...d, usuario: e.target.value })} /></Campo>
-        {t.doc && <Campo label={t.doc}><input style={st.input} value={d.documento} onChange={(e) => setD({ ...d, documento: e.target.value })} /></Campo>}
+        <Campo label={t.usuario}><input style={st.input} value={d.usuario} inputMode={ehDoc(t.usuario) ? "numeric" : undefined} placeholder={t.usuario === "CNPJ" ? "00.000.000/0000-00" : t.usuario === "CPF" ? "000.000.000-00" : undefined} onChange={(e) => setD({ ...d, usuario: ehDoc(t.usuario) ? mascaraDoc(t.usuario, e.target.value) : e.target.value })} /></Campo>
+        {t.doc && <Campo label={t.doc}><input style={st.input} value={d.documento} inputMode="numeric" placeholder={t.doc === "CPF" ? "000.000.000-00" : "00.000.000/0000-00"} onChange={(e) => setD({ ...d, documento: ehDoc(t.doc) ? mascaraDoc(t.doc!, e.target.value) : e.target.value })} /></Campo>}
         {t.cod && <Campo label="Código de acesso"><input style={st.input} value={d.cod_acesso} onChange={(e) => setD({ ...d, cod_acesso: e.target.value })} /></Campo>}
         {!t.cod && <Campo label={cred?.id ? "Nova senha (vazio = manter)" : "Senha"}><input type="password" autoComplete="new-password" style={st.input} value={d.senha} onChange={(e) => setD({ ...d, senha: e.target.value })} /></Campo>}
       </div>
