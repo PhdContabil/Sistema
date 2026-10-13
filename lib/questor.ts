@@ -688,3 +688,27 @@ export function excluirLucroDistribuido(
     { idempotencyKey: opts.idempotencyKey }
   );
 }
+// ------------------------------------------------------------- RH / férias
+
+/** Um período aquisitivo aberto (saldo > 0), como no relatório do Questor. */
+export interface FeriasAVencerLinha {
+  codigoempresa: number;
+  codigofunccontr: number;
+  nomefunc: string;
+  dataadm: string | null;
+  inicio_aquisitivo: string;
+  fim_aquisitivo: string;
+  saldo: number;
+  limite_sem_dobra: string;
+  dias_restantes: number;
+}
+export interface FeriasAVencerResponse { total: number; data_base: string; dados: FeriasAVencerLinha[] }
+
+/** GET /rh/ferias-a-vencer. `cnpj` faz match por prefixo (raiz de 8 dígitos = todas as filiais). */
+export function getFeriasAVencer(params: { cnpj?: string; dias?: number } = {}): Promise<FeriasAVencerResponse> {
+  const q = new URLSearchParams();
+  if (params.cnpj) q.set("cnpj", params.cnpj);
+  if (params.dias) q.set("dias", String(params.dias));
+  const qs = q.toString() ? `?${q.toString()}` : "";
+  return get<FeriasAVencerResponse>(`/rh/ferias-a-vencer${qs}`);
+}

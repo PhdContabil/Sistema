@@ -2391,3 +2391,11 @@ html[data-theme="dark"] .estr-escolha.on { background: #1c2f63; }
 .evc-check { display: none; position: absolute; top: 6px; right: 8px; font-style: normal; font-weight: 700; }
 .evc-mod.sel .evc-check, .evc-mod:has(input:checked) .evc-check { display: block; }
 .evc-acomp input { color: #0f1b2d; background: #fff; }
+
+/* Férias: programar (líder/RH) e períodos aquisitivos */
+.fpg-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; }
+.fpg-acoes { display: flex; gap: 8px; align-items: center; }
+.fpg-botoes { white-space: nowrap; }
+.fpg-botoes .btn { margin-left: 4px; }
+tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
+.fpg-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface); }

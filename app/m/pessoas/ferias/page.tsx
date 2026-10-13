@@ -1,7 +1,9 @@
 import Workspace from "@/components/Workspace";
 import MinhasFerias from "@/components/pessoas/MinhasFerias";
+import ProgramacaoFerias from "@/components/pessoas/ProgramacaoFerias";
+import { ehControleFerias } from "@/lib/pessoas/ferias-controle";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
-import { admin, encarregadoDoSetor, type SolicitacaoFerias } from "@/lib/pessoas/ferias";
+import { admin, encarregadoDoSetor, temVisaoDeGestores, type SolicitacaoFerias } from "@/lib/pessoas/ferias";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,7 @@ export default async function FeriasPage() {
 
       const { data: sols } = await sb
         .from("ferias_solicitacoes")
-        .select("id,pessoa_id,solicitante,setor,observacao,status,aprovador,avaliado_em,motivo_recusa,criado_em,ferias_periodos(id,inicio,fim,dias)")
+        .select("id,pessoa_id,solicitante,setor,observacao,status,aprovador,avaliado_em,motivo_recusa,criado_em,origem,ferias_periodos(id,inicio,fim,dias)")
         .eq("pessoa_id", p.id)
         .order("criado_em", { ascending: false });
 
@@ -57,6 +59,9 @@ export default async function FeriasPage() {
           inicial={solicitacoes}
         />
       )}
+
+      {/* Programar férias (líder do setor) e períodos aquisitivos (Márcio) */}
+      {(ehEncarregado || ehControleFerias(email) || temVisaoDeGestores(email, perfil?.setor)) && <ProgramacaoFerias />}
     </Workspace>
   );
 }

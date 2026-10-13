@@ -163,7 +163,11 @@ export default function MinhasFerias({
                           {ROTULO_STATUS[s.status as StatusFerias]}
                         </span>
                       </td>
-                      <td className="mut">{s.aprovador ?? <span className="dash">–</span>}</td>
+                      <td className="mut">
+                        {s.aprovador ?? <span className="dash">–</span>}
+                        {s.origem === "lider" && <span className="obs">programada pelo líder</span>}
+                        {s.origem === "rh" && <span className="obs">programada pelo RH</span>}
+                      </td>
                       <td className="c-res">
                         {s.status === "pendente" && (
                           <button className="btn-remover" onClick={() => cancelar(s.id)} title="Cancelar">✕</button>

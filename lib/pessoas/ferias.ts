@@ -18,6 +18,8 @@ export interface SolicitacaoFerias {
   criado_em: string;
   periodos?: PeriodoFerias[];
   pessoa_nome?: string;
+  /** solicitacao | lider | rh */
+  origem?: string;
 }
 
 export function admin() {
