@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
 import { ROTULO_TIPO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
 import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
@@ -69,6 +69,30 @@ export default function InformeRendimentos({
     return empresas.some((e) => e.codigo === n) ? n : null;
   }, [busca, empresas]);
   const nomeEscolhida = empresas.find((e) => e.codigo === codigo)?.nome ?? "";
+
+  // Regime lido do Tareffa assim que a empresa é escolhida (só exibição: o
+  // cálculo e a gravação releem o regime no servidor).
+  const [regimeInfo, setRegimeInfo] = useState<{ regime: "presumido" | "real" | null; descricao: string | null } | null>(null);
+  const [regimeErro, setRegimeErro] = useState<string | null>(null);
+  const [regimeCarregando, setRegimeCarregando] = useState(false);
+  useEffect(() => {
+    setRegimeInfo(null); setRegimeErro(null);
+    if (!codigo) { setRegimeCarregando(false); return; }
+    let ativo = true;
+    setRegimeCarregando(true);
+    fetch(`/api/contabil/informe-rendimentos/regime?codigo=${codigo}`)
+      .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
+      .then(({ ok, j }) => {
+        if (!ativo) return;
+        if (!ok) setRegimeErro(j.error ?? "Não consegui ler o regime no Tareffa.");
+        else setRegimeInfo({ regime: j.regime ?? null, descricao: j.regimeDescricao ?? null });
+      })
+      .catch(() => { if (ativo) setRegimeErro("Não consegui ler o regime no Tareffa."); })
+      .finally(() => { if (ativo) setRegimeCarregando(false); });
+    return () => { ativo = false; };
+  }, [codigo]);
+  const regimeTexto = !codigo ? "" : regimeCarregando ? "Consultando o Tareffa…"
+    : regimeErro ? "Não encontrado" : regimeInfo ? (regimeInfo.regime === "real" ? "Lucro Real" : regimeInfo.regime === "presumido" ? "Lucro Presumido" : (regimeInfo.descricao ?? "Sem regime no Tareffa")) : "";
 
   function corpo() {
     return { tipo, codigoempresa: codigo, competencia, rendimento, demaisReceitas: demais, dividendos, retencao };
@@ -145,12 +169,23 @@ export default function InformeRendimentos({
             </datalist>
           </label>
           <label style={campo}>
+            Regime tributário (Tareffa)
+            <input style={{ ...entrada, opacity: 0.9 }} readOnly tabIndex={-1} value={regimeTexto}
+              placeholder="Escolha a empresa" title="Lido automaticamente do Tareffa" />
+          </label>
+          <label style={campo}>
             Competência
             <input style={entrada} type="month" value={competencia}
               onChange={(e) => { setCompetencia(e.target.value); setRes(null); }} />
           </label>
         </div>
         {codigo && <div style={{ fontSize: 12, color: "var(--muted, #667)", marginTop: 6 }}>{codigo} · {nomeEscolhida}</div>}
+        {regimeErro && <div style={{ fontSize: 12, color: "var(--div)", marginTop: 4 }}>{regimeErro}</div>}
+        {regimeInfo && !regimeInfo.regime && (
+          <div style={{ fontSize: 12, color: "var(--div)", marginTop: 4 }}>
+            {regimeInfo.descricao ? `Regime "${regimeInfo.descricao}" não é atendido por esta tela (só Lucro Presumido e Lucro Real).` : "A empresa não tem Regime Tributário marcado no Tareffa."}
+          </div>
+        )}
 
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", marginTop: 14 }}>
           {tipo !== "ganho-capital" && money(rendimento, setRendimento, tipo === "alugueis" ? "Aluguéis (rendimento)" : "Rendimentos (receita financeira)")}
