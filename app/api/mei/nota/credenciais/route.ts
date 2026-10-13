@@ -7,7 +7,7 @@ import { chamar } from "@/lib/mei/api";
 // A senha é revelada pela API (fica registrado quem viu) e vai só para o robô local no PC de quem emite.
 export const dynamic = "force-dynamic";
 
-interface Cred { id: number; tipo: string; usuario: string | null; documento: string | null; ativo: boolean; tem_senha: boolean }
+interface Cred { id: number; tipo: string; usuario: string | null; documento: string | null; cod_acesso?: string | null; ativo: boolean; tem_senha: boolean }
 
 export async function GET(req: Request) {
   const user = await getCurrentUser().catch(() => null);
@@ -19,6 +19,12 @@ export async function GET(req: Request) {
   const r = await chamar("GET", "/mei/credenciais", { query: { codigoempresa: cod, ativo: true, limit: 50 }, usuario: user?.email ?? null });
   if (r.status !== 200) return NextResponse.json({ error: `Não consegui ler as senhas (API ${r.status}).` }, { status: 502 });
   const lista = ((r.json as { dados?: Cred[] }).dados ?? []).filter((c) => c.ativo);
+  // Guia DAS (PGMEI): CNPJ + CPF + código de acesso do Simples Nacional (não são senha; não precisa revelar).
+  if (new URL(req.url).searchParams.get("tipo") === "das") {
+    const sn = lista.find((c) => c.tipo === "SIMPLES_NACIONAL" && c.usuario);
+    if (!sn) return NextResponse.json({ error: "Esta empresa não tem a senha do Simples Nacional (PGMEI) cadastrada." }, { status: 404 });
+    return NextResponse.json({ creds: { cnpj: sn.usuario, cpf: sn.documento, cod: sn.cod_acesso }, origem: "Simples Nacional" });
+  }
   const segredo = async (c: Cred) => {
     const s = await chamar("GET", `/mei/credenciais/${c.id}/segredo`, { usuario: user?.email ?? null });
     const d = s.json as { senha?: string; segredo?: string };

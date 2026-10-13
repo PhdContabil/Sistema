@@ -138,8 +138,30 @@ function ObsTarefa({ t, fechar, aoSalvar }: { t: Tarefa; fechar: () => void; aoS
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) aoSalvar();
   }
-  async function baixar() {
-    if (!confirm("Baixar esta tarefa? (entrega = hoje)")) return;
+  const [das, setDas] = useState<{ status: string; passos: { msg: string }[]; erro?: string } | null>(null);
+  async function emitirGuia() {
+    setMsg(null);
+    try { await fetch("http://localhost:3199/status"); } catch { setMsg({ ok: false, texto: "O robô não está aberto neste computador (pasta MEI System)." }); return; }
+    const rc = await fetch(`/api/mei/nota/credenciais?cod=${t.codigoempresa}&tipo=das`); const jc = await rc.json();
+    if (!rc.ok) { setMsg({ ok: false, texto: jc.error ?? "Falha ao buscar o código de acesso." }); return; }
+    const r = await fetch("http://localhost:3199/das", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cod: t.codigoempresa, razao: t.razao, creds: jc.creds }) });
+    const j = await r.json();
+    if (!r.ok) { setMsg({ ok: false, texto: j.erro ?? "O robô recusou." }); return; }
+    setDas(j);
+    const id = j.id;
+    for (let i = 0; i < 400; i++) {
+      await new Promise((ok) => setTimeout(ok, 1500));
+      const s = await (await fetch(`http://localhost:3199/jobs/${id}`)).json().catch(() => null);
+      if (!s) break;
+      setDas(s);
+      if (!["preparando", "login", "aguardando_login", "preenchendo"].includes(s.status)) {
+        if (s.status === "aguardando_confirmacao" && t.status !== "Encerrado" && confirm("Guia emitida. Baixar a tarefa?")) await baixar(true);
+        break;
+      }
+    }
+  }
+  async function baixar(direto = false) {
+    if (!direto && !confirm("Baixar esta tarefa? (entrega = hoje)")) return;
     const r = await api("PATCH", `/mei/tarefas/${t.id}`, { corpo: { status: "Encerrado" } });
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) aoSalvar();
@@ -150,8 +172,10 @@ function ObsTarefa({ t, fechar, aoSalvar }: { t: Tarefa; fechar: () => void; aoS
       <textarea style={{ ...st.input, width: "100%", minHeight: 160 }} value={texto} onChange={(e) => setTexto(e.target.value)} />
       <div style={{ ...st.bar, marginTop: 10 }}>
         <button style={st.btnP} onClick={salvar}>Salvar observação</button>
-        {t.status !== "Encerrado" && <button style={st.btn} onClick={baixar}>Baixar tarefa</button>}
+        {t.status !== "Encerrado" && <button style={st.btn} onClick={() => baixar()}>Baixar tarefa</button>}
+        {t.servico_id === 6 && <button style={st.btn} onClick={emitirGuia} disabled={!!das && ["preparando", "login", "aguardando_login", "preenchendo"].includes(das.status)}>Emitir guia DAS (robô)</button>}
       </div>
+      {das && <div style={{ ...st.mut, marginTop: 8 }}><b>Robô DAS: {das.status}</b>{das.erro && <div style={{ color: "var(--div)" }}>{das.erro}</div>}{das.passos.slice(-4).map((p, i) => <div key={i}>• {p.msg}</div>)}</div>}
       <Mensagem msg={msg} />
     </Modal>
   );
