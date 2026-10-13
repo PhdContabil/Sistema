@@ -8,7 +8,7 @@ import {
   QuestorError,
   type TipoLookupCadastro,
 } from "@/lib/questor";
-import { chamar } from "@/lib/mei/api";
+import ativmunic from "@/lib/mei/ativmunic.json";
 
 // Listas fixas + buscas (naturezas jurídicas, enquadramentos, tabela de
 // feriado, tipo de logradouro, estados, municípios, CNAEs) do formulário de
@@ -35,15 +35,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ dados });
     }
     if (tipo === "ativ-municipais") {
-      // Atividades municipais (ISS) cadastradas no Questor para o município — o cadastro só aceita estas.
+      // Atividades municipais (tabela ATIVMUNIC do Questor) do município — é o que o cadastro valida.
+      // A rota /lookups/servicos-municipais da API lê outra tabela (servicomunicipal, códigos "17.19"),
+      // por isso usamos uma cópia da ATIVMUNIC (lib/mei/ativmunic.json) até a API ter a lista certa.
       const uf = searchParams.get("uf") ?? ""; const codigomunic = searchParams.get("codigomunic") ?? "";
-      if (!uf || !codigomunic) return NextResponse.json({ dados: [] });
-      const r = await chamar("GET", "/lookups/servicos-municipais", { query: { uf, codigomunic, limit: 0 } });
-      if (r.status !== 200) return NextResponse.json({ error: `API ${r.status}` }, { status: 502 });
-      const lista = ((r.json as { dados?: Record<string, unknown>[] }).dados ?? []).map((x) => ({
-        codigo: String(x.codigoativmunic ?? x.codigo ?? ""), descricao: String(x.descrativmunic ?? x.descricao ?? ""),
-      })).filter((x) => x.codigo);
-      return NextResponse.json({ dados: lista });
+      const tabela = ativmunic as Record<string, { codigo: string; descricao: string }[] | { codigo: string; descricao: string }>;
+      const v = tabela[`${uf}-${Number(codigomunic)}`];
+      return NextResponse.json({ dados: v ? (Array.isArray(v) ? v : [v]) : [] });
     }
     if (tipo === "cnaes") {
       const q = searchParams.get("q") ?? "";
