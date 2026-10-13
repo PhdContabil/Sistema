@@ -16,7 +16,7 @@ async function usuario() {
 const TABELAS: Record<string, string> = { modelos: "mei_contrato_modelo", contratos: "mei_contrato" };
 
 export async function GET(req: Request) {
-  if (!(await usuario())) return NextResponse.json({ error: "Sistema MEI restrito à T.I." }, { status: 403 });
+  if (!(await usuario())) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
   const sp = new URL(req.url).searchParams;
   const tabela = TABELAS[sp.get("tipo") ?? "contratos"];
   if (!tabela) return NextResponse.json({ error: "tipo inválido" }, { status: 400 });
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const email = await usuario();
-  if (!email) return NextResponse.json({ error: "Sistema MEI restrito à T.I." }, { status: 403 });
+  if (!email) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
   let b: { tipo?: string; acao?: "criar" | "alterar" | "excluir"; codigo?: number; dados?: Record<string, unknown> };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "JSON inválido." }, { status: 400 }); }
   const tabela = TABELAS[b.tipo ?? ""];

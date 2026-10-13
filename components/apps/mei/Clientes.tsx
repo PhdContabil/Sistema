@@ -150,7 +150,7 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
   function comunicado() {
     const salao = !m.salaoCod || m.salaoCod === 53278 ? "CLIENTE AVULSO" : m.salao;
     const corpo = `<p>Prezados(as),</p><p>Venho comunicar a todos o desligamento da profissional:</p><p><b>${salao}<br>${m.cod} - ${m.razao}</b><br>CNPJ: ${m.cnpj}</p><p>Questor: Baixada<br>Data de Saída: <span style="color:red">${dt(data)}</span></p>`;
-    const eml = [`To: anna.caroline@phdcontabil.com.br, debora@phdcontabil.com.br`, `Subject: Comunicado de Saída - ${m.razao}`, "MIME-Version: 1.0",
+    const eml = [`To: debora@phdcontabil.com.br, graciele@phdcontabil.com.br`, `Subject: Comunicado de Saída - ${m.razao}`, "MIME-Version: 1.0",
       "X-Unsent: 1", "Content-Type: text/html; charset=UTF-8", "", corpo].join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" }));

@@ -12,7 +12,7 @@ interface Cred { id: number; tipo: string; usuario: string | null; documento: st
 export async function GET(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
-  if (!podeAcessarApp(nivel, "mei", "Sistema MEI")) return NextResponse.json({ error: "Sistema MEI restrito à T.I." }, { status: 403 });
+  if (!podeAcessarApp(nivel, "mei", "Sistema MEI")) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
   const cod = Number(new URL(req.url).searchParams.get("cod"));
   if (!cod) return NextResponse.json({ error: "Informe o código do MEI." }, { status: 400 });
 

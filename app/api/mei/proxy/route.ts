@@ -15,13 +15,13 @@ async function usuarioLiberado() {
 }
 
 export async function GET() {
-  if (!(await usuarioLiberado())) return NextResponse.json({ error: "Sistema MEI restrito à T.I." }, { status: 403 });
+  if (!(await usuarioLiberado())) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
   return NextResponse.json(chavesConfiguradas());
 }
 
 export async function POST(req: Request) {
   const usuario = await usuarioLiberado();
-  if (!usuario) return NextResponse.json({ error: "Sistema MEI restrito à T.I." }, { status: 403 });
+  if (!usuario) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
   let b: { metodo?: string; caminho?: string; query?: Record<string, unknown>; corpo?: unknown; idempotencia?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "JSON inválido." }, { status: 400 }); }
   const metodo = String(b.metodo ?? "GET").toUpperCase();

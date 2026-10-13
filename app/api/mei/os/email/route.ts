@@ -17,7 +17,7 @@ const PARA: Record<string, string[]> = {
 export async function POST(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
-  if (!podeAcessarApp(nivel, "mei", "Sistema MEI")) return NextResponse.json({ error: "Sistema MEI restrito à T.I." }, { status: 403 });
+  if (!podeAcessarApp(nivel, "mei", "Sistema MEI")) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
   let b: { nos?: number; publico?: string; pdfBase64?: string; nomeArquivo?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "JSON inválido." }, { status: 400 }); }
   const para = PARA[b.publico ?? ""];
