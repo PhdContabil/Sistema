@@ -147,15 +147,19 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
     if (r.status < 300) { setFeito(true); if (!r.dryRunForcado) mudou(); }
   }
 
-  function comunicado() {
+  async function comunicado() {
     const salao = !m.salaoCod || m.salaoCod === 53278 ? "CLIENTE AVULSO" : m.salao;
-    const corpo = `<p>Prezados(as),</p><p>Venho comunicar a todos o desligamento da profissional:</p><p><b>${salao}<br>${m.cod} - ${m.razao}</b><br>CNPJ: ${m.cnpj}</p><p>Questor: Baixada<br>Data de Saída: <span style="color:red">${dt(data)}</span></p>`;
-    const eml = [`To: debora@phdcontabil.com.br, graciele@phdcontabil.com.br`, `Subject: Comunicado de Saída - ${m.razao}`, "MIME-Version: 1.0",
-      "X-Unsent: 1", "Content-Type: text/html; charset=UTF-8", "", corpo].join("\r\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" }));
-    a.download = `Comunicado de Saida - ${m.cod}.eml`;
-    a.click();
+    const r = await fetch("/api/mei/comunicado", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cod: m.cod, razao: m.razao, cnpj: m.cnpj, salao, data }) });
+    if ((r.headers.get("content-type") ?? "").includes("message/rfc822")) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = `Comunicado de Saida - ${m.cod}.eml`;
+      a.click();
+      setMsg({ ok: true, texto: `${decodeURIComponent(r.headers.get("x-motivo") ?? "")} Abra o arquivo baixado no Outlook e envie.` });
+      return;
+    }
+    const j = await r.json().catch(() => ({}));
+    setMsg(r.ok ? { ok: true, texto: `Comunicado enviado para ${(j.para ?? []).join(", ")}.` } : { ok: false, texto: j.error ?? "Falha ao enviar o comunicado." });
   }
 
   return (
@@ -164,7 +168,7 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
       <Campo label="Data de encerramento"><input type="date" style={st.input} value={data} onChange={(e) => setData(e.target.value)} /></Campo>
       <div style={{ ...st.bar, marginTop: 10 }}>
         <button style={st.btnD} onClick={salvar}>Salvar encerramento</button>
-        <button style={st.btn} onClick={comunicado} disabled={!feito}>Gerar comunicado (.eml)</button>
+        <button style={st.btn} onClick={comunicado} disabled={!feito}>Enviar comunicado de saída</button>
       </div>
       <Mensagem msg={msg} />
     </Modal>

@@ -82,17 +82,20 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
     const { doc, nome } = await pdfDaOS(o, publico, servicos, porCod.get(Number(o.questor)));
     doc.save(nome);
   }
-  async function email(o: OS, publico: "financeiro" | "geral") {
+  async function email(o: OS, publico: "financeiro" | "geral"): Promise<string> {
     setMsg({ ok: true, texto: "Gerando PDF e e-mail…" });
     const { doc, nome } = await pdfDaOS(o, publico, servicos, porCod.get(Number(o.questor)));
     const r = await fetch("/api/mei/os/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nos: o.nos, publico, pdfBase64: pdfParaBase64(doc), nomeArquivo: nome }) });
     if (r.headers.get("content-type")?.includes("message/rfc822")) {
       const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = `OS ${o.nos} - ${publico}.eml`; a.click();
-      setMsg({ ok: true, texto: "Rascunho de e-mail baixado (abra no Outlook e clique em Enviar)." + (r.headers.get("x-motivo") ? ` ${decodeURIComponent(r.headers.get("x-motivo")!)}` : "") });
-      return;
+      const texto = "Rascunho de e-mail baixado (abra no Outlook e clique em Enviar)." + (r.headers.get("x-motivo") ? ` ${decodeURIComponent(r.headers.get("x-motivo")!)}` : "");
+      setMsg({ ok: true, texto });
+      return texto;
     }
     const j = await r.json().catch(() => ({}));
-    setMsg(r.ok ? { ok: true, texto: `E-mail enviado para ${(j.para ?? []).join(", ")}.` } : { ok: false, texto: j.error ?? "Falha ao enviar." });
+    const res = r.ok ? { ok: true, texto: `E-mail ${publico === "financeiro" ? "Financeiro" : "Geral"} enviado para ${(j.para ?? []).join(", ")}.` } : { ok: false, texto: j.error ?? "Falha ao enviar." };
+    setMsg(res);
+    return res.texto;
   }
 
   return (
@@ -133,7 +136,7 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
   );
 }
 
-function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null; mei: Mei[]; servicos: ServEscrit[]; fechar: () => void; baixarPdf: (o: OS, p: "financeiro" | "geral") => Promise<void>; email: (o: OS, p: "financeiro" | "geral") => Promise<void> }) {
+function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null; mei: Mei[]; servicos: ServEscrit[]; fechar: () => void; baixarPdf: (o: OS, p: "financeiro" | "geral") => Promise<void>; email: (o: OS, p: "financeiro" | "geral") => Promise<string> }) {
   const nova = !os;
   const [o, setO] = useState<OS>(os ?? vazio());
   const [busca, setBusca] = useState("");
@@ -143,6 +146,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
   const [linhas, setLinhas] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState<OS | null>(null);
+  const [emailAuto, setEmailAuto] = useState(true);
 
   useEffect(() => {
     if (!nova) return;
@@ -221,7 +225,17 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
       }
       setLinhas(out);
       setMsg({ ok: true, texto: r.dryRunForcado ? "Simulação concluída (trava ligada) — nada foi gravado." : "O.S. salva." });
-      if (!r.dryRunForcado) setSalvo(gravada);
+      if (!r.dryRunForcado) {
+        setSalvo(gravada);
+        // Envio automático ao salvar (O.S. nova): Financeiro e Geral, com o PDF de cada um.
+        if (nova && emailAuto && gravada.nos) {
+          for (const p of ["financeiro", "geral"] as const) {
+            const txt = await email(gravada, p).catch(() => `Falha ao enviar o e-mail ${p}.`);
+            out.push(txt);
+          }
+          setLinhas([...out]);
+        }
+      }
     } finally { setSalvando(false); }
   }
 
@@ -312,6 +326,12 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
         <label><span>Observações gerais <small style={{ opacity: 0.7 }}>(só no PDF Geral)</small></span><textarea rows={2} value={o.obsgerais ?? ""} onChange={(e) => set("obsgerais", e.target.value)} /></label>
         <label><span>Observações financeiro <small style={{ opacity: 0.7 }}>(só no PDF Financeiro)</small></span><textarea rows={2} value={o.obs ?? ""} onChange={(e) => set("obs", e.target.value)} /></label>
 
+        {nova && !salvo && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, flexDirection: "row", marginTop: 8 }}>
+            <input type="checkbox" checked={emailAuto} onChange={(e) => setEmailAuto(e.target.checked)} style={{ width: "auto" }} />
+            <span>Ao salvar, enviar a O.S. por e-mail para o Financeiro e o Geral</span>
+          </label>
+        )}
         {msg && <div className={`pl-banner${msg.ok ? "" : " error"}`} style={{ marginTop: 8 }}>{msg.texto}</div>}
         {linhas.map((l, i) => <p key={i} style={{ fontSize: 13, margin: "4px 0" }}>{l}</p>)}
         {salvo && <div className="pl-banner" style={{ marginTop: 8 }}>O.S. {salvo.nos} salva. Feche e use a lista para imprimir ou mandar por e-mail ao Financeiro.</div>}

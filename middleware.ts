@@ -34,6 +34,10 @@ const PUBLIC_PATHS = [
   "/api/paralegal/robo-zen/cron/varredura",
   // Fila de nomes de pastas (script do phddc01; autentica por token próprio)
   "/api/paralegal/pastas-fila",
+  // Mesma fila para o Cliente Mensal do Sistema MEI (token próprio)
+  "/api/mei/pastas-fila",
+  // Instalador e arquivos do robô local do Sistema MEI (sem segredos; o .bat baixa daqui)
+  "/robo/",
 ];
 
 /** Domínio corporativo autorizado a entrar no hub. */

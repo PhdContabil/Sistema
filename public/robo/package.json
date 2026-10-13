@@ -1,0 +1,8 @@
+{
+  "name": "robo-nucleo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Robô local do Sistema MEI (Núcleo Contábil): preenche NFS-e no Emissor Nacional e abre a guia DAS no PGMEI.",
+  "engines": { "node": ">=18" },
+  "dependencies": { "playwright-core": "1.48.2" }
+}

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api, ler, st, Tabela, Campo, Mensagem, Modal, SelectSalao, useLista, baixarCsv, dt, hojeISO, primeiroDiaMes, ultimoDiaMes,
-  resumoGravacao, semHtml, type Mei, type Responsavel, type ServicoTarefa,
+  resumoGravacao, semHtml, verificarRobo, AvisoRobo, ROBO_URL, type RoboEstado, type Mei, type Responsavel, type ServicoTarefa,
 } from "./ui";
 
 interface Tarefa {
@@ -16,6 +16,46 @@ interface Tarefa {
 const POR_PAGINA = 100;
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const comp = (s: string | null) => (s ? `${s.slice(5, 7)}/${s.slice(0, 4)}` : "");
+const ontemISO = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+
+interface JobDas { id?: string; status: string; passos: { msg: string }[]; erro?: string }
+const DAS_RODANDO = ["preparando", "login", "aguardando_login", "preenchendo"];
+const DAS_STATUS: Record<string, string> = {
+  preparando: "abrindo o Chrome…", login: "entrando no Simples Nacional…", aguardando_login: "aguardando você resolver a verificação na janela do Chrome",
+  preenchendo: "abrindo a guia…", aguardando_confirmacao: "guia aberta — confira e baixe o PDF; feche a janela ao terminar",
+  fechada: "janela fechada", erro: "erro", cancelada: "cancelado",
+};
+
+/** Roda o robô da guia DAS para uma tarefa. esperarFechar=true (lote): só termina quando a janela do Chrome é fechada. */
+async function rodarDAS(t: Tarefa, onJob: (j: JobDas) => void, esperarFechar = false): Promise<"ok" | "falhou"> {
+  const rc = await fetch(`/api/mei/nota/credenciais?cod=${t.codigoempresa}&tipo=das`); const jc = await rc.json();
+  if (!rc.ok) { onJob({ status: "erro", erro: jc.error ?? "Falha ao buscar o código de acesso.", passos: [] }); return "falhou"; }
+  const r = await fetch(`${ROBO_URL}/das`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cod: t.codigoempresa, razao: t.razao, creds: jc.creds }) });
+  const j = await r.json();
+  if (!r.ok) { onJob({ status: "erro", erro: j.erro ?? "O robô recusou.", passos: [] }); return "falhou"; }
+  onJob(j);
+  let abriu = false;
+  for (let i = 0; i < 2400; i++) {
+    await new Promise((ok) => setTimeout(ok, 1500));
+    const s: JobDas | null = await (await fetch(`${ROBO_URL}/jobs/${j.id}`)).json().catch(() => null);
+    if (!s) return abriu ? "ok" : "falhou";
+    onJob(s);
+    if (s.status === "aguardando_confirmacao") { abriu = true; if (!esperarFechar) return "ok"; continue; }
+    if (!DAS_RODANDO.includes(s.status)) return abriu ? "ok" : "falhou";
+  }
+  return abriu ? "ok" : "falhou";
+}
+
+function PainelDas({ job, titulo }: { job: JobDas | null; titulo?: string }) {
+  if (!job) return null;
+  return (
+    <div style={{ ...st.mut, marginTop: 8, padding: "8px 10px", background: "var(--accent-soft)", borderRadius: 8 }}>
+      <b>{titulo ?? "Robô DAS"}: {DAS_STATUS[job.status] ?? job.status}</b>
+      {job.erro && <div style={{ color: "var(--div)" }}>{job.erro}</div>}
+      {job.passos.slice(-4).map((p, i) => <div key={i}>• {p.msg}</div>)}
+    </div>
+  );
+}
 
 export default function Tarefas({ mei }: { mei: Mei[] }) {
   const resp = useLista<Responsavel>("/mei/responsaveis");
@@ -30,6 +70,9 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [modal, setModal] = useState<"" | "avulso" | "programacao" | "transferencia">("");
   const [obs, setObs] = useState<Tarefa | null>(null);
+  const [vencidas, setVencidas] = useState<Tarefa[]>([]);
+  const [lote, setLote] = useState<{ atual: number; total: number; razao: string; job: JobDas | null; parar: boolean } | null>(null);
+  const [roboEstado, setRoboEstado] = useState<RoboEstado>("ok");
 
   const filtroApi = useMemo(() => ({
     de: f.de, ate: f.ate, status: f.status || undefined, responsavel_id: f.responsavel_id || undefined,
@@ -46,6 +89,20 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
   }, [filtroApi, pagina]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  // Aviso de vencidas: tarefas em aberto com data de serviço até ontem (independe do filtro da tela).
+  const carregarVencidas = useCallback(async () => {
+    try {
+      const j = await ler<{ dados: Tarefa[] }>("/mei/tarefas", { status: "Em Aberto", de: "2000-01-01", ate: ontemISO(), limit: 1000 });
+      setVencidas(j.dados ?? []);
+    } catch { setVencidas([]); }
+  }, []);
+  useEffect(() => { carregarVencidas(); }, [carregarVencidas, dados]);
+  const vencidasPorResp = useMemo(() => {
+    const m = new Map<string, { id: number; nome: string; n: number }>();
+    for (const v of vencidas) { const k = String(v.responsavel_id); const x = m.get(k) ?? { id: v.responsavel_id, nome: v.responsavel_nome || "Sem responsável", n: 0 }; x.n++; m.set(k, x); }
+    return [...m.values()].sort((a, b) => b.n - a.n);
+  }, [vencidas]);
+  const verVencidas = (responsavel_id?: number) => setF((x) => ({ ...x, status: "Em Aberto", de: "2000-01-01", ate: ontemISO(), responsavel_id: responsavel_id ? String(responsavel_id) : "" }));
   // Igual ao Access: mudar filtro desmarca a seleção.
   useEffect(() => { setSel(new Set()); setPagina(0); }, [filtroApi]);
 
@@ -79,6 +136,31 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
     setMsg(null);
   }
 
+  // Guia DAS em lote: abre uma guia por vez; a próxima começa quando você fecha a janela do Chrome.
+  const dasSelecionadas = dados.filter((x) => sel.has(x.id) && x.servico_id === 6 && x.status !== "Encerrado");
+  async function dasEmLote() {
+    if (!dasSelecionadas.length) { setMsg({ ok: false, texto: "Marque tarefas de guia DAS em aberto." }); return; }
+    const estado = await verificarRobo(); setRoboEstado(estado);
+    if (estado !== "ok") return;
+    if (!confirm(`Emitir ${dasSelecionadas.length} guia(s) DAS? O robô abre uma por vez: confira/baixe o PDF e FECHE a janela do Chrome para ir para a próxima.`)) return;
+    const feitas: number[] = [];
+    let parar = false;
+    for (let i = 0; i < dasSelecionadas.length && !parar; i++) {
+      const tf = dasSelecionadas[i];
+      setLote({ atual: i + 1, total: dasSelecionadas.length, razao: `${tf.codigoempresa} - ${tf.razao}`, job: null, parar: false });
+      const res = await rodarDAS(tf, (job) => setLote((l) => { if (l?.parar) parar = true; return l ? { ...l, job } : l; }), true);
+      if (res === "ok") feitas.push(tf.id);
+    }
+    setLote(null);
+    if (!feitas.length) { setMsg({ ok: false, texto: "Nenhuma guia foi aberta." }); return; }
+    if (confirm(`${feitas.length} guia(s) aberta(s). Baixar essas tarefas? (entrega = hoje)`)) {
+      const r1 = await api("POST", "/mei/tarefas/lote", { corpo: { acao: "selecionar", ids: feitas, validacao: true } });
+      const r2 = r1.status < 300 ? await api("POST", "/mei/tarefas/lote", { corpo: { acao: "baixar", ids: feitas } }) : r1;
+      setMsg(resumoGravacao(r2));
+      if (r2.status < 300 && !r2.dryRunForcado) { setSel(new Set()); carregar(); }
+    } else setMsg({ ok: true, texto: `${feitas.length} guia(s) aberta(s). Tarefas não baixadas.` });
+  }
+
   const ativos = mei.filter((m) => m.ativo).sort((a, b) => a.razao.localeCompare(b.razao));
 
   return (
@@ -100,9 +182,26 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
           <button style={st.btn} onClick={() => setModal("programacao")}>Programação</button>
           <button style={st.btn} onClick={() => setModal("transferencia")}>Transferência</button>
           <button style={st.btn} onClick={exportar}>Exportar Excel (CSV)</button>
+          <button style={st.btn} onClick={dasEmLote} disabled={!!lote}>Emitir DAS das selecionadas ({dasSelecionadas.length})</button>
           <span style={{ flex: 1 }} />
           <span style={st.mut}>{carregando ? "Carregando…" : `${total} tarefa(s)`}</span>
         </div>
+        {vencidasPorResp.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "6px 0 10px", padding: "8px 10px", borderRadius: 10, background: "rgba(220, 38, 38, 0.08)", border: "1px solid rgba(220, 38, 38, 0.25)" }}>
+            <b style={{ color: "var(--div)" }}>⚠ {vencidas.length} tarefa(s) vencida(s):</b>
+            {vencidasPorResp.map((r) => (
+              <button key={r.id} style={{ ...st.btn, padding: "3px 10px" }} onClick={() => verVencidas(r.id)}>{r.nome}: <b>{r.n}</b></button>
+            ))}
+            <button style={{ ...st.btn, padding: "3px 10px" }} onClick={() => verVencidas()}>Ver todas</button>
+          </div>
+        )}
+        <AvisoRobo estado={roboEstado} fechar={() => setRoboEstado("ok")} />
+        {lote && (
+          <div>
+            <PainelDas job={lote.job} titulo={`Guia ${lote.atual} de ${lote.total} — ${lote.razao}`} />
+            <button style={{ ...st.btn, marginTop: 6 }} onClick={() => setLote((l) => (l ? { ...l, parar: true } : l))}>Parar depois desta</button>
+          </div>
+        )}
         <Mensagem msg={msg} />
         {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
         <Tabela
@@ -138,27 +237,14 @@ function ObsTarefa({ t, fechar, aoSalvar }: { t: Tarefa; fechar: () => void; aoS
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) aoSalvar();
   }
-  const [das, setDas] = useState<{ status: string; passos: { msg: string }[]; erro?: string } | null>(null);
+  const [das, setDas] = useState<JobDas | null>(null);
+  const [roboEstado, setRoboEstado] = useState<RoboEstado>("ok");
   async function emitirGuia() {
     setMsg(null);
-    try { await fetch("http://localhost:3199/status"); } catch { setMsg({ ok: false, texto: "O robô não está aberto neste computador (pasta MEI System)." }); return; }
-    const rc = await fetch(`/api/mei/nota/credenciais?cod=${t.codigoempresa}&tipo=das`); const jc = await rc.json();
-    if (!rc.ok) { setMsg({ ok: false, texto: jc.error ?? "Falha ao buscar o código de acesso." }); return; }
-    const r = await fetch("http://localhost:3199/das", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cod: t.codigoempresa, razao: t.razao, creds: jc.creds }) });
-    const j = await r.json();
-    if (!r.ok) { setMsg({ ok: false, texto: j.erro ?? "O robô recusou." }); return; }
-    setDas(j);
-    const id = j.id;
-    for (let i = 0; i < 400; i++) {
-      await new Promise((ok) => setTimeout(ok, 1500));
-      const s = await (await fetch(`http://localhost:3199/jobs/${id}`)).json().catch(() => null);
-      if (!s) break;
-      setDas(s);
-      if (!["preparando", "login", "aguardando_login", "preenchendo"].includes(s.status)) {
-        if (s.status === "aguardando_confirmacao" && t.status !== "Encerrado" && confirm("Guia emitida. Baixar a tarefa?")) await baixar(true);
-        break;
-      }
-    }
+    const estado = await verificarRobo(); setRoboEstado(estado);
+    if (estado !== "ok") return;
+    const res = await rodarDAS(t, setDas);
+    if (res === "ok" && t.status !== "Encerrado" && confirm("Guia aberta. Baixar a tarefa?")) await baixar(true);
   }
   async function baixar(direto = false) {
     if (!direto && !confirm("Baixar esta tarefa? (entrega = hoje)")) return;
@@ -173,9 +259,10 @@ function ObsTarefa({ t, fechar, aoSalvar }: { t: Tarefa; fechar: () => void; aoS
       <div style={{ ...st.bar, marginTop: 10 }}>
         <button style={st.btnP} onClick={salvar}>Salvar observação</button>
         {t.status !== "Encerrado" && <button style={st.btn} onClick={() => baixar()}>Baixar tarefa</button>}
-        {t.servico_id === 6 && <button style={st.btn} onClick={emitirGuia} disabled={!!das && ["preparando", "login", "aguardando_login", "preenchendo"].includes(das.status)}>Emitir guia DAS (robô)</button>}
+        {t.servico_id === 6 && <button style={st.btn} onClick={emitirGuia} disabled={!!das && DAS_RODANDO.includes(das.status)}>Emitir guia DAS (robô)</button>}
       </div>
-      {das && <div style={{ ...st.mut, marginTop: 8 }}><b>Robô DAS: {das.status}</b>{das.erro && <div style={{ color: "var(--div)" }}>{das.erro}</div>}{das.passos.slice(-4).map((p, i) => <div key={i}>• {p.msg}</div>)}</div>}
+      <AvisoRobo estado={roboEstado} fechar={() => setRoboEstado("ok")} />
+      <PainelDas job={das} />
       <Mensagem msg={msg} />
     </Modal>
   );

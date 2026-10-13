@@ -169,3 +169,34 @@ export function SelectSalao({ mei, valor, onChange, todos = true }: { mei: Mei[]
     </Campo>
   );
 }
+
+// ---------------- Robô local (NFS-e e guia DAS) ----------------
+export const ROBO_URL = "http://localhost:3199";
+export const ROBO_VERSAO_MINIMA = 2;
+export const ROBO_INSTALADOR = "/robo/instalar-robo-nucleo.bat";
+export type RoboEstado = "ok" | "ausente" | "desatualizado";
+
+/** Confere se o robô está rodando neste computador e se é a versão atual. */
+export async function verificarRobo(): Promise<RoboEstado> {
+  try {
+    const r = await fetch(`${ROBO_URL}/status`, { cache: "no-store" });
+    const j = await r.json();
+    return Number(j.versao ?? 1) >= ROBO_VERSAO_MINIMA ? "ok" : "desatualizado";
+  } catch { return "ausente"; }
+}
+
+/** Aviso com o link do instalador (baixa o .bat; ao abrir, ele instala/atualiza tudo sozinho). */
+export function AvisoRobo({ estado, fechar }: { estado: RoboEstado; fechar?: () => void }) {
+  if (estado === "ok") return null;
+  return (
+    <div style={{ ...st.aviso, borderLeft: "4px solid var(--accent)", display: "grid", gap: 6 }}>
+      <b>{estado === "ausente" ? "O robô não está instalado (ou não está aberto) neste computador." : "Tem uma versão nova do robô."}</b>
+      <span>1) Clique em <b>Baixar instalador</b> · 2) abra o arquivo baixado (se o Windows avisar, clique em “Mais informações” → “Executar assim mesmo”) · 3) espere a mensagem “Pronto!” e clique de novo no botão do robô.</span>
+      <div style={{ display: "flex", gap: 8 }}>
+        <a href={ROBO_INSTALADOR} download style={{ ...st.btnP, textDecoration: "none" }}>Baixar instalador</a>
+        {fechar && <button style={st.btn} onClick={fechar}>Fechar</button>}
+      </div>
+      <span style={st.mut}>Não precisa de administrador. Precisa do Google Chrome instalado. Depois de instalado, o robô abre sozinho com o Windows.</span>
+    </div>
+  );
+}

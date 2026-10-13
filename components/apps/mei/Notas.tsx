@@ -3,7 +3,7 @@
 // Notas MEI (menu_mei): profissionais do salão, notas do período, Exportar Notas, Exportar DAS,
 // relatório rel_notas e a tela de emissão (emitirnota).
 import { useEffect, useMemo, useState } from "react";
-import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, type Mei } from "./ui";
+import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, type RoboEstado, type Mei } from "./ui";
 
 interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
@@ -88,6 +88,7 @@ interface ResultadoNota {
 /** emitirnota: lança no Questor a NFS-e já emitida no Portal Nacional (saída no MEI + entrada no salão + ISS). */
 function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
   const [d, setD] = useState({ data: data > hojeISO() ? hojeISO() : data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
+  const [roboEstado, setRoboEstado] = useState<RoboEstado>("ok");
   const [robo, setRobo] = useState<{ id?: string; status: string; passos: { msg: string }[]; erro?: string } | null>(null);
   const [sugestao, setSugestao] = useState("");
   const [erro, setErro] = useState("");
@@ -111,10 +112,9 @@ function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => v
     const valor = Number(d.valor.replace(/\./g, "").replace(",", "."));
     if (!valor || !d.data) { setErro("Informe a data e o valor antes de preencher no portal."); return; }
     if (!m.salaoCnpj) { setErro("Salão sem CNPJ no cadastro — não dá para preencher o tomador."); return; }
-    try { await fetch("http://localhost:3199/status"); } catch {
-      setErro("O robô não está aberto neste computador. Abra \"iniciar-robo-nucleo.bat\" na pasta MEI System e tente de novo.");
-      return;
-    }
+    const estado = await verificarRobo();
+    setRoboEstado(estado);
+    if (estado !== "ok") return;
     setRobo({ status: "buscando senha", passos: [] });
     const rc = await fetch(`/api/mei/nota/credenciais?cod=${m.cod}`);
     const jc = await rc.json();
@@ -182,6 +182,7 @@ function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => v
         {soSaida && <button style={st.btnD} onClick={() => lancar(false)}>Lançar só a saída</button>}
       </div>
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
+      <AvisoRobo estado={roboEstado} fechar={() => setRoboEstado("ok")} />
       {robo && (
         <div style={{ ...st.card, marginTop: 10 }}>
           <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Robô: {({ "buscando senha": "buscando a senha…", preparando: "abrindo o Chrome…", login: "fazendo login…", preenchendo: "preenchendo a nota…", aguardando_confirmacao: "PRONTO — confira na janela do Chrome e clique em EMITIR lá. Depois informe o número da nota acima e lance no Questor.", erro: "erro", cancelada: "cancelado", fechada: "janela do Chrome fechada" } as Record<string, string>)[robo.status] ?? robo.status}</p>
