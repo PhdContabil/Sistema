@@ -11,7 +11,8 @@ const KEY = process.env.QUESTOR_API_KEY ?? "";
 const WRITE_KEY = process.env.QUESTOR_WRITE_KEY ?? "";
 const MEI_KEY = process.env.MEI_API_KEY ?? "";
 const CRED_KEY = process.env.MEI_CRED_KEY ?? "";
-const ADMIN_KEY = process.env.MEI_ADMIN_KEY ?? "";
+// trim: valor colado no Vercel com espaço/quebra de linha; aceita também "perfil:chave".
+const ADMIN_KEY = (process.env.MEI_ADMIN_KEY ?? "").trim().replace(/^nucleo-mei-os:/, "");
 
 /**
  * Trava por recurso. MEI_GRAVACAO_LIBERADA = "sim" libera tudo; ou uma lista separada por vírgula,
@@ -80,8 +81,7 @@ function cabecalhos(metodo: string, caminho: string, usuario: string | null): Re
     if (CRED_KEY) h["X-Mei-Key"] = CRED_KEY;
   } else if (metodo === "DELETE" && caminho.startsWith("/mei/os/")) {
     // Excluir O.S. exige o perfil de administrador da API (X-Admin-Key).
-    // A rota também passa pela checagem do perfil MEI, então vão as duas chaves.
-    if (MEI_KEY) h["X-Mei-Key"] = MEI_KEY;
+    // Só a chave de administrador (a de operador junto faz a API recusar com 403).
     if (ADMIN_KEY) h["X-Admin-Key"] = ADMIN_KEY;
   } else if (caminho.startsWith("/mei/") && metodo !== "GET") {
     if (MEI_KEY) h["X-Mei-Key"] = MEI_KEY;

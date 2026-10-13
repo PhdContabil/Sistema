@@ -249,7 +249,6 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
     try {
       const r = await api("DELETE", `/mei/os/${o.nos}`);
       const x = resumoGravacao(r);
-      if (r.status === 403) { setMsg({ ok: false, texto: "A API só permite excluir O.S. com a chave de administrador (MEI_ADMIN_KEY), que ainda não está configurada no Núcleo." }); return; }
       setMsg(x);
       if (x.ok && !r.dryRunForcado) fechar();
     } finally { setSalvando(false); }
