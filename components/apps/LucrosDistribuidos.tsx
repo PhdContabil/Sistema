@@ -16,6 +16,7 @@ interface Resultado {
   gravacaoLiberada: boolean;
   motivoBloqueio: string | null;
   jaLancadoEm: string | null;
+  questor?: { avisos?: string[] };
 }
 
 interface Ajuste {
@@ -319,6 +320,7 @@ export default function LucrosDistribuidos({
             <div className="banner error">Esta mesma distribuição já foi lançada em {new Date(res.jaLancadoEm).toLocaleString("pt-BR")}.</div>
           )}
           {res.motivoBloqueio && <div className="banner error">{res.motivoBloqueio}</div>}
+          {(res.questor?.avisos ?? []).map((a) => <div key={`q-${a}`} className="banner">Aviso do Questor: {a}</div>)}
 
           <h3 style={{ fontSize: 14, margin: "8px 0" }}>Fiscal — OUTRORENDIMENTOPAGO</h3>
           <div className="table-wrap" style={{ marginBottom: 14 }}>
