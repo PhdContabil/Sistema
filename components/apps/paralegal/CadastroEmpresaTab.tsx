@@ -209,6 +209,16 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
   const ehMei = modo === "mei";
   const [dados, setDados] = useState(ehMei ? { ...DADOS_VAZIO, codigonaturjurid: "2135", tipoenquad: "4" } : { ...DADOS_VAZIO });
   const [meiExtra, setMeiExtra] = useState({ salao: "", usuarioNacional: "", senhaNacional: "", ativmunic: "" });
+  const [ativOpcoes, setAtivOpcoes] = useState<{ codigo: string; descricao: string }[] | null>(null);
+  useEffect(() => {
+    if (!ehMei || !dados.siglaestado || !dados.codigomunic) { setAtivOpcoes(null); return; }
+    let vivo = true;
+    buscarLookup("ativ-municipais", { uf: dados.siglaestado, codigomunic: dados.codigomunic })
+      .then((l) => { if (!vivo) return; const ops = l as unknown as { codigo: string; descricao: string }[]; setAtivOpcoes(ops); setMeiExtra((x) => (ops.some((o) => o.codigo === x.ativmunic) ? x : { ...x, ativmunic: ops.length === 1 ? ops[0].codigo : "" })); })
+      .catch(() => { if (vivo) setAtivOpcoes([]); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ehMei, dados.siglaestado, dados.codigomunic]);
   const [socios, setSocios] = useState<Socio[]>(() => [novoSocio(1)]);
   const socioIdRef = useRef(1);
 
@@ -514,7 +524,7 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
 
   function validarAntesDeEnviar(): string | null {
     // Access (formCadastroQuestor): atividade municipal obrigatória no MEI — define CFOP e ISS das notas.
-    if (ehMei && !meiExtra.ativmunic.trim()) return "Informe a atividade municipal (ex.: 00000601 cabeleireiro, 00008494, 00008516, 00008567).";
+    if (ehMei && !meiExtra.ativmunic.trim()) return "Escolha a atividade municipal (lista do município no Questor).";
     if (!cnaeSelecionado) return "Selecione um CNAE na busca antes de continuar.";
     // A API do Questor recusa (422) CEP que não tenha exatamente 8 dígitos.
     if (somenteDigitos(dados.cependerestab).length !== 8) return "Informe o CEP da empresa completo (8 dígitos).";
@@ -646,15 +656,13 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
                   <input type="text" value={meiExtra.salao} onChange={(e) => setMeiExtra({ ...meiExtra, salao: e.target.value.replace(/\D/g, "") })} />
                 </label>
                 <label>Atividade municipal (obrigatória)
-                  <input type="text" list="mei-ativmunic" placeholder="ex.: 00000601" value={meiExtra.ativmunic} onChange={(e) => setMeiExtra({ ...meiExtra, ativmunic: e.target.value.replace(/[^\d.]/g, "") })} />
-                  <datalist id="mei-ativmunic">
-                    <option value="00000601">06.01 Barbearia, cabeleireiros, manicuros, pedicuros</option>
-                    <option value="00008494">8494 (São Paulo) — 06.01</option>
-                    <option value="00008516">8516 (São Paulo) — 06.02 Esteticistas</option>
-                    <option value="00008567">8567 (São Paulo) — 06.05</option>
-                    <option value="00000602">06.02 Esteticistas, tratamento de pele</option>
-                    <option value="00000605">06.05 Centros de emagrecimento, spa</option>
-                  </datalist>
+                  {!dados.codigomunic ? <input type="text" disabled placeholder="Escolha primeiro o município (endereço)" /> : ativOpcoes === null ? <input type="text" disabled placeholder="Carregando…" /> : ativOpcoes.length === 0 ? <input type="text" disabled placeholder="Município sem atividade cadastrada no Questor" /> : (
+                    <select value={meiExtra.ativmunic} onChange={(e) => setMeiExtra({ ...meiExtra, ativmunic: e.target.value })}>
+                      <option value="">Selecione…</option>
+                      {ativOpcoes.map((o) => <option key={o.codigo} value={o.codigo}>{o.codigo} — {o.descricao}</option>)}
+                    </select>
+                  )}
+                  {ativOpcoes && ativOpcoes.length === 0 && dados.codigomunic && <small style={{ color: "var(--div, #dc2626)" }}>Este município não tem atividade municipal no Questor. Cadastre no Questor (Atividades municipais) antes de criar o MEI.</small>}
                 </label>
                 <label>Portal Nacional — usuário
                   <input type="text" value={meiExtra.usuarioNacional} onChange={(e) => setMeiExtra({ ...meiExtra, usuarioNacional: e.target.value })} />

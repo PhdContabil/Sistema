@@ -8,6 +8,7 @@ import {
   QuestorError,
   type TipoLookupCadastro,
 } from "@/lib/questor";
+import { chamar } from "@/lib/mei/api";
 
 // Listas fixas + buscas (naturezas jurídicas, enquadramentos, tabela de
 // feriado, tipo de logradouro, estados, municípios, CNAEs) do formulário de
@@ -19,7 +20,7 @@ const TIPOS_FIXOS: TipoLookupCadastro[] = ["naturezas-juridicas", "enquadramento
 export async function GET(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
-  if (!podeAcessarApp(nivel, "paralegal", "Controle")) {
+  if (!podeAcessarApp(nivel, "paralegal", "Controle") && !podeAcessarApp(nivel, "mei", "Sistema MEI")) {
     return NextResponse.json({ error: "Sem acesso ao Paralegal." }, { status: 403 });
   }
 
@@ -32,6 +33,17 @@ export async function GET(req: Request) {
       if (!uf) return NextResponse.json({ error: "Parâmetro uf é obrigatório." }, { status: 400 });
       const dados = await getLookupMunicipios(uf);
       return NextResponse.json({ dados });
+    }
+    if (tipo === "ativ-municipais") {
+      // Atividades municipais (ISS) cadastradas no Questor para o município — o cadastro só aceita estas.
+      const uf = searchParams.get("uf") ?? ""; const codigomunic = searchParams.get("codigomunic") ?? "";
+      if (!uf || !codigomunic) return NextResponse.json({ dados: [] });
+      const r = await chamar("GET", "/lookups/servicos-municipais", { query: { uf, codigomunic, limit: 0 } });
+      if (r.status !== 200) return NextResponse.json({ error: `API ${r.status}` }, { status: 502 });
+      const lista = ((r.json as { dados?: Record<string, unknown>[] }).dados ?? []).map((x) => ({
+        codigo: String(x.codigoativmunic ?? x.codigo ?? ""), descricao: String(x.descrativmunic ?? x.descricao ?? ""),
+      })).filter((x) => x.codigo);
+      return NextResponse.json({ dados: lista });
     }
     if (tipo === "cnaes") {
       const q = searchParams.get("q") ?? "";

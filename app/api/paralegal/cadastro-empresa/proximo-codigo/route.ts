@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
-  if (!podeAcessarApp(nivel, "paralegal", "Controle")) {
+  if (!podeAcessarApp(nivel, "paralegal", "Controle") && !podeAcessarApp(nivel, "mei", "Sistema MEI")) {
     return NextResponse.json({ error: "Sem acesso ao Paralegal." }, { status: 403 });
   }
 
