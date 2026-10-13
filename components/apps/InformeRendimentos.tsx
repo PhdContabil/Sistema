@@ -16,7 +16,7 @@ interface Resultado {
   gravacaoLiberada: boolean;
   motivoBloqueio: string | null;
   jaLancadoEm: string | null;
-  questor: { disponivel: boolean; motivo?: string };
+  questor: { disponivel: boolean; motivo?: string; avisos?: string[] };
 }
 
 const campo: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4, fontSize: 13 };
@@ -218,6 +218,7 @@ export default function InformeRendimentos({
             <div className="banner error">Este mesmo informe já foi lançado em {new Date(res.jaLancadoEm).toLocaleString("pt-BR")}.</div>
           )}
           {res.plano.avisos.map((a) => <div key={a} className="banner">{a}</div>)}
+          {(res.questor.avisos ?? []).map((a) => <div key={`q-${a}`} className="banner">Aviso do Questor: {a}</div>)}
           {res.motivoBloqueio && <div className="banner error">{res.motivoBloqueio}</div>}
 
           <h3 style={{ fontSize: 14, margin: "8px 0" }}>ECF — OUTRAOPERACAOECF</h3>

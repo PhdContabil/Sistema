@@ -538,10 +538,9 @@ export async function buscarClientesFinanceiro(params: { cpf_cnpj?: string; nome
 // ---------------------------------------------------------------------------
 // Informe de Rendimentos (escrita) — módulo Contábil.
 //
-// Contrato PROPOSTO, ainda sem implementação na API do Questor: ver
-// docs/informe-rendimentos-api-questor.md. Se o caminho ou o formato mudarem,
-// ajustar só esta função. Enquanto a API não tiver o endpoint, a resposta é
-// 404 e a tela mostra isso em português, sem gravar nada.
+// Endpoint no ar na API do Questor (POST /contabil/informe-rendimentos, chave
+// X-Write-Key). Padrão da API: dry_run=true — o parâmetro vai sempre explícito.
+// Ver docs/informe-rendimentos-api-questor.md.
 // ---------------------------------------------------------------------------
 
 export interface RespostaInformeQuestor {
@@ -583,9 +582,10 @@ export async function lancarInformeRendimentos(
 // ---------------------------------------------------------------------------
 // Lucros Distribuídos (escrita) — módulo Contábil.
 //
-// Contrato PROPOSTO, ainda sem implementação na API do Questor: ver
-// docs/lucros-distribuidos-api-questor.md. Enquanto a API não tiver os
-// endpoints, a resposta é 404 e a tela mostra isso em português, sem gravar.
+// Endpoints no ar na API do Questor (GET/POST/PATCH/DELETE em
+// /contabil/lucros-distribuidos). Padrão: dry_run=true no POST e no PATCH,
+// dry_run=false no DELETE — o parâmetro vai sempre explícito.
+// Ver docs/lucros-distribuidos-api-questor.md.
 // ---------------------------------------------------------------------------
 
 async function enviar<T>(
@@ -683,7 +683,8 @@ export function excluirLucroDistribuido(
 ) {
   return enviar<RespostaLucroQuestor>(
     "DELETE",
-    `/contabil/lucros-distribuidos/${alvo.codigoempresa}/${alvo.chave}`,
+    // A API assume dry_run=false no DELETE (diferente do POST/PATCH): o parâmetro vai explícito.
+    `/contabil/lucros-distribuidos/${alvo.codigoempresa}/${alvo.chave}?dry_run=false`,
     { codigosocio: alvo.codigosocio, data_atual: alvo.dataAtual, usuario: opts.usuario },
     { idempotencyKey: opts.idempotencyKey }
   );
