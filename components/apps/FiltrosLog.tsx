@@ -31,8 +31,8 @@ export function aplicarFiltro<T extends { competencia: string; origem?: "nucleo"
 }
 
 const campo: CSSProperties = {
-  padding: "6px 8px", border: "1px solid var(--border, #cbd5e1)", borderRadius: 6,
-  background: "var(--card, #fff)", color: "inherit", fontSize: 13,
+  padding: "6px 8px", border: "1px solid var(--border)", borderRadius: 6,
+  background: "var(--surface2)", color: "var(--text)", fontSize: 13,
 };
 
 export default function FiltrosLog({
@@ -70,7 +70,7 @@ export default function FiltrosLog({
       {filtroAtivo(filtro) && (
         <button className="btn" onClick={() => onChange(FILTRO_VAZIO)}>Limpar filtros</button>
       )}
-      <span style={{ fontSize: 12, color: "var(--muted, #667)" }}>{exibidas} de {total}</span>
+      <span style={{ fontSize: 12, color: "var(--muted)" }}>{exibidas} de {total}</span>
     </div>
   );
 }
