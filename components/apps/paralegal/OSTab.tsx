@@ -454,6 +454,14 @@ export default function OSTab() {
         return { ...atual, dados };
       });
     }
+    // Filial tem cadastro próprio no financeiro (ex.: CMX filial 6 = 57676): acha pelo CNPJ da filial.
+    if (filial) {
+      const docF = somenteDigitos(cnpjSel);
+      fetch(`/api/paralegal/financeiro-clientes?q=${docF}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+        const c = ((j.dados ?? []) as { codigocliente: number; inscrfederal?: string }[]).find((x) => somenteDigitos(x.inscrfederal ?? "") === docF);
+        if (c) setCampo("codigo", String(c.codigocliente));
+      }).catch(() => null);
+    }
 
     // Busca os dados completos no Questor para preencher o resto sozinho —
     // mesmo comportamento do "aoSelecionarEmpresa" do formulário original.
@@ -479,7 +487,7 @@ export default function OSTab() {
           dados.inscrMunicipal = dados.inscrMunicipal || val("inscrmunic");
           dados.regimeTributario = dados.regimeTributario || (REGIME_NOME[val("regime").toUpperCase()] ?? val("regime"));
           // Cód. financeiro da OS = código do cliente da empresa no financeiro.
-          if (val("codigocliente")) dados.codigo = val("codigocliente");
+          if (!filial && val("codigocliente")) dados.codigo = val("codigocliente");
           dados.dataInicio = dados.dataInicio || (val("datainicioativ").slice(0, 10) || null);
           dados.logradouro = dados.logradouro || [val("tipologradouro"), val("enderecoestab", "endereco")].filter(Boolean).join(" ");
           dados.numero = dados.numero || val("numenderestab", "numero");
