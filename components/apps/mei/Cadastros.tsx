@@ -8,6 +8,8 @@ import { api, ler, st, Tabela, Campo, Mensagem, Modal, useLista, brl, dt, hojeIS
 export function Responsaveis() {
   const { dados, erro, recarregar } = useLista<Responsavel>("/mei/responsaveis");
   const [ed, setEd] = useState<Partial<Responsavel> | null>(null);
+  const [pode, setPode] = useState(false);
+  useEffect(() => { fetch("/api/mei/proxy").then((r) => r.json()).then((j) => setPode(!!j.podeUsuarios)).catch(() => null); }, []);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   async function salvar() {
@@ -27,12 +29,12 @@ export function Responsaveis() {
 
   return (
     <div style={st.card}>
-      <div style={st.bar}><button style={st.btnP} onClick={() => { setEd({ nome: "", email: "" }); setMsg(null); }}>Novo responsável</button></div>
+      <div style={st.bar}>{pode ? <button style={st.btnP} onClick={() => { setEd({ nome: "", email: "" }); setMsg(null); }}>Novo responsável</button> : <span style={st.mut}>Só T.I. e Diretoria podem incluir, editar ou baixar usuários.</span>}</div>
       <Mensagem msg={msg} />
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
       <Tabela cab={["Código", "Nome", "E-mail", "Data de baixa", "Situação", ""]}
         linhas={dados.map((x) => [x.id, x.nome, x.email ?? "", dt(x.data_baixa), x.ativo ? "Ativo" : "Baixado",
-          <span key="a" style={{ display: "flex", gap: 6 }}>
+          <span key="a" style={{ display: pode ? "flex" : "none", gap: 6 }}>
             <button style={st.btn} onClick={() => { setEd(x); setMsg(null); }}>Editar</button>
             {x.ativo ? <button style={st.btnD} onClick={() => baixar(x, false)}>Baixar</button> : <button style={st.btn} onClick={() => baixar(x, true)}>Reativar</button>}
           </span>])} />
@@ -103,7 +105,8 @@ export function TabelaPreco() {
     ler<{ dados: ServicoEscrit[] } | ServicoEscrit[]>("/lookups/servicos", { codigo_min: 2000, codigo_max: 2100, limit: 500 })
       .then((j) => setDados(Array.isArray(j) ? j : j.dados ?? [])).catch((e) => setErro(e.message));
   }, []);
-  const L = dados.filter((s) => (s.codigo + " " + s.descricao).toLowerCase().includes(q.toLowerCase()));
+  // Só os serviços do MEI (descrição com "MEI"), como na tabela de preço do Access.
+  const L = dados.filter((s) => /\bMEI\b/i.test(s.descricao) && (s.codigo + " " + s.descricao).toLowerCase().includes(q.toLowerCase()));
   return (
     <div style={st.card}>
       <div style={st.bar}><Campo label="Pesquisar"><input style={st.input} value={q} onChange={(e) => setQ(e.target.value)} /></Campo></div>

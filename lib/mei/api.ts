@@ -32,6 +32,7 @@ export function recursoDaRota(caminho: string): string {
   if (/^\/fiscal\/nota-servico$/.test(caminho)) return "nota";
   if (/^\/mei\/credenciais/.test(caminho)) return "senhas";
   if (/^\/cadastro\/(estabelecimento|socio)\//.test(caminho) || /^\/empresas\/\d+\//.test(caminho)) return "ficha";
+  if (/^\/mei\/responsaveis/.test(caminho)) return "usuarios"; // só T.I./Diretoria grava (ver proxy)
   return "tarefas";
 }
 
@@ -99,13 +100,13 @@ export interface Resposta { status: number; json: unknown; dryRunForcado?: boole
 /** Chamada à API com ritmo mínimo de 120 ms e até 4 tentativas em 503/429 (só para leitura). */
 export async function chamar(
   metodo: string, caminho: string,
-  opts: { query?: Record<string, unknown>; corpo?: unknown; usuario?: string | null; idempotencia?: string } = {},
+  opts: { query?: Record<string, unknown>; corpo?: unknown; usuario?: string | null; idempotencia?: string; liberar?: boolean } = {},
 ): Promise<Resposta> {
   if (!KEY) return { status: 500, json: { erro: "QUESTOR_API_KEY não configurada." } };
   const url = new URL(BASE + caminho);
   for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
   let dryRunForcado = false;
-  if (metodo !== "GET" && !gravacaoLiberada(recursoDaRota(caminho))) {
+  if (metodo !== "GET" && !opts.liberar && !gravacaoLiberada(recursoDaRota(caminho))) {
     url.searchParams.set("dry_run", "true");
     dryRunForcado = true;
   } else if (metodo !== "GET" && !url.searchParams.has("dry_run") && (caminho.startsWith("/mei/") || caminho.startsWith("/cadastro/servico-"))) {

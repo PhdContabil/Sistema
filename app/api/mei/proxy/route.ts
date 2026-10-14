@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
-import { chamar, rotaPermitida, chavesConfiguradas } from "@/lib/mei/api";
+import { chamar, rotaPermitida, chavesConfiguradas, recursoDaRota } from "@/lib/mei/api";
 
 // Proxy do Sistema MEI para a API Questor (lista branca de rotas em lib/mei/api.ts).
 // POST { metodo, caminho, query?, corpo?, idempotencia? }. GET devolve o estado das chaves.
@@ -14,9 +14,16 @@ async function usuarioLiberado() {
   return podeAcessarApp(nivel, "mei", "Sistema MEI") ? (user?.email ?? "desconhecido") : null;
 }
 
+/** Usuários (responsáveis) do MEI: só T.I. e Diretoria gravam. */
+async function ehAdmin() {
+  const user = await getCurrentUser().catch(() => null);
+  const nivel = await obterNivelAcesso(user?.email);
+  return nivel.ti || nivel.acessoTotal;
+}
+
 export async function GET() {
   if (!(await usuarioLiberado())) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
-  return NextResponse.json(chavesConfiguradas());
+  return NextResponse.json({ ...chavesConfiguradas(), podeUsuarios: await ehAdmin() });
 }
 
 export async function POST(req: Request) {
@@ -27,6 +34,11 @@ export async function POST(req: Request) {
   const metodo = String(b.metodo ?? "GET").toUpperCase();
   const caminho = String(b.caminho ?? "");
   if (!rotaPermitida(metodo, caminho)) return NextResponse.json({ error: `Rota não permitida: ${metodo} ${caminho}` }, { status: 403 });
-  const r = await chamar(metodo, caminho, { query: b.query, corpo: b.corpo, usuario, idempotencia: b.idempotencia });
+  let liberar = false;
+  if (metodo !== "GET" && recursoDaRota(caminho) === "usuarios") {
+    if (!(await ehAdmin())) return NextResponse.json({ error: "Só T.I. e Diretoria podem alterar os usuários do MEI." }, { status: 403 });
+    liberar = true;
+  }
+  const r = await chamar(metodo, caminho, { query: b.query, corpo: b.corpo, usuario, idempotencia: b.idempotencia, liberar });
   return NextResponse.json({ status: r.status, dados: r.json, dryRunForcado: !!r.dryRunForcado }, { status: 200 });
 }
