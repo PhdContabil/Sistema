@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { admin, encarregadoDoSetor, formatarPeriodos, type PeriodoFerias } from "@/lib/pessoas/ferias";
 import { enviarEmail, notificarTeams, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
+import { dentroDoPrazo, prazoParaSolicitar } from "@/lib/pessoas/ferias-controle";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,16 @@ export async function POST(req: Request) {
 
   const periodos = (body.periodos ?? []).filter((p) => p?.inicio && p?.fim);
   if (periodos.length === 0) return NextResponse.json({ error: "Informe ao menos um período." }, { status: 400 });
+  // Prazo mínimo: pedir até o dia 15 do mês anterior ao início das férias.
+  const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); // horário de Brasília
   for (const p of periodos) {
     if (p.fim < p.inicio) return NextResponse.json({ error: "A data final não pode ser anterior à inicial." }, { status: 400 });
+    if (!dentroDoPrazo(p.inicio, hoje)) {
+      const [a, m, d] = prazoParaSolicitar(p.inicio).split("-");
+      return NextResponse.json({
+        error: `Férias com início em ${p.inicio.split("-").reverse().join("/")} precisavam ser pedidas até ${d}/${m}/${a} (dia 15 do mês anterior). Converse com seu líder.`,
+      }, { status: 400 });
+    }
   }
 
   // perfil do solicitante

@@ -1,12 +1,10 @@
 // Programação de férias pelo líder / RH e controle de períodos aquisitivos — SERVIDOR.
 import { admin, temVisaoDeGestores, formatarPeriodos, type PeriodoFerias } from "./ferias";
-import { ehControleFerias, nomeCasa, limiteSugerido } from "./ferias-controle";
+import { ehControleFerias, casarNomes, limiteSugerido, EMPRESAS_PHD, CONTROLE_FERIAS } from "./ferias-controle";
 import { enviarEmail, notificarTeams, layoutEmail } from "./notificar";
 import { getFeriasAVencer } from "../questor";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
-/** Raiz do CNPJ da PHD no Questor (todas as filiais). */
-const CNPJ_PHD = "11274011";
 
 export interface Papel {
   email: string;
@@ -34,7 +32,7 @@ export interface PessoaControle {
   id: number; nome: string; setor: string; email: string | null;
   aquisitivos: {
     id: number; inicio_aquisitivo: string; fim_aquisitivo: string; limite_gozo: string;
-    saldo: number | null; origem: string; observacao: string | null;
+    saldo: number | null; origem: string; observacao: string | null; codigoempresa: number;
   }[];
   programacoes: {
     id: number; status: string; origem: string; aquisitivo_id: number | null;
@@ -55,7 +53,7 @@ export async function listarControle(papel: Papel): Promise<PessoaControle[]> {
 
   const [{ data: aqs }, { data: sols }] = await Promise.all([
     sb.from("ferias_aquisitivos")
-      .select("id,pessoa_id,inicio_aquisitivo,fim_aquisitivo,limite_gozo,saldo,origem,observacao")
+      .select("id,pessoa_id,inicio_aquisitivo,fim_aquisitivo,limite_gozo,saldo,origem,observacao,codigoempresa")
       .in("pessoa_id", ids).order("inicio_aquisitivo"),
     sb.from("ferias_solicitacoes")
       .select("id,pessoa_id,status,origem,aquisitivo_id,programado_por,ferias_periodos(inicio,fim)")
@@ -67,7 +65,7 @@ export async function listarControle(papel: Papel): Promise<PessoaControle[]> {
     aquisitivos: (aqs ?? []).filter((a) => a.pessoa_id === p.id).map((a) => ({
       id: a.id, inicio_aquisitivo: a.inicio_aquisitivo, fim_aquisitivo: a.fim_aquisitivo,
       limite_gozo: a.limite_gozo, saldo: a.saldo == null ? null : Number(a.saldo),
-      origem: a.origem, observacao: a.observacao,
+      origem: a.origem, observacao: a.observacao, codigoempresa: a.codigoempresa,
     })),
     programacoes: (sols ?? []).filter((s) => s.pessoa_id === p.id).map((s) => ({
       id: s.id, status: s.status, origem: s.origem, aquisitivo_id: s.aquisitivo_id,
@@ -140,6 +138,9 @@ export async function programarFerias(
     ));
     await notificarTeams(pessoa.email, "Suas férias foram programadas", `${quem} programou suas férias: ${resumo}.`, link);
   }
+  if (!papel.email.startsWith("marcio@")) {
+    await avisarControle(`${papel.perfil?.nome ?? papel.email} programou as férias de ${pessoa.nome} (${pessoa.setor}): ${formatarPeriodos(periodos)}.`, "Férias programadas");
+  }
   return null;
 }
 
@@ -159,7 +160,7 @@ export async function salvarAquisitivo(
     pessoa_id: c.pessoa_id, inicio_aquisitivo: c.inicio_aquisitivo, fim_aquisitivo: c.fim_aquisitivo,
     limite_gozo: limite, saldo: c.saldo ?? null, observacao: c.observacao || null,
     origem: "manual", atualizado_por: papel.email, atualizado_em: new Date().toISOString(),
-  }, { onConflict: "pessoa_id,inicio_aquisitivo" });
+  }, { onConflict: "pessoa_id,codigoempresa,inicio_aquisitivo" });
   return error?.message ?? null;
 }
 
@@ -172,49 +173,53 @@ export async function excluirAquisitivo(papel: Papel, id: number): Promise<strin
 }
 
 /**
- * Importa do Questor os períodos aquisitivos abertos dos funcionários da PHD.
- * Casa pelo código do funcionário já vinculado; senão pelo nome (o nome curto
- * do cadastro precisa estar contido no nome completo, e só um funcionário pode
- * casar). Períodos com limite vencido há mais de um ano ficam de fora: no
- * Questor costumam ser saldo antigo não baixado, e encheriam a tela de vermelho.
+ * Importa do Questor os períodos aquisitivos abertos das três empresas do grupo
+ * (PHD Contábil, PHD Digital, PHD Negócios). O código do funcionário só é
+ * único dentro da empresa, então a chave é empresa + início do aquisitivo.
+ * O vínculo com o cadastro de Pessoas é pelo nome (casarNomes). Períodos com
+ * limite vencido há mais de um ano ficam de fora: no Questor costumam ser
+ * saldo antigo não baixado (sócios), e encheriam a tela de vermelho.
  */
 export async function importarDoQuestor(papel: Papel) {
   const sb = admin();
   if (!sb) throw new Error("Banco indisponível.");
   if (!papel.controle) throw new Error("Só o controle de férias (Márcio) importa do Questor.");
 
-  const r = await getFeriasAVencer({ cnpj: CNPJ_PHD });
+  const respostas = await Promise.all(EMPRESAS_PHD.map((e) => getFeriasAVencer({ cnpj: e.raiz })));
+  const dados = respostas.flatMap((r) => r.dados ?? []);
   const { data: pessoas } = await sb.from("pessoas_perfil")
-    .select("id,nome,questor_codigofunc").eq("ativo", true).neq("modelo", true);
-  const lista = pessoas ?? [];
-  const hoje = new Date().toISOString().slice(0, 10);
+    .select("id,nome").eq("ativo", true).neq("modelo", true);
+  const vinculo = casarNomes(pessoas ?? [], dados.map((d) => d.nomefunc));
+  const pessoaDoNome = new Map([...vinculo.entries()].map(([id, nome]) => [nome, id]));
   const umAnoAtras = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
 
   let importados = 0;
   const semVinculo = new Set<string>();
-  const antigos: string[] = [];
-  const vinculos = new Map<number, number>(); // codigofunc -> pessoa_id
-
-  for (const l of r.dados) {
-    let pessoaId = lista.find((p) => p.questor_codigofunc === l.codigofunccontr)?.id ?? vinculos.get(l.codigofunccontr);
-    if (!pessoaId) {
-      const casam = lista.filter((p) => !p.questor_codigofunc && nomeCasa(p.nome, l.nomefunc));
-      if (casam.length === 1) {
-        pessoaId = casam[0].id;
-        vinculos.set(l.codigofunccontr, pessoaId);
-        await sb.from("pessoas_perfil").update({ questor_codigofunc: l.codigofunccontr }).eq("id", pessoaId);
-        casam[0].questor_codigofunc = l.codigofunccontr;
-      }
-    }
+  const antigos = new Set<string>();
+  for (const l of dados) {
+    const pessoaId = pessoaDoNome.get(l.nomefunc);
     if (!pessoaId) { semVinculo.add(l.nomefunc); continue; }
-    if (l.limite_sem_dobra < umAnoAtras) { antigos.push(`${l.nomefunc} (${l.inicio_aquisitivo})`); continue; }
-
+    if (l.limite_sem_dobra < umAnoAtras) { antigos.add(l.nomefunc); continue; }
     const { error } = await sb.from("ferias_aquisitivos").upsert({
-      pessoa_id: pessoaId, inicio_aquisitivo: l.inicio_aquisitivo, fim_aquisitivo: l.fim_aquisitivo,
+      pessoa_id: pessoaId, codigoempresa: l.codigoempresa, codigofunc: l.codigofunccontr,
+      inicio_aquisitivo: l.inicio_aquisitivo, fim_aquisitivo: l.fim_aquisitivo,
       limite_gozo: l.limite_sem_dobra, saldo: l.saldo, origem: "questor",
       atualizado_por: `questor (${papel.email})`, atualizado_em: new Date().toISOString(),
-    }, { onConflict: "pessoa_id,inicio_aquisitivo" });
+    }, { onConflict: "pessoa_id,codigoempresa,inicio_aquisitivo" });
     if (!error) importados++;
   }
-  return { dataBase: r.data_base ?? hoje, lidos: r.dados.length, importados, semVinculo: [...semVinculo], antigos };
+  const semPeriodo = (pessoas ?? []).filter((p) => !vinculo.has(p.id)).map((p) => p.nome);
+  return {
+    dataBase: respostas[0]?.data_base ?? new Date().toISOString().slice(0, 10),
+    lidos: dados.length, importados,
+    semVinculo: [...semVinculo], antigos: [...antigos], semPeriodo,
+  };
+}
+
+/** Avisa o controle de férias (Márcio) no Teams quando férias são aprovadas ou programadas. */
+export async function avisarControle(texto: string, titulo = "Férias aprovadas") {
+  const link = `${BASE}/m/pessoas/ferias`;
+  for (const email of CONTROLE_FERIAS.filter((e) => e.startsWith("marcio@"))) {
+    await notificarTeams(email, titulo, texto, link);
+  }
 }

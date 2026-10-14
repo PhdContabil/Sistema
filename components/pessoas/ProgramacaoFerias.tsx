@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { dataBR, diasEntre } from "@/lib/pessoas/ferias";
 import {
+  dentroDoPrazo, prazoParaSolicitar,
   sinalDoAquisitivo, diasAte, limiteSugerido, fimAquisitivoSugerido, ROTULO_SINAL, type Sinal,
 } from "@/lib/pessoas/ferias-controle";
 
@@ -13,8 +14,9 @@ import {
 
 interface Aquisitivo {
   id: number; inicio_aquisitivo: string; fim_aquisitivo: string; limite_gozo: string;
-  saldo: number | null; origem: string; observacao: string | null;
+  saldo: number | null; origem: string; observacao: string | null; codigoempresa?: number;
 }
+const EMPRESA: Record<number, string> = { 725: "PHD Contábil", 893: "PHD Digital", 128: "PHD Negócios" };
 interface Programacao {
   id: number; status: string; origem: string; aquisitivo_id: number | null;
   programado_por: string | null; periodos: { inicio: string; fim: string }[];
@@ -71,7 +73,8 @@ export default function ProgramacaoFerias() {
     if (!r.ok) { setMsg({ ok: false, texto: j.error ?? "Falha ao buscar no Questor." }); return; }
     const partes = [`${j.importados} período(s) importado(s) do Questor (base ${dataBR(j.dataBase)}).`];
     if (j.semVinculo?.length) partes.push(`Sem cadastro em Pessoas: ${j.semVinculo.join(", ")}.`);
-    if (j.antigos?.length) partes.push(`${j.antigos.length} período(s) com limite vencido há mais de 1 ano ficaram de fora (conferir no Questor).`);
+    if (j.antigos?.length) partes.push(`Períodos com limite vencido há mais de 1 ano ficaram de fora (conferir no Questor): ${j.antigos.join(", ")}.`);
+    if (j.semPeriodo?.length) partes.push(`Sem período aberto no Questor (ou nome não encontrado): ${j.semPeriodo.join(", ")}.`);
     setMsg({ ok: true, texto: partes.join(" ") });
     carregar();
   }
@@ -148,7 +151,7 @@ export default function ProgramacaoFerias() {
                     </td>
                     <td className="mut">
                       {aq ? `${dataBR(aq.inicio_aquisitivo)} a ${dataBR(aq.fim_aquisitivo)}` : <em>não cadastrado</em>}
-                      {aq?.saldo != null && <span className="obs">saldo {aq.saldo} dias{aq.origem === "questor" ? " · Questor" : ""}</span>}
+                      {aq?.saldo != null && <span className="obs">saldo {aq.saldo} dias{aq.origem === "questor" ? ` · Questor${aq.codigoempresa ? ` (${EMPRESA[aq.codigoempresa] ?? aq.codigoempresa})` : ""}` : ""}</span>}
                     </td>
                     <td className="mut">
                       {aq ? dataBR(aq.limite_gozo) : "–"}
@@ -250,6 +253,9 @@ function FormProgramar({ pessoa, aq, onFim }: { pessoa: Pessoa; aq: Aquisitivo |
       <label className="campo"><span>Observação (opcional)</span>
         <input className="search" value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: combinado com a pessoa em 10/10" />
       </label>
+      {periodos.some((p) => p.inicio && !dentroDoPrazo(p.inicio, new Date().toISOString().slice(0, 10))) && (
+        <div className="banner">Fora do prazo normal de pedido (dia 15 do mês anterior, ex.: {dataBR(prazoParaSolicitar(periodos.find((p) => p.inicio)!.inicio))}). Como é programação do líder/RH, é permitido.</div>
+      )}
       {foraDoLimite && <div className="banner error">Atenção: há início depois da data limite ({dataBR(aq!.limite_gozo)}) — férias em dobro.</div>}
       {erro && <div className="banner error">{erro}</div>}
       <div className="fp-acoes">

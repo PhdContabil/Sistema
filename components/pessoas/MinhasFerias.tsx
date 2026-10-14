@@ -7,6 +7,7 @@ import {
   dataBR, diasEntre, ROTULO_STATUS, CLASSE_STATUS,
   type SolicitacaoFerias, type StatusFerias,
 } from "@/lib/pessoas/ferias";
+import { dentroDoPrazo, prazoParaSolicitar } from "@/lib/pessoas/ferias-controle";
 
 interface Linha { inicio: string; fim: string }
 
@@ -39,6 +40,12 @@ export default function MinhasFerias({
     const validos = periodos.filter((p) => p.inicio && p.fim);
     if (validos.length === 0) { setErro("Informe ao menos um período."); return; }
     if (validos.some((p) => p.fim < p.inicio)) { setErro("A data final não pode ser anterior à inicial."); return; }
+    const hoje = new Date().toISOString().slice(0, 10);
+    const atrasado = validos.find((p) => !dentroDoPrazo(p.inicio, hoje));
+    if (atrasado) {
+      setErro(`Férias com início em ${dataBR(atrasado.inicio)} precisavam ser pedidas até ${dataBR(prazoParaSolicitar(atrasado.inicio))} (dia 15 do mês anterior). Converse com seu líder.`);
+      return;
+    }
 
     setEnviando(true);
     try {
@@ -86,6 +93,7 @@ export default function MinhasFerias({
         <h3>Solicitar férias</h3>
         <p className="sub-info">
           Informe o período desejado. Você pode pedir <strong>dois períodos</strong> no ano.
+          Prazo: peça <strong>até o dia 15 do mês anterior</strong> ao início (ex.: férias em outubro, pedir até 15/09).
           {chefe && <> A aprovação é de <strong>{chefe.nome}</strong>.</>}
         </p>
 
@@ -103,6 +111,9 @@ export default function MinhasFerias({
               <span className="dias-badge">
                 {p.inicio && p.fim && p.fim >= p.inicio ? `${diasEntre(p.inicio, p.fim)} dias` : "—"}
               </span>
+              {p.inicio && !dentroDoPrazo(p.inicio, new Date().toISOString().slice(0, 10)) && (
+                <span className="sub-info" style={{ color: "#dc2626" }}>fora do prazo (era até {dataBR(prazoParaSolicitar(p.inicio))})</span>
+              )}
               {periodos.length > 1 && (
                 <button type="button" className="btn-remover" onClick={() => setPeriodos((ps) => ps.filter((_, k) => k !== i))}>✕</button>
               )}

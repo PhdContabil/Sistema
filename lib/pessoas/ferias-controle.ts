@@ -11,7 +11,15 @@
 // fica vermelho. Os dados podem vir do Questor (GET /rh/ferias-a-vencer).
 
 /** Quem mantém o controle de períodos aquisitivos e programa para qualquer setor. */
-export const CONTROLE_FERIAS = ["marcio@phdcontabil.com.br"];
+// Gabriel (TI) incluído para acompanhar a implantação e importar do Questor.
+export const CONTROLE_FERIAS = ["marcio@phdcontabil.com.br", "gabriel.santos@phdcontabil.com.br"];
+
+/** Empresas do grupo no Questor (raiz do CNPJ): PHD Contábil, PHD Digital e PHD Negócios. */
+export const EMPRESAS_PHD = [
+  { raiz: "11274011", nome: "PHD Contábil" },
+  { raiz: "11525190", nome: "PHD Digital" },
+  { raiz: "09001701", nome: "PHD Negócios" },
+];
 
 export function ehControleFerias(email: string | null | undefined): boolean {
   const e = email?.toLowerCase();
@@ -110,4 +118,48 @@ export function nomeCasa(curto: string, completo: string): boolean {
   const a = normalizar(curto);
   const b = new Set(normalizar(completo));
   return a.length > 0 && a.every((t) => b.has(t));
+}
+
+/**
+ * Casa os nomes curtos do cadastro com os nomes completos do Questor.
+ *
+ * Em rodadas: primeiro os pares sem ambiguidade (só um nome do Questor serve
+ * para o cadastro E só um cadastro serve para aquele nome); tira esses e repete.
+ * Assim "Sra. Conceição" fica com MARIA CONCEICAO e, na rodada seguinte,
+ * "Maria" fica com a outra Maria. O que continuar ambíguo não é vinculado.
+ */
+export function casarNomes(cadastro: { id: number; nome: string }[], questor: string[]): Map<number, string> {
+  const res = new Map<number, string>();
+  let pessoas = [...cadastro];
+  let nomes = [...new Set(questor)];
+  for (let rodada = 0; rodada < 5; rodada++) {
+    const novos: [number, string][] = [];
+    for (const p of pessoas) {
+      const cands = nomes.filter((n) => nomeCasa(p.nome, n));
+      if (cands.length !== 1) continue;
+      // Bloqueia só se outro cadastro também tiver ESTE como único candidato.
+      const rivais = pessoas.filter((o) => o.id !== p.id
+        && nomeCasa(o.nome, cands[0]) && nomes.filter((n) => nomeCasa(o.nome, n)).length === 1);
+      if (rivais.length === 0) novos.push([p.id, cands[0]]);
+    }
+    if (novos.length === 0) break;
+    for (const [id, n] of novos) res.set(id, n);
+    pessoas = pessoas.filter((p) => !res.has(p.id));
+    nomes = nomes.filter((n) => ![...res.values()].includes(n));
+  }
+  return res;
+}
+
+/**
+ * Prazo mínimo para pedir férias: até o dia 15 do mês anterior ao início.
+ * Ex.: férias em outubro → pedir até 15/09.
+ */
+export function prazoParaSolicitar(inicio: string): string {
+  const [a, m] = inicio.split("-").map(Number);
+  const anterior = new Date(Date.UTC(a, m - 2, 15));
+  return anterior.toISOString().slice(0, 10);
+}
+
+export function dentroDoPrazo(inicio: string, hoje: string): boolean {
+  return hoje <= prazoParaSolicitar(inicio);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { admin, formatarPeriodos, type PeriodoFerias } from "@/lib/pessoas/ferias";
 import { enviarEmail, notificarTeams, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
+import { avisarControle } from "@/lib/pessoas/ferias-programacao";
 
 export const dynamic = "force-dynamic";
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
@@ -107,6 +108,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       link
     );
     await avisarCanal(`${aprovado ? "✅" : "❌"} Férias de **${nome}** ${aprovado ? "aprovadas" : "recusadas"} — ${resumo}`);
+    // Márcio (controle de férias) fica sabendo de toda aprovação pelo Teams.
+    if (aprovado) await avisarControle(`${avaliador?.nome ?? email} aprovou as férias de ${nome} (${sol.setor}): ${resumo}.`);
   }
 
   return NextResponse.json({ ok: true, status: novoStatus });
