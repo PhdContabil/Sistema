@@ -126,6 +126,18 @@ export async function getEmpresaCadastroDetalhado(codigoEmpresa: string | number
   return d;
 }
 
+/** Todos os estabelecimentos (matriz + filiais) de uma empresa — uma linha por estab. */
+export async function getEstabelecimentos(codigoEmpresa: string | number): Promise<EmpresaCadastroDetalhado[]> {
+  const resp = await get<EmpresaCadastroDetalhado | EmpresaCadastroDetalhado[] | { dados: EmpresaCadastroDetalhado[]; estabelecimentos?: EmpresaCadastroDetalhado[] }>(
+    `/empresas/cadastro?codigoempresa=${encodeURIComponent(String(codigoEmpresa))}&detalhado=true`
+  );
+  const r = resp as { dados?: EmpresaCadastroDetalhado[]; estabelecimentos?: EmpresaCadastroDetalhado[] };
+  const linhas = Array.isArray(resp) ? resp : Array.isArray(r.dados) ? r.dados : [resp as EmpresaCadastroDetalhado];
+  // Alguns formatos trazem os estabelecimentos dentro da empresa.
+  const dentro = linhas.flatMap((l) => (Array.isArray((l as { estabelecimentos?: unknown }).estabelecimentos) ? ((l as { estabelecimentos: EmpresaCadastroDetalhado[] }).estabelecimentos.map((e) => ({ ...l, ...e, estabelecimentos: undefined }))) : []));
+  return dentro.length ? dentro : linhas;
+}
+
 /** Consolidação Departamental: agregados por empresa e mês (valor + quantidade). */
 export function getConsolidacaoDepartamental(
   params: { ano: number; cnpj?: string; codigoempresa?: number }

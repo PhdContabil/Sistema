@@ -261,11 +261,38 @@ export default function OSTab() {
         const cnpj = somenteDigitos(e.cnpj ?? "");
         const codigo = String(e.codigoempresa);
         if (qDigitos && codigo === qDigitos) return true;
+        if (qDigitos && qDigitos.length >= 8 && cnpj.slice(0, 8) === qDigitos.slice(0, 8)) return true; // filial: mesma raiz do CNPJ
         if (qDigitos && qDigitos.length >= 3) return cnpj.includes(qDigitos) || nome.includes(qMin);
         return nome.includes(qMin);
       })
       .slice(0, 20);
   }, [empresas, buscaEmpresa]);
+
+  // Filiais: o cadastro de empresas traz só a matriz. Para as poucas empresas achadas na busca,
+  // busca os estabelecimentos no Questor e mostra as filiais logo abaixo da matriz.
+  const [filiais, setFiliais] = useState<Record<number, Record<string, unknown>[]>>({});
+  useEffect(() => {
+    if (!empresaAberta || empresasFiltradas.length === 0 || empresasFiltradas.length > 5) return;
+    const faltam = empresasFiltradas.filter((e) => !(e.codigoempresa in filiais));
+    if (!faltam.length) return;
+    let cancelado = false;
+    (async () => {
+      const novos: Record<number, Record<string, unknown>[]> = {};
+      for (const e of faltam) {
+        try {
+          const r = await fetch(`/api/paralegal/empresas/${e.codigoempresa}/filiais`, { cache: "no-store" });
+          const j = await r.json();
+          const matriz = somenteDigitos(e.cnpj ?? "");
+          novos[e.codigoempresa] = r.ok ? ((j.dados ?? []) as Record<string, unknown>[])
+            .filter((f) => { const d = somenteDigitos(String(f.inscrfederal ?? f.cnpj ?? "")); return d.length === 14 && d !== matriz; })
+            .filter((f) => { const fim = String(f.dataencerativ ?? f.datafimativ ?? "2100").slice(0, 4); return fim >= "2100" || fim >= String(new Date().getFullYear() + 1); }) : [];
+        } catch { novos[e.codigoempresa] = []; }
+      }
+      if (!cancelado) setFiliais((x) => ({ ...x, ...novos }));
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaAberta, empresasFiltradas]);
 
   // Avulsos (só no financeiro) não estão na lista de empresas: busca na API
   // do financeiro conforme a pessoa digita (nome com 3+ letras ou CPF/CNPJ).
@@ -404,13 +431,29 @@ export default function OSTab() {
     }
   }
 
-  async function selecionarEmpresa(emp: EmpresaResumo) {
+  async function selecionarEmpresa(emp: EmpresaResumo, filial?: Record<string, unknown>) {
     setEmpresaAberta(false);
     setBuscaEmpresa("");
+    const cnpjSel = filial ? String(filial.inscrfederal ?? filial.cnpj ?? "") : (emp.cnpj ?? "");
+    const nomeSel = filial ? String(filial.nomeestab ?? filial.nomeempresa ?? filial.nome ?? emp.nome ?? "") : (emp.nome ?? "");
+    cnpjJaBuscadoRef.current = somenteDigitos(cnpjSel);
     setCampo("questor", String(emp.codigoempresa));
-    setCampo("razao", emp.nome ?? "");
-    setCampo("cnpj", formatarDoc(emp.cnpj) || emp.cnpj || "");
-    setTipoDocOS(somenteDigitos(emp.cnpj ?? "").length === 11 ? "cpf" : "cnpj");
+    setCampo("razao", nomeSel);
+    setCampo("cnpj", formatarDoc(cnpjSel) || cnpjSel);
+    setTipoDocOS(somenteDigitos(cnpjSel).length === 11 ? "cpf" : "cnpj");
+    // Filial: o endereço e as inscrições são os do próprio estabelecimento (já vieram na busca).
+    if (filial) {
+      setModal((atual) => {
+        if (!atual) return atual;
+        const s = (...c: string[]) => { for (const k of c) { const v = filial[k]; if (v !== undefined && v !== null && v !== "") return String(v); } return ""; };
+        const dados = { ...atual.dados };
+        dados.inscrEstadual = s("inscrestad"); dados.inscrMunicipal = s("inscrmunic");
+        dados.logradouro = [s("tipologradouro"), s("enderecoestab", "endereco")].filter(Boolean).join(" ");
+        dados.numero = s("numenderestab", "numero"); dados.complemento = s("complenderestab", "complemento");
+        dados.bairro = s("bairroenderestab", "bairro"); dados.cidade = s("nomemunic", "cidade"); dados.cep = s("cependerestab", "cep");
+        return { ...atual, dados };
+      });
+    }
 
     // Busca os dados completos no Questor para preencher o resto sozinho —
     // mesmo comportamento do "aoSelecionarEmpresa" do formulário original.
@@ -766,7 +809,7 @@ export default function OSTab() {
                 />
               </label>
               {empresaAberta && (empresasFiltradas.length > 0 || avulsos.length > 0) && (
-                <div className="pl-dropdown" style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid var(--pl-border)", borderRadius: 8, maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 20px rgba(0,0,0,.12)" }}>
+                <div className="pl-dropdown" style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "var(--pl-card, #fff)", color: "var(--pl-ink, inherit)", border: "1px solid var(--pl-border)", borderRadius: 8, maxHeight: 220, overflowY: "auto", boxShadow: "0 6px 20px rgba(0,0,0,.12)" }}>
                   {empresasFiltradas.map((e) => (
                     <div
                       key={e.codigoempresa}
@@ -776,7 +819,20 @@ export default function OSTab() {
                       <strong>{e.nome ?? "—"}</strong>
                       <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{formatarCnpj(e.cnpj) || e.cnpj || "—"} · Código {e.codigoempresa}</div>
                     </div>
-                  ))}
+                  )).flatMap((el, idx) => {
+                    const e = empresasFiltradas[idx];
+                    const fs = filiais[e.codigoempresa] ?? [];
+                    return [el, ...fs.map((f) => {
+                      const doc = somenteDigitos(String(f.inscrfederal ?? f.cnpj ?? ""));
+                      return (
+                        <div key={`${e.codigoempresa}-${doc}`} onClick={() => selecionarEmpresa(e, f)}
+                          style={{ padding: "8px 12px 8px 26px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--pl-border)" }}>
+                          <strong>↳ {String(f.nomeestab ?? e.nome ?? "")} — Filial {doc.slice(8, 12)}</strong>
+                          <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{formatarDoc(doc)} · Código {e.codigoempresa}{f.codigoestab ? ` · Estab. ${String(f.codigoestab)}` : ""}</div>
+                        </div>
+                      );
+                    })];
+                  })}
                   {avulsos.map((c) => (
                     <div
                       key={"av" + c.codigocliente}
