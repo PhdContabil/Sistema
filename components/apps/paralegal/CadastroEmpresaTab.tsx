@@ -352,8 +352,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
   async function preencherComDadosCnpjPublico(digitos: string) {
     setCnpjStatus({ texto: "Buscando dados do CNPJ...", tipo: "" });
     try {
-      const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digitos}`);
-      if (!resp.ok) throw new Error(resp.status === 404 ? "CNPJ não encontrado." : "Erro ao consultar CNPJ.");
+      const resp = await fetch(`/api/cnpj/${digitos}`);
+      if (!resp.ok) throw new Error(((await resp.json().catch(() => ({}))) as { error?: string }).error || "Erro ao consultar CNPJ.");
       const d = await resp.json();
 
       setDados((prev) => {

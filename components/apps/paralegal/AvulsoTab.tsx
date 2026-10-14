@@ -146,8 +146,8 @@ export default function AvulsoTab({ modo }: { modo?: "mei" } = {}) {
   async function buscarCnpj(digitos: string) {
     setStatus({ texto: "Buscando dados do CNPJ...", tipo: "" });
     try {
-      const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digitos}`);
-      if (!r.ok) throw new Error(r.status === 404 ? "CNPJ não encontrado." : "Erro ao consultar CNPJ.");
+      const r = await fetch(`/api/cnpj/${digitos}`);
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "Erro ao consultar CNPJ.");
       const d = await r.json();
       const fone = somenteDigitos(String(d.ddd_telefone_1 || ""));
       setDados((p) => ({
