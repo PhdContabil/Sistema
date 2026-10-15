@@ -6,7 +6,7 @@ import {
 
 const base: EntradaLucro = {
   codigoempresa: 1415, codigosocio: 2, competencia: "2026-03", dataPagamento: "2026-03-15",
-  rendimento: 10000, baseIrrf: 0, imposto: 0, tisencao: 1,
+  rendimento: 10000, baseIrrf: 0, imposto: 0, tisencao: 0,
 };
 
 test("sugerirIrrf: até R$ 50.000 não retém", () => {
@@ -36,7 +36,7 @@ test("plano sem imposto: sem colunas de IRRF e base zero", () => {
   assert.equal(p.fiscal.basecalcirrf, 0);
   assert.equal(p.fiscal.aliquota, null);
   assert.equal(p.fiscal.codigoimposto, null);
-  assert.equal(p.fiscal.tipoisencao, 1);
+  assert.equal(p.fiscal.tipoisencao, 0);
   assert.equal(p.fiscal.valorisencao, 0);
   assert.equal(p.liquido, 10000);
 });
@@ -79,7 +79,9 @@ test("validação", () => {
   assert.throws(() => montarPlano({ ...base, dataPagamento: "2026-02-30" }), LucroInvalido);
   assert.throws(() => montarPlano({ ...base, imposto: 20000 }), LucroInvalido);
   assert.throws(() => montarPlano({ ...base, imposto: 100, baseIrrf: 0 }), LucroInvalido);
-  assert.throws(() => montarPlano({ ...base, tisencao: 0 }), LucroInvalido);
+  assert.throws(() => montarPlano({ ...base, tisencao: -1 }), LucroInvalido);
+  assert.throws(() => montarPlano({ ...base, tisencao: 100 }), LucroInvalido);
+  assert.equal(montarPlano({ ...base, tisencao: 0 }).fiscal.tipoisencao, 0);
 });
 
 test("ajuste: novos valores e data da DP", () => {

@@ -38,7 +38,7 @@ S√≥ devolve `CODIGONATUREZARENDIMENTO = 12001`.
       "chave": 33, "codigosocio": 2, "nomesocio": "FULANO DE TAL",
       "competencia": "2026-03-01", "datalctofis": "2026-03-31",
       "valorrendpago": 60000.00, "basecalcirrf": 60000.00,
-      "valorimposto": 6000.00, "tipoisencao": 1
+      "valorimposto": 6000.00, "tipoisencao": 0
     }
   ]
 }
@@ -63,7 +63,7 @@ Idempotency-Key: lucro:<empresa>:<socio>:<AAAA-MM>:<hash>   (e ":dry" na simula√
     "competencia": "2026-03-01", "datalctofis": "2026-03-31",
     "valorrendpago": 60000, "basecalcirrf": 60000,
     "aliquota": 10, "valorimposto": 6000, "codigoimposto": 1841, "variacaoimposto": 1,
-    "tipoisencao": 1, "valorisencao": 0
+    "tipoisencao": 0, "valorisencao": 0
   },
   "dp": {
     "codigoempresa": 1415, "tipo": 2, "codigoestab": 1, "codigosocio": 2,
