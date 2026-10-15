@@ -79,6 +79,7 @@ export function ParceriaFicha({ m }: { m: Mei }) {
       <Campo label="Observação"><textarea style={{ ...st.input, width: "100%", minHeight: 70 }} value={d.obs ?? ""} onChange={(e) => set("obs", e.target.value)} /></Campo>
       <div style={{ ...st.bar, marginTop: 10 }}>
         <button style={st.btnP} disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "Salvar"}</button>
+        <a style={{ ...st.btn, textDecoration: "none" }} href="https://homologa.probeleza.org.br/documentos" target="_blank" rel="noopener noreferrer">Abrir plataforma do Sindicato ↗</a>
         {d.atualizado_em && <span style={st.mut}>Atualizado em {new Date(d.atualizado_em).toLocaleString("pt-BR")}{d.atualizado_por ? ` por ${d.atualizado_por}` : ""}</span>}
       </div>
       <Mensagem msg={msg} />
@@ -111,7 +112,7 @@ export function RelatorioParceria({ mei, abrir }: { mei: Mei[]; abrir?: (m: Mei)
         <Campo label="Modelo"><select style={{ ...st.input, maxWidth: 280 }} value={mod} onChange={(e) => setMod(e.target.value)}><option value="">Todos</option><option value="-">— sem modelo —</option>{MODELOS_PARCERIA.map((x) => <option key={x} value={x}>{x}</option>)}</select></Campo>
         <button style={st.btnP} onClick={imp}>Imprimir</button>
         <button style={st.btn} onClick={() => baixarCsv("parceria_sindicato.csv", ["Salão", "Cód.", "Profissional", "Modelo", "Situação", "Protocolo", "Envio", "Homologação"], L.map(linha))}>Exportar CSV</button>
-        <span style={st.mut}>{lista === null ? "Carregando…" : `${L.length} profissional(is) ativo(s)`}</span>
+        <span style={st.mut}>{lista === null ? "Carregando…" : `${L.length} profissional(is) ativo(s) · duplo clique na linha abre a Ficha`}</span>
       </div>
       <Mensagem msg={erro ? { ok: false, texto: erro } : null} />
       <Tabela cab={["Salão", "Cód.", "Profissional", "Modelo", "Situação", "Protocolo", "Envio", "Homologação"]} linhas={L.map(linha)} onLinha={abrir ? (i) => abrir(L[i].m) : undefined} />
