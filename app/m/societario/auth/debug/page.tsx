@@ -1,12 +1,14 @@
 // Página de debug — mostra estado da sessão atual.
 // Acesse /m/societario/auth/debug logado para ver as informações.
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/societario/supabase-server";
 import { ALLOWED_EMAILS, isEmailAllowed } from "@/lib/societario/options";
 
 export const dynamic = "force-dynamic";
 
 export default async function DebugPage() {
+  if (process.env.NODE_ENV === "production") notFound();
   const sb = createSupabaseServerClient();
   const { data: userData } = await sb.auth.getUser();
   const { data: sessionData } = await sb.auth.getSession();

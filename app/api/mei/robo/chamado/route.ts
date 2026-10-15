@@ -48,8 +48,8 @@ export async function POST(req: Request) {
       const path = `${t.id}/robo-${Date.now()}.jpg`;
       const up = await db.storage.from(BUCKET).upload(path, Buffer.from(b.print, "base64"), { contentType: "image/jpeg", upsert: false });
       if (!up.error) {
-        const { data: pub } = db.storage.from(BUCKET).getPublicUrl(path);
-        await db.from("ticket_attachments").insert({ ticket_id: t.id, url: pub.publicUrl, filename: "print-robo.jpg", uploaded_by_email: email });
+        // Bucket privado: guarda o caminho; a tela recebe um link assinado (lib/tickets assinarAnexos).
+        await db.from("ticket_attachments").insert({ ticket_id: t.id, url: `storage:${BUCKET}/${path}`, filename: "print-robo.jpg", uploaded_by_email: email });
       }
     } catch { /* chamado já criado; o print é opcional */ }
   }

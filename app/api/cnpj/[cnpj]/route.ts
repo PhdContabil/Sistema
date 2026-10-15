@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/societario/supabase-server";
+import { dentroDoLimite } from "@/lib/seguranca";
 
 // Consulta pública de CNPJ (Receita) com reserva: BrasilAPI e, se ela falhar, publica.cnpj.ws.
 // Devolve sempre no formato da BrasilAPI (é o que os formulários do Paralegal/MEI esperam).
@@ -36,6 +38,9 @@ async function cnpjWs(cnpj: string): Promise<Obj | "404" | null> {
 }
 
 export async function GET(_req: Request, { params }: { params: { cnpj: string } }) {
+  const user = await getCurrentUser().catch(() => null);
+  if (!user?.email) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+  if (!dentroDoLimite(`cnpj:${user.email}`, 30)) return NextResponse.json({ error: "Muitas consultas seguidas. Aguarde um minuto." }, { status: 429 });
   const cnpj = String(params.cnpj).replace(/\D/g, "");
   if (cnpj.length !== 14) return NextResponse.json({ error: "CNPJ inválido." }, { status: 400 });
   const a = await brasilApi(cnpj);
