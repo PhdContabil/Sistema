@@ -197,7 +197,7 @@ export default function LucrosDistribuidos({
     try {
       const j = await chamar("/api/contabil/lucros-distribuidos/lancar", { ...corpo(), confirmar: true });
       setOk(j.repetido ? "Esta distribuição já estava gravada no Questor — nada novo foi escrito." : "Distribuição lançada no Questor com sucesso.");
-      setRes(null); setRendimento(""); setBase(""); setImposto(""); setTisencao(1);
+      setRes(null); setRendimento(""); setBase(""); setImposto(""); setTisencao(0);
       await atualizarLog();
       if (lista) await carregarLista();
     } catch (e) {
