@@ -83,6 +83,11 @@ export default function LucrosDistribuidos({
   const [inicio, setInicio] = useState(`${new Date().getFullYear()}-01-01`);
   const [fim, setFim] = useState(hoje());
   const [lista, setLista] = useState<LucroLancadoQuestor[] | null>(null);
+  // Filtros da lista "Lançamentos no Questor" (no navegador, sobre o que a Busca trouxe).
+  const [fEmpresa, setFEmpresa] = useState("");
+  const [fSocio, setFSocio] = useState("");
+  const [fValor, setFValor] = useState("");
+  const [paginaLista, setPaginaLista] = useState(0);
   const [erroLista, setErroLista] = useState<string | null>(null);
   const [ajuste, setAjuste] = useState<Ajuste | null>(null);
 
@@ -136,6 +141,23 @@ export default function LucrosDistribuidos({
     if (l?.log) setLog(l.log);
   }
 
+  const sem = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const valorBuscado = (() => {
+    const t = fValor.trim();
+    if (!t) return null;
+    const n = Number(t.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  })();
+  const listaVisivel = (lista ?? []).filter((l) => {
+    if (fEmpresa.trim() && !sem(`${l.codigoempresa} ${l.nomeestab ?? ""}`).includes(sem(fEmpresa.trim()))) return false;
+    if (fSocio.trim() && !sem(`${l.codigosocio} ${l.nomesocio ?? ""}`).includes(sem(fSocio.trim()))) return false;
+    if (valorBuscado !== null && Math.abs(l.valorrendpago - valorBuscado) > 0.005) return false;
+    return true;
+  });
+  const filtroListaAtivo = Boolean(fEmpresa.trim() || fSocio.trim() || fValor.trim());
+  const paginaListaAtual = Math.min(paginaLista, Math.max(0, Math.ceil(listaVisivel.length / LINHAS_POR_PAGINA) - 1));
+  const listaPagina = listaVisivel.slice(paginaListaAtual * LINHAS_POR_PAGINA, (paginaListaAtual + 1) * LINHAS_POR_PAGINA);
+
   async function carregarLista() {
     setErroLista(null);
     const qs = new URLSearchParams({ inicio, fim });
@@ -145,6 +167,7 @@ export default function LucrosDistribuidos({
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? `Erro ${r.status}`);
       setLista(j.lancamentos ?? []);
+      setPaginaLista(0);
     } catch (e) {
       setLista(null);
       setErroLista(e instanceof Error ? e.message : "Falha ao listar os lançamentos.");
@@ -415,6 +438,25 @@ export default function LucrosDistribuidos({
       </div>
 
       {lista && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end", margin: "0 0 10px" }}>
+          <label style={campo}>Empresa (código ou nome)
+            <input style={entrada} value={fEmpresa} onChange={(e) => { setFEmpresa(e.target.value); setPaginaLista(0); }} placeholder="Ex.: 82 ou Ecoplating" />
+          </label>
+          <label style={campo}>Sócio
+            <input style={entrada} value={fSocio} onChange={(e) => { setFSocio(e.target.value); setPaginaLista(0); }} placeholder="Nome ou código" />
+          </label>
+          <label style={campo}>Valor
+            <input style={{ ...entrada, textAlign: "right" }} inputMode="decimal" value={fValor}
+              onChange={(e) => { setFValor(e.target.value.replace(/[^\d.,]/g, "")); setPaginaLista(0); }} placeholder="Ex.: 50.000,00" />
+          </label>
+          {filtroListaAtivo && (
+            <button className="btn" onClick={() => { setFEmpresa(""); setFSocio(""); setFValor(""); setPaginaLista(0); }}>Limpar filtros</button>
+          )}
+          <span style={{ fontSize: 12, color: "var(--muted)", paddingBottom: 8 }}>{listaVisivel.length} de {lista.length}</span>
+        </div>
+      )}
+
+      {lista && (
         <div className="table-wrap" style={{ marginBottom: 16 }}>
           <table className="grid">
             <thead>
@@ -424,14 +466,14 @@ export default function LucrosDistribuidos({
               </tr>
             </thead>
             <tbody>
-              {lista.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center" }}>Nenhum lançamento no período.</td></tr>}
-              {lista.map((l) => (
+              {listaVisivel.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center" }}>{lista.length === 0 ? "Nenhum lançamento no período." : "Nenhum lançamento com esses filtros."}</td></tr>}
+              {listaPagina.map((l) => (
                 <tr key={`${l.codigoempresa}-${l.chave}`}>
                   <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nomeestab ?? ""}</td>
                   <td style={{ textAlign: "left" }}>{l.nomesocio ?? l.codigosocio}</td>
                   <td>{dataBR(l.competencia).slice(3)}</td><td>{dataBR(l.datalctofis)}</td>
                   <td>{formatBRL(l.valorrendpago)}</td><td>{formatBRL(l.valorimposto ?? 0)}</td>
-                  <td>{formatBRL(l.valorrendpago - (l.valorimposto ?? 0))}</td><td>{l.tipoisencao ?? 1}</td>
+                  <td>{formatBRL(l.valorrendpago - (l.valorimposto ?? 0))}</td><td>{l.tipoisencao ?? "—"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="btn" disabled={ocupado} onClick={() => abrirAjuste(l)}>Alterar</button>{" "}
                     <button className="btn" disabled={ocupado} onClick={() => excluir(l)}>Excluir</button>
@@ -440,6 +482,7 @@ export default function LucrosDistribuidos({
               ))}
             </tbody>
           </table>
+          <PaginacaoLog total={listaVisivel.length} pagina={paginaListaAtual} onPagina={setPaginaLista} />
         </div>
       )}
 
