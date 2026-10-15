@@ -1,3 +1,4 @@
+import { bearerConfere } from "@/lib/seguranca";
 import { NextResponse } from "next/server";
 import { listarOS } from "@/lib/paralegal/os";
 
@@ -19,9 +20,7 @@ function properCase(s: string): string {
 }
 
 export async function GET(req: Request) {
-  const token = process.env.PARALEGAL_PASTAS_TOKEN;
-  const auth = req.headers.get("authorization") ?? "";
-  if (!token || auth !== `Bearer ${token}`) {
+  if (!bearerConfere(req, process.env.PARALEGAL_PASTAS_TOKEN)) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 

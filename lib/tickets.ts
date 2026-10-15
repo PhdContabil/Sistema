@@ -534,6 +534,20 @@ export async function listarTicketsDashboard(f: FiltroDashboard): Promise<Ticket
   return tickets;
 }
 
+/** Anexos do bucket ticket-anexos (agora privado) viram link assinado de 1h. URLs de outros lugares ficam como estão. */
+async function assinarAnexos(db: SupabaseClient, anexos: Anexo[]): Promise<Anexo[]> {
+  const marca = "/object/public/ticket-anexos/";
+  return Promise.all(anexos.map(async (x) => {
+    const url = String((x as { url?: string }).url ?? "");
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+    const i = url.indexOf(marca);
+    const caminho = url.startsWith("storage:ticket-anexos/") ? url.slice("storage:ticket-anexos/".length) : (i >= 0 && base && url.startsWith(base) ? decodeURIComponent(url.slice(i + marca.length)) : null);
+    if (!caminho) return x;
+    const { data } = await db.storage.from("ticket-anexos").createSignedUrl(caminho, 3600);
+    return data?.signedUrl ? { ...x, url: data.signedUrl } : x;
+  }));
+}
+
 export async function detalheTicket(id: string) {
   const db = ticketsDb();
   if (!db) return null;
@@ -549,7 +563,7 @@ export async function detalheTicket(id: string) {
   return {
     ticket: { ...t.data, ...medicao(t.data as Record<string, unknown>) },
     comentarios: (c.data ?? []) as Comentario[],
-    anexos: (a.data ?? []) as Anexo[],
+    anexos: await assinarAnexos(db, (a.data ?? []) as Anexo[]),
     responsaveis: (r.data ?? []) as Responsavel[],
   };
 }

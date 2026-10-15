@@ -1,3 +1,4 @@
+import { bearerConfere } from "@/lib/seguranca";
 import { NextResponse } from "next/server";
 import { listaMEI } from "@/lib/mei/questor-mei";
 
@@ -15,8 +16,8 @@ function properCase(s: string): string {
 }
 
 export async function GET(req: Request) {
-  const token = process.env.PARALEGAL_PASTAS_TOKEN;
-  if (!token || (req.headers.get("authorization") ?? "") !== `Bearer ${token}`) {
+  // Token próprio do MEI (MEI_PASTAS_TOKEN); aceita o do Paralegal até o script do servidor ser trocado.
+  if (!bearerConfere(req, process.env.MEI_PASTAS_TOKEN, process.env.PARALEGAL_PASTAS_TOKEN)) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
   const lista = await listaMEI(true);

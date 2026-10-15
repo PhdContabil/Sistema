@@ -4,6 +4,7 @@
 // modelocontratos + ajudavariaveis + relatórios contrato/contratoimprimir.
 import { useCallback, useEffect, useState } from "react";
 import { ler, st, Tabela, Campo, Mensagem, Modal, dt, hojeISO, imprimir, esc } from "./ui";
+import { sanitizarHtml } from "@/lib/sanitizar-html";
 
 interface Modelo { codigo: number; modelo: string; conteudo: string; ativo: boolean }
 interface Contrato { codigo: number; codigoempresa: number; codigoestab: number; codigosocio: number | null; modelo_codigo: number | null; contrato: string; data_emissao: string | null; data_inicio: string | null; data_assinado: string | null }
@@ -182,7 +183,7 @@ function GerarContrato({ fechar, aoSalvar }: { fechar: () => void; aoSalvar: () 
       <button style={st.btnP} onClick={gerar}>Gerar</button>
       {texto && (
         <>
-          <div contentEditable suppressContentEditableWarning onBlur={(e) => setTexto(e.currentTarget.innerHTML)} style={{ ...st.card, marginTop: 12, maxHeight: 420, overflow: "auto", background: "#fff", color: "#111" }} dangerouslySetInnerHTML={{ __html: texto }} />
+          <div contentEditable suppressContentEditableWarning onBlur={(e) => setTexto(e.currentTarget.innerHTML)} style={{ ...st.card, marginTop: 12, maxHeight: 420, overflow: "auto", background: "#fff", color: "#111" }} dangerouslySetInnerHTML={{ __html: sanitizarHtml(texto) }} />
           <div style={st.bar}><button style={st.btnP} onClick={salvar}>Salvar contrato</button><button style={st.btn} onClick={() => imprimir("Contrato", texto)}>Imprimir</button></div>
         </>
       )}
@@ -205,7 +206,7 @@ function EditarContrato({ c, nome, fechar, aoSalvar }: { c: Contrato; nome: stri
         <Campo label="Início"><input type="date" style={st.input} value={d.data_inicio} onChange={(e) => setD({ ...d, data_inicio: e.target.value })} /></Campo>
         <Campo label="Assinado em"><input type="date" style={st.input} value={d.data_assinado} onChange={(e) => setD({ ...d, data_assinado: e.target.value })} /></Campo>
       </div>
-      <div contentEditable suppressContentEditableWarning onBlur={(e) => setD({ ...d, contrato: e.currentTarget.innerHTML })} style={{ ...st.card, maxHeight: 460, overflow: "auto", background: "#fff", color: "#111" }} dangerouslySetInnerHTML={{ __html: c.contrato }} />
+      <div contentEditable suppressContentEditableWarning onBlur={(e) => setD({ ...d, contrato: e.currentTarget.innerHTML })} style={{ ...st.card, maxHeight: 460, overflow: "auto", background: "#fff", color: "#111" }} dangerouslySetInnerHTML={{ __html: sanitizarHtml(c.contrato) }} />
       <div style={st.bar}><button style={st.btnP} onClick={salvar}>Salvar</button><button style={st.btn} onClick={() => imprimir(`Contrato ${c.codigo}`, d.contrato)}>Imprimir</button></div>
       <Mensagem msg={msg} />
     </Modal>
@@ -238,7 +239,7 @@ function Modelos() {
         <Modal titulo={ed.codigo ? `Modelo ${ed.codigo}` : "Novo modelo"} fechar={() => setEd(null)} largura={900}>
           <Campo label="Nome do modelo"><input style={st.input} value={ed.modelo ?? ""} onChange={(e) => setEd({ ...ed, modelo: e.target.value })} /></Campo>
           <p style={st.mut}>Texto (pode editar direto; use as variáveis @ da ajuda):</p>
-          <div contentEditable suppressContentEditableWarning onBlur={(e) => setEd({ ...ed, conteudo: e.currentTarget.innerHTML })} style={{ ...st.card, minHeight: 200, maxHeight: 460, overflow: "auto", background: "#fff", color: "#111" }} dangerouslySetInnerHTML={{ __html: ed.conteudo ?? "" }} />
+          <div contentEditable suppressContentEditableWarning onBlur={(e) => setEd({ ...ed, conteudo: e.currentTarget.innerHTML })} style={{ ...st.card, minHeight: 200, maxHeight: 460, overflow: "auto", background: "#fff", color: "#111" }} dangerouslySetInnerHTML={{ __html: sanitizarHtml(ed.conteudo ?? "") }} />
           <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}><input type="checkbox" checked={ed.ativo !== false} onChange={(e) => setEd({ ...ed, ativo: e.target.checked })} /> Ativo</label>
           <button style={st.btnP} onClick={salvar}>Salvar</button>
           <Mensagem msg={msg} />
