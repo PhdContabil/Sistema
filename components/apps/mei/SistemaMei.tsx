@@ -9,6 +9,7 @@ import Tarefas from "./Tarefas";
 import { Clientes, Ficha } from "./Clientes";
 import { Responsaveis, Servicos, TabelaPreco } from "./Cadastros";
 import { DadosMei, ValoresMensal, SalaoMei } from "./Relatorios";
+import { RelatorioParceria } from "./Parceria";
 import { SenhasLista } from "./Senhas";
 import Notas, { EmitirNota } from "./Notas";
 import Painel from "./Painel";
@@ -22,7 +23,7 @@ const MENU: { grupo: string; itens: string[] }[] = [
   { grupo: "Painel", itens: ["Início", "Tarefas"] },
   { grupo: "Cadastros", itens: ["Cliente Mensal", "Cliente Avulso", "Usuários", "Serviços"] },
   { grupo: "Gestão de serviços", itens: ["Gerar O.S.", "Tabela de preço", "Contratos PHD", "Notas MEI"] },
-  { grupo: "Controle e relatórios", itens: ["Ficha / Clientes", "Senhas Prefeitura", "Senhas Nacional", "Valores Mensal", "Dados MEI", "Salão x MEI", "Consulta financeiro", "Controle BI"] },
+  { grupo: "Controle e relatórios", itens: ["Ficha / Clientes", "Senhas Prefeitura", "Senhas Nacional", "Valores Mensal", "Dados MEI", "Salão x MEI", "Parceria (Sindicato)", "Consulta financeiro", "Controle BI"] },
   { grupo: "Migração", itens: ["Situação"] },
 ];
 
@@ -102,6 +103,7 @@ export default function SistemaMei() {
           {tela === "Valores Mensal" && <ValoresMensal mei={mei} />}
           {tela === "Dados MEI" && <DadosMei mei={mei} />}
           {tela === "Salão x MEI" && <SalaoMei mei={mei} />}
+          {tela === "Parceria (Sindicato)" && <RelatorioParceria mei={mei} abrir={setFicha} />}
           {tela === "Consulta financeiro" && <ConsultaFinanceiro />}
           {tela === "Controle BI" && <div style={st.card}><p>O “Controle BI” do Access é o mesmo painel Power BI que já está no Núcleo.</p><Link href="/m/mei/painel" style={st.btnP}>Abrir Painel MEI</Link></div>}
           {tela === "Situação" && <Situacao chaves={chaves} />}

@@ -20,7 +20,9 @@ export const situacao = (m: Mei) => (m.ativo ? "Ativo" : "Inativo");
 export const primeiroDiaMes = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; };
 export const ultimoDiaMes = () => { const d = new Date(); const u = new Date(d.getFullYear(), d.getMonth() + 1, 0); return `${u.getFullYear()}-${String(u.getMonth() + 1).padStart(2, "0")}-${String(u.getDate()).padStart(2, "0")}`; };
 /** Texto sem HTML (as observações do Access são rich text). */
-export const semHtml = (s?: string | null) => String(s ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").trim();
+export const semHtml = (s?: string | null) => String(s ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ")
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&amp;/g, "&").replace(/\u00a0/g, " ").replace(/undefined/g, "").trim();
 
 export interface RespostaApi<T = unknown> { status: number; dados: T; dryRunForcado: boolean }
 
