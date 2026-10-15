@@ -19,7 +19,8 @@ interface Aquisitivo {
 const EMPRESA: Record<number, string> = { 725: "PHD Contábil", 893: "PHD Digital", 128: "PHD Negócios" };
 interface Programacao {
   id: number; status: string; origem: string; aquisitivo_id: number | null;
-  programado_por: string | null; periodos: { inicio: string; fim: string }[];
+  programado_por: string | null;
+  periodos: { inicio: string; fim: string; questor_prog_id?: number | null; questor_data_pagamento?: string | null; questor_erro?: string | null }[];
 }
 interface Pessoa { id: number; nome: string; setor: string; email: string | null; aquisitivos: Aquisitivo[]; programacoes: Programacao[] }
 
@@ -76,6 +77,18 @@ export default function ProgramacaoFerias() {
     if (j.antigos?.length) partes.push(`Períodos com limite vencido há mais de 1 ano ficaram de fora (conferir no Questor): ${j.antigos.join(", ")}.`);
     if (j.semPeriodo?.length) partes.push(`Sem período aberto no Questor (ou nome não encontrado): ${j.semPeriodo.join(", ")}.`);
     setMsg({ ok: true, texto: partes.join(" ") });
+    carregar();
+  }
+
+  async function reenviarQuestor(solicitacaoId: number) {
+    setMsg(null);
+    const r = await fetch("/api/pessoas/ferias/questor", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ solicitacao_id: solicitacaoId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) setMsg({ ok: false, texto: j.error ?? "Falha ao enviar ao Questor." });
+    else if (j.falhas?.length) setMsg({ ok: false, texto: `Questor: ${j.falhas.join(" · ")}` });
+    else setMsg({ ok: true, texto: `Enviado ao Questor.${j.avisos?.length ? ` Avisos: ${j.avisos.join(" · ")}` : ""}` });
     carregar();
   }
 
@@ -165,6 +178,12 @@ export default function ProgramacaoFerias() {
                         <span key={x.id} className="obs">
                           {x.periodos.map((y) => `${dataBR(y.inicio)} a ${dataBR(y.fim)}`).join(" · ")}
                           {" "}({x.status === "pendente" ? "pedido aguardando" : x.origem === "solicitacao" ? "pedido aprovado" : x.origem === "rh" ? "programado pelo RH" : "programado pelo líder"})
+                          {x.status === "aprovada" && (x.periodos.every((y) => y.questor_prog_id)
+                            ? <em className="fpg-q ok"> · no Questor{x.periodos[0]?.questor_data_pagamento ? `, pagamento ${dataBR(x.periodos[0].questor_data_pagamento)}` : ""}</em>
+                            : <>
+                                <em className="fpg-q erro"> · fora do Questor{x.periodos.find((y) => y.questor_erro)?.questor_erro ? `: ${x.periodos.find((y) => y.questor_erro)!.questor_erro}` : ""}</em>
+                                <button type="button" className="btn fpg-reenviar" onClick={() => reenviarQuestor(x.id)}>Enviar ao Questor</button>
+                              </>)}
                         </span>
                       ))}
                     </td>
@@ -228,7 +247,10 @@ function FormProgramar({ pessoa, aq, onFim }: { pessoa: Pessoa; aq: Aquisitivo |
     const j = await r.json().catch(() => ({}));
     setSalvando(false);
     if (!r.ok) { setErro(j.error ?? "Falha ao programar."); return; }
-    onFim(`Férias de ${pessoa.nome} programadas. Já estão na agenda e ${pessoa.nome} foi avisado(a).`);
+    const q = j.questor as { enviados: number; falhas: string[]; avisos: string[] } | undefined;
+    const noQuestor = q && q.falhas.length === 0 && q.enviados > 0 ? " Também foram para a programação do Questor."
+      : q?.falhas.length ? ` Não foram para o Questor: ${q.falhas.join(" · ")}` : "";
+    onFim(`Férias de ${pessoa.nome} programadas. Já estão na agenda e ${pessoa.nome} foi avisado(a).${noQuestor}${q?.avisos.length ? ` Avisos do Questor: ${q.avisos.join(" · ")}` : ""}`);
   }
 
   return (

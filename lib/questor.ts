@@ -725,3 +725,48 @@ export function getFeriasAVencer(params: { cnpj?: string; dias?: number } = {}):
   const qs = q.toString() ? `?${q.toString()}` : "";
   return get<FeriasAVencerResponse>(`/rh/ferias-a-vencer${qs}`);
 }
+
+// ------------------------------------------------- RH / programação de férias
+// POST/PATCH/DELETE /rh/ferias/programacao (escrita só nas empresas 725, 893
+// e 128). Padrão do Núcleo: dry_run explícito; Idempotency-Key no POST.
+
+export interface ProgramacaoFeriasIn {
+  usuario: string;
+  codigoempresa: number;
+  codigofunccontr: number;
+  inicio: string;
+  dias_ferias: number;
+  dias_abono?: number;
+  datainicial_periodo?: string | null;
+  data_pagamento?: string | null;
+  adianta_13?: boolean;
+}
+
+export interface RespostaProgramacaoFerias {
+  ok?: boolean;
+  dry_run?: boolean;
+  id?: number;
+  data_pagamento?: string;
+  saldo_restante?: number;
+  erros?: unknown[];
+  avisos?: unknown[];
+  repetido?: boolean;
+  detail?: unknown;
+  erro?: string;
+}
+
+export function programarFeriasQuestor(
+  dados: ProgramacaoFeriasIn,
+  opts: { dryRun: boolean; idempotencyKey?: string }
+) {
+  return post<RespostaProgramacaoFerias>(
+    `/rh/ferias/programacao?dry_run=${opts.dryRun ? "true" : "false"}`, dados,
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}
+
+export function excluirProgramacaoFeriasQuestor(id: number, usuario: string, opts: { dryRun: boolean }) {
+  return enviar<RespostaProgramacaoFerias>(
+    "DELETE", `/rh/ferias/programacao/${id}?dry_run=${opts.dryRun ? "true" : "false"}`, { usuario }
+  );
+}

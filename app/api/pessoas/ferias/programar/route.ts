@@ -13,9 +13,9 @@ export async function POST(req: Request) {
   let b: { pessoa_id?: number; periodos?: PeriodoFerias[]; observacao?: string; aquisitivo_id?: number | null };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
   if (!b.pessoa_id) return NextResponse.json({ error: "Escolha a pessoa." }, { status: 400 });
-  const erro = await programarFerias(await papelDe(email), {
+  const r = await programarFerias(await papelDe(email), {
     pessoa_id: Number(b.pessoa_id), periodos: b.periodos ?? [], observacao: b.observacao, aquisitivo_id: b.aquisitivo_id ?? null,
   });
-  if (erro) return NextResponse.json({ error: erro }, { status: 400 });
-  return NextResponse.json({ ok: true });
+  if (r.erro) return NextResponse.json({ error: r.erro }, { status: 400 });
+  return NextResponse.json({ ok: true, questor: r.questor });
 }

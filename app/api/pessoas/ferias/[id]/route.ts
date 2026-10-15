@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { admin, formatarPeriodos, type PeriodoFerias } from "@/lib/pessoas/ferias";
 import { enviarEmail, notificarTeams, avisarCanal, layoutEmail } from "@/lib/pessoas/notificar";
 import { avisarControle } from "@/lib/pessoas/ferias-programacao";
+import { enviarFeriasAoQuestor } from "@/lib/pessoas/ferias-questor";
 
 export const dynamic = "force-dynamic";
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
@@ -109,7 +110,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     );
     await avisarCanal(`${aprovado ? "✅" : "❌"} Férias de **${nome}** ${aprovado ? "aprovadas" : "recusadas"} — ${resumo}`);
     // Márcio (controle de férias) fica sabendo de toda aprovação pelo Teams.
-    if (aprovado) await avisarControle(`${avaliador?.nome ?? email} aprovou as férias de ${nome} (${sol.setor}): ${resumo}.`);
+    if (aprovado) {
+      await avisarControle(`${avaliador?.nome ?? email} aprovou as férias de ${nome} (${sol.setor}): ${resumo}.`);
+      // Programação no Questor para o DP calcular o recibo (não desfaz a aprovação se falhar).
+      const q = await enviarFeriasAoQuestor(sol.id, email);
+      return NextResponse.json({ ok: true, status: novoStatus, questor: q });
+    }
   }
 
   return NextResponse.json({ ok: true, status: novoStatus });

@@ -3,6 +3,7 @@ import { admin, temVisaoDeGestores, formatarPeriodos, type PeriodoFerias } from 
 import { ehControleFerias, casarNomes, limiteSugerido, EMPRESAS_PHD, CONTROLE_FERIAS, SOCIOS_SEM_FERIAS } from "./ferias-controle";
 import { enviarEmail, notificarTeams, layoutEmail } from "./notificar";
 import { getFeriasAVencer } from "../questor";
+import { enviarFeriasAoQuestor, type ResultadoQuestor } from "./ferias-questor";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
 
@@ -36,7 +37,8 @@ export interface PessoaControle {
   }[];
   programacoes: {
     id: number; status: string; origem: string; aquisitivo_id: number | null;
-    programado_por: string | null; periodos: { inicio: string; fim: string }[];
+    programado_por: string | null;
+    periodos: { inicio: string; fim: string; questor_prog_id?: number | null; questor_data_pagamento?: string | null; questor_erro?: string | null }[];
   }[];
 }
 
@@ -57,7 +59,7 @@ export async function listarControle(papel: Papel): Promise<PessoaControle[]> {
       .select("id,pessoa_id,inicio_aquisitivo,fim_aquisitivo,limite_gozo,saldo,origem,observacao,codigoempresa")
       .in("pessoa_id", ids).order("inicio_aquisitivo"),
     sb.from("ferias_solicitacoes")
-      .select("id,pessoa_id,status,origem,aquisitivo_id,programado_por,ferias_periodos(inicio,fim)")
+      .select("id,pessoa_id,status,origem,aquisitivo_id,programado_por,ferias_periodos(inicio,fim,questor_prog_id,questor_data_pagamento,questor_erro)")
       .in("pessoa_id", ids).in("status", ["pendente", "aprovada"]),
   ]);
 
@@ -83,19 +85,19 @@ export async function listarControle(papel: Papel): Promise<PessoaControle[]> {
 export async function programarFerias(
   papel: Papel,
   campos: { pessoa_id: number; periodos: PeriodoFerias[]; observacao?: string | null; aquisitivo_id?: number | null }
-): Promise<string | null> {
+): Promise<{ erro?: string; questor?: ResultadoQuestor }> {
   const sb = admin();
-  if (!sb) return "Banco indisponível.";
-  if (!papel.programa) return "Só o líder do setor ou o controle de férias podem programar.";
+  if (!sb) return { erro: "Banco indisponível." };
+  if (!papel.programa) return { erro: "Só o líder do setor ou o controle de férias podem programar." };
 
   const { data: pessoa } = await sb.from("pessoas_perfil")
     .select("id,nome,setor,email").eq("id", campos.pessoa_id).maybeSingle();
-  if (!pessoa) return "Pessoa não encontrada.";
-  if (!papel.todos && pessoa.setor !== papel.perfil?.setor) return "Você só pode programar férias do seu setor.";
+  if (!pessoa) return { erro: "Pessoa não encontrada." };
+  if (!papel.todos && pessoa.setor !== papel.perfil?.setor) return { erro: "Você só pode programar férias do seu setor." };
 
   const periodos = (campos.periodos ?? []).filter((p) => p?.inicio && p?.fim);
-  if (periodos.length === 0) return "Informe ao menos um período.";
-  if (periodos.some((p) => p.fim < p.inicio)) return "A data final não pode ser anterior à inicial.";
+  if (periodos.length === 0) return { erro: "Informe ao menos um período." };
+  if (periodos.some((p) => p.fim < p.inicio)) return { erro: "A data final não pode ser anterior à inicial." };
 
   const origem = papel.controle ? "rh" : "lider";
   const agora = new Date().toISOString();
@@ -111,14 +113,14 @@ export async function programarFerias(
     programado_por: papel.email,
     aquisitivo_id: campos.aquisitivo_id ?? null,
   }).select("id").single();
-  if (error || !sol) return error?.message ?? "Falha ao salvar.";
+  if (error || !sol) return { erro: error?.message ?? "Falha ao salvar." };
 
   const { error: e2 } = await sb.from("ferias_periodos").insert(
     periodos.map((p) => ({ solicitacao_id: sol.id, inicio: p.inicio, fim: p.fim }))
   );
   if (e2) {
     await sb.from("ferias_solicitacoes").delete().eq("id", sol.id);
-    return e2.message;
+    return { erro: e2.message };
   }
 
   await sb.from("eventos_agenda").insert(periodos.map((p) => ({
@@ -142,8 +144,10 @@ export async function programarFerias(
   if (!papel.email.startsWith("marcio@")) {
     await avisarControle(`${papel.perfil?.nome ?? papel.email} programou as férias de ${pessoa.nome} (${pessoa.setor}): ${formatarPeriodos(periodos)}.`, "Férias programadas");
   }
-  return null;
+  // Leva para a programação de férias do Questor (não desfaz se falhar).
+  return { questor: await enviarFeriasAoQuestor(sol.id, papel.email) };
 }
+
 
 /** Cadastro manual do Márcio (cria ou atualiza pelo início do aquisitivo). */
 export async function salvarAquisitivo(
