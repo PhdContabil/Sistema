@@ -7,6 +7,10 @@ import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, e
 
 interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
+// Nota "sem tomador": o participante no Questor é um cadastro genérico, sem CPF/CNPJ
+// (3 = CLIENTES DIVERSOS, 3108 = AVULSOS — os únicos usados pelos MEIs desde 2024).
+const PESSOAS_SEM_TOMADOR = new Set([3, 3108]);
+const semTomador = (n: Nota) => n.codigopessoa == null || PESSOAS_SEM_TOMADOR.has(Number(n.codigopessoa));
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 export default function Notas({ mei }: { mei: Mei[] }) {
@@ -30,20 +34,26 @@ export default function Notas({ mei }: { mei: Mei[] }) {
       .catch((e) => setInfo(e.message));
   }, [sal, de, ate]);
 
-  const total = (notas ?? []).reduce((a, n) => a + (n.valorcontabil || 0), 0);
+  const [filtroTom, setFiltroTom] = useState<"" | "com" | "sem">("");
+  const visiveis = (notas ?? []).filter((n) => !filtroTom || (filtroTom === "sem") === semTomador(n));
+  const soma = (l: Nota[]) => l.reduce((a, n) => a + (n.valorcontabil || 0), 0);
+  const total = soma(visiveis);
+  const comT = (notas ?? []).filter((n) => !semTomador(n)); const semT = (notas ?? []).filter(semTomador);
 
   function exportarNotas() {
     // exportarnota: usuário/senha da prefeitura, CNPJ do tomador (salão), nome, valor, número, série, data, município.
-    baixarCsv("exportar_notas.csv", ["Usuário prefeitura", "CNPJ tomador", "Profissional", "Valor", "Número", "Série", "Data", "Município"],
-      (notas ?? []).map((n) => { const m = porCod.get(n.codigoempresa); return ["", m?.salaoCnpj ?? "", limpo(n.nome), String(n.valorcontabil).replace(".", ","), n.numeronf, n.serienf ?? "", dt(n.datalctofis), m?.cidade ?? ""]; }));
+    baixarCsv("exportar_notas.csv", ["Usuário prefeitura", "CNPJ tomador", "Profissional", "Valor", "Número", "Série", "Data", "Município", "Tomador"],
+      visiveis.map((n) => { const m = porCod.get(n.codigoempresa); return ["", semTomador(n) ? "" : m?.salaoCnpj ?? "", limpo(n.nome), String(n.valorcontabil).replace(".", ","), n.numeronf, n.serienf ?? "", dt(n.datalctofis), m?.cidade ?? "", semTomador(n) ? "Sem tomador" : "Com tomador"]; }));
   }
   function exportarDas() {
     const mes = MESES[Number(ate.slice(5, 7)) - 1];
     baixarCsv("exportar_das.csv", ["CNPJ", "Mês", "Nome", "Bloqueio"], mei.filter((m) => m.ativo && String(m.salaoCod) === sal).map((m) => [m.cnpj, mes, m.razao, m.bloqueado ? "BLOQUEADO" : ""]));
   }
   function relatorio() {
-    const linhas = (notas ?? []).map((n) => `<tr><td>${n.codigoempresa}</td><td>${esc(limpo(n.nome))}</td><td>${n.numeronf}</td><td>${esc(n.serienf ?? "")}</td><td>${dt(n.datalctofis)}</td><td class="dir">${brl(n.valorcontabil)}</td></tr>`).join("");
-    imprimir(`Notas MEI — ${esc(nomeSalao)}`, `<p>Período: ${dt(de)} a ${dt(ate)}</p><table><tr><th>Cód.</th><th>Profissional</th><th>Nº</th><th>Série</th><th>Data</th><th class="dir">Valor</th></tr>${linhas}</table><p class="dir"><b>Total: ${brl(total)}</b></p>`);
+    // Relatório separado: notas com tomador (salão) e notas sem tomador, cada bloco com o seu total.
+    const bloco = (titulo: string, l: Nota[]) => !l.length ? "" : `<h3>${titulo} (${l.length})</h3><table><tr><th>Cód.</th><th>Profissional</th><th>Nº</th><th>Série</th><th>Data</th><th class="dir">Valor</th></tr>${l.map((n) => `<tr><td>${n.codigoempresa}</td><td>${esc(limpo(n.nome))}</td><td>${n.numeronf}</td><td>${esc(n.serienf ?? "")}</td><td>${dt(n.datalctofis)}</td><td class="dir">${brl(n.valorcontabil)}</td></tr>`).join("")}</table><p class="dir"><b>Subtotal: ${brl(soma(l))}</b></p>`;
+    const c = visiveis.filter((n) => !semTomador(n)); const s2 = visiveis.filter(semTomador);
+    imprimir(`Notas MEI — ${esc(nomeSalao)}`, `<p>Período: ${dt(de)} a ${dt(ate)}</p>${bloco("Notas com tomador", c)}${bloco("Notas sem tomador", s2)}<p class="dir"><b>Total geral: ${brl(soma(visiveis))}</b></p>`);
   }
 
   return (
@@ -53,7 +63,8 @@ export default function Notas({ mei }: { mei: Mei[] }) {
           <Campo label="Data inicial"><input type="date" style={st.input} value={de} onChange={(e) => setDe(e.target.value)} /></Campo>
           <Campo label="Data final"><input type="date" style={st.input} value={ate} onChange={(e) => setAte(e.target.value)} /></Campo>
           <SelectSalao mei={mei} valor={sal} onChange={setSal} todos={false} />
-          <button style={st.btn} onClick={exportarNotas} disabled={!notas?.length}>Exportar notas</button>
+          <Campo label="Tomador"><select style={st.input} value={filtroTom} onChange={(e) => setFiltroTom(e.target.value as "" | "com" | "sem")}><option value="">Todas</option><option value="com">Com tomador</option><option value="sem">Sem tomador</option></select></Campo>
+          <button style={st.btn} onClick={exportarNotas} disabled={!visiveis.length}>Exportar notas</button>
           <button style={st.btn} onClick={exportarDas}>Exportar DAS</button>
           <button style={st.btn} onClick={relatorio} disabled={!notas}>Relatório</button>
         </div>
@@ -66,8 +77,9 @@ export default function Notas({ mei }: { mei: Mei[] }) {
         <div style={st.card}>
           <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Notas do período</h3>
           <p style={st.mut}>{info}</p>
-          {notas && <Tabela cab={["Cód.", "Profissional", "Nº NF", "Série", "Data", "Valor"]} linhas={notas.map((n) => [n.codigoempresa, limpo(n.nome), n.numeronf, n.serienf ?? "", dt(n.datalctofis), brl(n.valorcontabil)])} />}
-          {notas && <p style={{ textAlign: "right", fontWeight: 600 }}>Total: {brl(total)}</p>}
+          {notas && <p style={st.mut}>Com tomador: <b>{comT.length}</b> · {brl(soma(comT))} — Sem tomador: <b>{semT.length}</b> · {brl(soma(semT))}</p>}
+          {notas && <Tabela cab={["Cód.", "Profissional", "Nº NF", "Série", "Data", "Tomador", "Valor"]} linhas={visiveis.map((n) => [n.codigoempresa, limpo(n.nome), n.numeronf, n.serienf ?? "", dt(n.datalctofis), semTomador(n) ? "Sem tomador" : "Com tomador", brl(n.valorcontabil)])} />}
+          {notas && <p style={{ textAlign: "right", fontWeight: 600 }}>Total{filtroTom ? (filtroTom === "sem" ? " (sem tomador)" : " (com tomador)") : ""}: {brl(total)}</p>}
         </div>
       </div>
       {emitir && <EmitirNota m={emitir} data={ate} fechar={() => setEmitir(null)} />}
