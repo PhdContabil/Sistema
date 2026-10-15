@@ -29,6 +29,24 @@ function codigoServico(codigoativmunic) {
   return `${a.slice(0, 2)}.${a.slice(2)}.01`;
 }
 
+/** No erro: guarda o print (para o chamado) e junta a mensagem que o portal mostrou na tela. */
+async function capturarErro(page, ctl, e) {
+  try {
+    const msg = await page.evaluate(() => [...document.querySelectorAll('.modal.show, .modal.in, [role="dialog"], .swal2-popup, .alert-danger, .alert-warning, .validation-summary-errors, .field-validation-error, .text-danger')]
+      .filter((x) => x.offsetParent !== null).map((x) => x.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' | ').slice(0, 500));
+    if (msg) { ctl.log('Mensagem do portal: ' + msg); e.message = `${e.message} [PORTAL: ${msg}]`; }
+  } catch { /* página fechada */ }
+  try { if (ctl.setPrint) ctl.setPrint((await page.screenshot({ type: 'jpeg', quality: 60 })).toString('base64')); } catch { /* sem print */ }
+}
+
+/** Depois de enviar o login: se o portal recusar (senha/usuário), avisa na hora em vez de esperar 5 minutos. */
+async function conferirLogin(page) {
+  await sleep(3500);
+  const txt = await page.evaluate(() => [...document.querySelectorAll('.alert, .alert-danger, .validation-summary-errors, .field-validation-error, .text-danger, #login-error, .br-message.danger')]
+    .filter((x) => x.offsetParent !== null).map((x) => x.innerText.replace(/\s+/g, ' ').trim()).join(' | ')).catch(() => '');
+  if (/senha|inv[aá]lid|incorret|bloquead|n[aã]o encontrad/i.test(txt)) throw new Error('LOGIN_RECUSADO: ' + txt.slice(0, 200));
+}
+
 /** Tenta cada seletor até um funcionar. */
 async function acao(page, seletores, fn, { timeout = 8000, nome = 'elemento' } = {}) {
   let ultimo;
@@ -91,6 +109,7 @@ async function preparar(job, creds, ctl) {
       await acao(page, '#Senha', (l) => l.fill(creds.emissor.senha), { nome: 'campo de senha' });
       await acao(page, ['button:has-text("Entrar")', 'xpath=//button[contains(text(),"Entrar")]'], (l) => l.click(), { nome: 'botão Entrar' });
       ctl.log('Login pelo Emissor Nacional enviado.');
+      await conferirLogin(page);
     } else if (creds && creds.govbr && creds.govbr.cpf) {
       await page.goto(`${BASE}/AcessoGovBR/AcessarGovBR`, { waitUntil: 'domcontentloaded' });
       await acao(page, '#accountId', (l) => l.fill(onlyDigits(creds.govbr.cpf)), { nome: 'campo CPF (gov.br)' });
@@ -157,9 +176,10 @@ async function preparar(job, creds, ctl) {
     ctl.log('PRONTO: confira os dados na janela do Chrome e clique em EMITIR você mesmo. Depois, volte aqui e conclua.');
   } catch (e) {
     await print('erro');
+    await capturarErro(page, ctl, e);
     ctl.log('ERRO: ' + e.message);
     throw e;
   }
 }
 
-module.exports = { preparar, codigoServico, hoje };
+module.exports = { preparar, codigoServico, hoje, capturarErro };

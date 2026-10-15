@@ -3,7 +3,7 @@
 // Notas MEI (menu_mei): profissionais do salão, notas do período, Exportar Notas, Exportar DAS,
 // relatório rel_notas e a tela de emissão (emitirnota).
 import { useEffect, useMemo, useState } from "react";
-import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, type RoboEstado, type Mei } from "./ui";
+import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, ErroRobo, type RoboEstado, type Mei } from "./ui";
 
 interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
@@ -29,9 +29,26 @@ export default function Notas({ mei }: { mei: Mei[] }) {
   useEffect(() => {
     if (!sal) return;
     setInfo("Consultando notas…"); setNotas(null);
-    ler<{ dados: Nota[]; total: number; truncado: boolean }>("/fiscal/lancamentos", { tipo: "saida", salao: sal, data_inicio: de, data_fim: ate })
-      .then((j) => { setNotas(j.dados ?? []); setInfo(`${j.total} nota(s)${j.truncado ? " — resultado truncado pela API (5000 linhas)" : ""}`); })
-      .catch((e) => setInfo(e.message));
+    // A API aceita no máximo 92 dias por consulta: períodos maiores são buscados em partes e somados.
+    (async () => {
+      if (!de || !ate || de > ate) { setInfo("Confira as datas: a inicial precisa ser antes da final."); setNotas([]); return; }
+      const partes: [string, string][] = [];
+      for (let ini = new Date(de + "T12:00:00"); ini.toISOString().slice(0, 10) <= ate; ) {
+        const fim = new Date(ini); fim.setDate(fim.getDate() + 89);
+        const f = fim.toISOString().slice(0, 10) > ate ? ate : fim.toISOString().slice(0, 10);
+        partes.push([ini.toISOString().slice(0, 10), f]);
+        ini = new Date(f + "T12:00:00"); ini.setDate(ini.getDate() + 1);
+      }
+      try {
+        const todas: Nota[] = []; let truncado = false;
+        for (const [a1, b1] of partes) {
+          const j = await ler<{ dados: Nota[]; total: number; truncado: boolean }>("/fiscal/lancamentos", { tipo: "saida", salao: sal, data_inicio: a1, data_fim: b1 });
+          todas.push(...(j.dados ?? [])); truncado = truncado || !!j.truncado;
+        }
+        setNotas(todas);
+        setInfo(`${todas.length} nota(s)${partes.length > 1 ? ` (período buscado em ${partes.length} partes)` : ""}${truncado ? " — parte do resultado foi cortada pela API (5000 linhas); diminua o período" : ""}`);
+      } catch (e) { setInfo(e instanceof Error ? e.message : "Falha ao buscar as notas."); }
+    })();
   }, [sal, de, ate]);
 
   const [filtroTom, setFiltroTom] = useState<"" | "com" | "sem">("");
@@ -130,13 +147,13 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     setRobo({ status: "buscando senha", passos: [] });
     const rc = await fetch(`/api/mei/nota/credenciais?cod=${m.cod}`);
     const jc = await rc.json();
-    if (!rc.ok) { setRobo(null); setErro(jc.error ?? "Falha ao buscar a senha."); return; }
+    if (!rc.ok) { setRobo({ status: "erro", erro: jc.error ?? "Falha ao buscar a senha (sem senha cadastrada?).", passos: [] }); return; }
     const r = await fetch("http://localhost:3199/preparar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: m.salaoCnpj, descricao: d.obs,
       municipio: m.cidade, uf: m.uf, codigoativmunic: (m.ativMunic || "").split(" ")[0], creds: jc.creds,
     }) });
     const j = await r.json();
-    if (!r.ok) { setRobo(null); setErro(j.erro ?? "O robô recusou."); return; }
+    if (!r.ok) { setRobo({ status: "erro", erro: j.erro ?? "O robô recusou.", passos: [] }); return; }
     setRobo({ ...j, passos: [{ msg: `Login: ${jc.origem}` }, ...(j.passos ?? [])] });
     const id = j.id;
     const t = setInterval(async () => {
@@ -198,7 +215,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
       {robo && (
         <div style={{ ...st.card, marginTop: 10 }}>
           <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Robô: {({ "buscando senha": "buscando a senha…", preparando: "abrindo o Chrome…", login: "fazendo login…", preenchendo: "preenchendo a nota…", aguardando_confirmacao: "PRONTO — confira na janela do Chrome e clique em EMITIR lá. Depois informe o número da nota acima e lance no Questor.", erro: "erro", cancelada: "cancelado", fechada: "janela do Chrome fechada" } as Record<string, string>)[robo.status] ?? robo.status}</p>
-          {robo.erro && <p style={{ color: "var(--div)", fontSize: 13 }}>{robo.erro}</p>}
+          {robo.erro && <ErroRobo erro={robo.erro} jobId={robo.id} passos={robo.passos} contexto={`Emissão de NFS-e (Emissor Nacional) — MEI ${m.cod} - ${m.razao}, data ${d.data}, valor ${d.valor}`} />}
           {robo.passos.slice(-6).map((p, i) => <p key={i} style={{ ...st.mut, margin: "2px 0" }}>• {p.msg}</p>)}
         </div>
       )}

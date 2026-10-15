@@ -29,7 +29,7 @@ function cors(req, res) {
   return ORIGENS.includes(o) || !o;
 }
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
-const publico = (j) => { const { creds, ctx, ...p } = j; void creds; void ctx; return p; };
+const publico = (j) => { const { creds, ctx, printB64, ...p } = j; void creds; void ctx; return { ...p, temPrint: !!printB64 }; };
 
 http.createServer(async (req, res) => {
   const permitido = cors(req, res);
@@ -38,11 +38,14 @@ http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   try {
     if (req.method === 'GET' && u.pathname === '/status') {
-      return send(res, 200, { ok: true, versao: 2, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
+      return send(res, 200, { ok: true, versao: 3, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
     }
     let m;
     if (req.method === 'GET' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)$/))) {
       const j = jobs.get(m[1]); return j ? send(res, 200, publico(j)) : send(res, 404, { erro: 'job não encontrado' });
+    }
+    if (req.method === 'GET' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)\/print$/))) {
+      const j = jobs.get(m[1]); return j && j.printB64 ? send(res, 200, { jpeg: j.printB64 }) : send(res, 404, { erro: 'sem print' });
     }
     if (req.method === 'POST' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)\/cancelar$/))) {
       const j = jobs.get(m[1]); if (!j) return send(res, 404, { erro: 'job não encontrado' });
@@ -74,6 +77,7 @@ http.createServer(async (req, res) => {
         log: (msg) => job.passos.push({ t: new Date().toISOString(), msg }),
         setStatus: (s) => { job.status = s; },
         cancelado: () => job.cancel === true,
+        setPrint: (b64) => { job.printB64 = b64; },
         onPage: (ctx) => { job.ctx = ctx; ctx.on('close', () => { if (job.status === 'aguardando_confirmacao') { job.status = 'fechada'; job.passos.push({ t: new Date().toISOString(), msg: 'Janela do Chrome fechada.' }); } }); },
       };
       preparar(job, job.creds, ctl)
@@ -95,6 +99,7 @@ http.createServer(async (req, res) => {
         log: (msg) => job.passos.push({ t: new Date().toISOString(), msg }),
         setStatus: (s) => { job.status = s; },
         cancelado: () => job.cancel === true,
+        setPrint: (b64) => { job.printB64 = b64; },
         onPage: (ctx) => { job.ctx = ctx; ctx.on('close', () => { if (ATIVOS.includes(job.status)) { job.status = 'fechada'; } }); },
       };
       guiaDAS(job, c, ctl).catch((e) => { job.status = 'erro'; job.erro = e.message; });

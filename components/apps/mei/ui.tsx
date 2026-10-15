@@ -172,7 +172,7 @@ export function SelectSalao({ mei, valor, onChange, todos = true }: { mei: Mei[]
 
 // ---------------- Robô local (NFS-e e guia DAS) ----------------
 export const ROBO_URL = "http://localhost:3199";
-export const ROBO_VERSAO_MINIMA = 2;
+export const ROBO_VERSAO_MINIMA = 3;
 export const ROBO_INSTALADOR = "/robo/instalar-robo-nucleo.bat";
 export type RoboEstado = "ok" | "ausente" | "desatualizado";
 
@@ -197,6 +197,58 @@ export function AvisoRobo({ estado, fechar }: { estado: RoboEstado; fechar?: () 
         {fechar && <button style={st.btn} onClick={fechar}>Fechar</button>}
       </div>
       <span style={st.mut}>Não precisa de administrador. Precisa do Google Chrome instalado. Depois de instalado, o robô abre sozinho com o Windows.</span>
+    </div>
+  );
+}
+
+// ---------------- Erros do robô em linguagem simples ----------------
+export interface ExplicacaoErro { titulo: string; oQueFazer: string; ehTI: boolean }
+
+/** Traduz o erro técnico do robô para o pessoal do setor. ehTI = precisa chamar a T.I. */
+export function explicarErroRobo(erro: string): ExplicacaoErro {
+  const e = String(erro || "");
+  const tem = (r: RegExp) => r.test(e);
+  if (tem(/n[aã]o foi poss[ií]vel recuperar a lista de munic|indispon|503|502|504|ERR_CONNECTION|ERR_NAME|ERR_TIMED_OUT|net::|fora do ar|manuten/i))
+    return { titulo: "O portal do governo está instável agora", oQueFazer: "Não é problema do sistema. Feche a janela do Chrome, espere alguns minutos e tente de novo.", ehTI: false };
+  if (tem(/LOGIN_RECUSADO|senha.*(inv[aá]lid|incorret)|usu[aá]rio.*inv[aá]lid|bloquead/i))
+    return { titulo: "O portal não aceitou o login (usuário ou senha)", oQueFazer: "Confira a senha da empresa em Controle e relatórios → Senhas (ou na Ficha → Senhas). Se a senha mudou no portal, atualize aqui e tente de novo.", ehTI: false };
+  if (tem(/sem senha|n[aã]o tem a senha|Falta CNPJ, CPF ou c[oó]digo de acesso|c[oó]digo de acesso/i))
+    return { titulo: "Falta a senha desta empresa no sistema", oQueFazer: "Cadastre a senha em Controle e relatórios → Senhas (Emissor Nacional, gov.br ou Simples Nacional) e tente de novo.", ehTI: false };
+  if (tem(/j[aá] existe uma emiss[aã]o|rob[oô] em andamento/i))
+    return { titulo: "O robô já está trabalhando em outra nota/guia", oQueFazer: "Termine a anterior (ou clique em Cancelar robô / feche a janela do Chrome) e tente de novo.", ehTI: false };
+  if (tem(/Tempo esgotado esperando o login|waitForFunction|captcha/i))
+    return { titulo: "O login não foi concluído a tempo", oQueFazer: "Se aparecer verificação (captcha ou código), resolva na janela do Chrome dentro de 5 minutos. Tente de novo.", ehTI: false };
+  if (tem(/data futura|data inv[aá]lida|valor inv[aá]lido|tomador.*inv[aá]lido|MEI inv[aá]lido/i))
+    return { titulo: "Algum dado da nota está errado", oQueFazer: "Confira data (não pode ser futura), valor e o CNPJ do salão (tomador) e tente de novo.", ehTI: false };
+  if (tem(/Chrome n[aã]o encontrado|Executable doesn.t exist|chrome.*not found|Failed to launch/i))
+    return { titulo: "O Google Chrome não foi encontrado neste computador", oQueFazer: "Instale o Google Chrome e rode o instalador do robô de novo.", ehTI: false };
+  if (tem(/Cancelado|cancelad|fechad/i))
+    return { titulo: "O robô foi cancelado ou a janela foi fechada", oQueFazer: "É só clicar de novo no botão do robô.", ehTI: false };
+  return { titulo: "O robô não conseguiu terminar (mudança no portal ou erro do sistema)", oQueFazer: "Isso precisa da T.I. Clique em \"Abrir chamado na T.I.\" — o erro e o print vão junto.", ehTI: true };
+}
+
+/** Caixa de erro do robô: explicação simples + detalhe técnico + botão de chamado (quando é coisa da T.I.). */
+export function ErroRobo({ erro, jobId, contexto, passos }: { erro: string; jobId?: string; contexto: string; passos?: { msg: string }[] }) {
+  const x = explicarErroRobo(erro);
+  const [chamado, setChamado] = useState<{ ok: boolean; texto: string; id?: string } | null>(null);
+  const [abrindo, setAbrindo] = useState(false);
+  async function abrirChamado() {
+    setAbrindo(true);
+    try {
+      let print: string | undefined;
+      if (jobId) { const r = await fetch(`${ROBO_URL}/jobs/${jobId}/print`).catch(() => null); if (r?.ok) print = (await r.json()).jpeg; }
+      const r = await fetch("/api/mei/robo/chamado", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contexto, erro, passos: (passos ?? []).map((p) => p.msg), print }) });
+      const j = await r.json();
+      setChamado(r.ok ? { ok: true, texto: "Chamado aberto para a T.I. (Pedro). Você pode acompanhar em Tecnologia → Tickets.", id: j.id } : { ok: false, texto: j.error ?? "Não consegui abrir o chamado." });
+    } finally { setAbrindo(false); }
+  }
+  return (
+    <div style={{ ...st.aviso, borderLeft: `4px solid ${x.ehTI ? "var(--div)" : "#d97706"}`, display: "grid", gap: 6 }}>
+      <b>{x.titulo}</b>
+      <span>{x.oQueFazer}</span>
+      <details><summary style={{ cursor: "pointer", ...st.mut }}>Detalhe técnico</summary><code style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>{erro}</code></details>
+      {x.ehTI && !chamado?.ok && <div><button style={st.btnP} onClick={abrirChamado} disabled={abrindo}>{abrindo ? "Abrindo chamado…" : "Abrir chamado na T.I."}</button></div>}
+      {chamado && <span style={{ color: chamado.ok ? "var(--ok)" : "var(--div)" }}>{chamado.texto}{chamado.id && <> · <a href={`/m/tecnologia/tickets?ticket=${chamado.id}`} target="_blank" rel="noreferrer">abrir o chamado</a></>}</span>}
     </div>
   );
 }

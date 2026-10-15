@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api, ler, st, Tabela, Campo, Mensagem, Modal, SelectSalao, useLista, baixarCsv, dt, hojeISO, primeiroDiaMes, ultimoDiaMes,
-  resumoGravacao, semHtml, verificarRobo, AvisoRobo, ROBO_URL, type RoboEstado, type Mei, type Responsavel, type ServicoTarefa,
+  resumoGravacao, semHtml, verificarRobo, AvisoRobo, ErroRobo, ROBO_URL, type RoboEstado, type Mei, type Responsavel, type ServicoTarefa,
 } from "./ui";
 
 interface Tarefa {
@@ -51,7 +51,7 @@ function PainelDas({ job, titulo }: { job: JobDas | null; titulo?: string }) {
   return (
     <div style={{ ...st.mut, marginTop: 8, padding: "8px 10px", background: "var(--accent-soft)", borderRadius: 8 }}>
       <b>{titulo ?? "Robô DAS"}: {DAS_STATUS[job.status] ?? job.status}</b>
-      {job.erro && <div style={{ color: "var(--div)" }}>{job.erro}</div>}
+      {job.erro && <ErroRobo erro={job.erro} jobId={job.id} passos={job.passos} contexto={`Guia DAS (PGMEI)${titulo ? " — " + titulo : ""}`} />}
       {job.passos.slice(-4).map((p, i) => <div key={i}>• {p.msg}</div>)}
     </div>
   );
