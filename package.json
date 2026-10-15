@@ -11,9 +11,10 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.45.0",
+    "eslint-config-next": "^14.2.35",
     "jspdf": "^4.2.1",
     "mupdf": "^1.28.1",
-    "next": "14.2.5",
+    "next": "^14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "^2.12.7",
