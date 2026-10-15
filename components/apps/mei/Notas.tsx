@@ -64,7 +64,7 @@ export default function Notas({ mei }: { mei: Mei[] }) {
   }
   function exportarDas() {
     const mes = MESES[Number(ate.slice(5, 7)) - 1];
-    baixarCsv("exportar_das.csv", ["CNPJ", "Mês", "Nome", "Bloqueio"], mei.filter((m) => m.ativo && String(m.salaoCod) === sal).map((m) => [m.cnpj, mes, m.razao, m.bloqueado ? "BLOQUEADO" : ""]));
+    baixarCsv("exportar_das.csv", ["CNPJ", "Mês", "Nome", "Bloqueio"], mei.filter((m) => m.ativo && String(m.salaoCod) === sal).map((m) => [m.cnpj.replace(/\D/g, ""), mes, m.razao, m.bloqueado ? "BLOQUEADO" : ""]));
   }
   function relatorio() {
     // Relatório separado: notas com tomador (salão) e notas sem tomador, cada bloco com o seu total.

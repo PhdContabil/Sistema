@@ -252,3 +252,29 @@ export function ErroRobo({ erro, jobId, contexto, passos }: { erro: string; jobI
     </div>
   );
 }
+
+// ---------------- CNPJ/CPF: mostra formatado, copia só os números ----------------
+export const soNumeros = (s: unknown) => String(s ?? "").replace(/\D/g, "");
+/** Formata para leitura (00.000.000/0000-00 ou 000.000.000-00). Se não for CNPJ/CPF, devolve como veio. */
+export function fmtDoc(s: unknown): string {
+  const d = soNumeros(s);
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  return String(s ?? "");
+}
+/** CNPJ/CPF formatado + botão que copia SEM pontuação (o site do Simples Nacional só aceita números). */
+export function Doc({ valor }: { valor: unknown }) {
+  const [ok, setOk] = useState(false);
+  const d = soNumeros(valor);
+  if (!d) return <>{String(valor ?? "") || "—"}</>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+      {fmtDoc(valor)}
+      <button type="button" title="Copiar só os números (para colar no site do Simples Nacional)"
+        onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(d).then(() => { setOk(true); setTimeout(() => setOk(false), 1500); }).catch(() => null); }}
+        style={{ border: "1px solid var(--border)", background: "transparent", color: "inherit", borderRadius: 6, padding: "0 6px", fontSize: 11, cursor: "pointer", lineHeight: "18px" }}>
+        {ok ? "copiado" : "copiar"}
+      </button>
+    </span>
+  );
+}

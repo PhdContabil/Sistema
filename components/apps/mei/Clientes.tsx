@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import {
   api, ler, st, Tabela, Campo, Mensagem, Modal, SelectSalao, brl, dt, hojeISO, situacao, semHtml, resumoGravacao, mensagemErro, type Mei,
-} from "./ui";
+Doc, } from "./ui";
 import { SenhasEmpresa } from "./Senhas";
 
 export function Clientes({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }) {
@@ -115,7 +115,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
           {m.ativo ? <Selo cor="ok">Ativo</Selo> : <Selo cor="div">Inativo desde {dt(m.fim)}</Selo>}
           {m.bloqueado && <Selo cor="div">Bloqueado</Selo>}
           {vencidas.length > 0 && <Selo cor="aviso">{vencidas.length} tarefa(s) vencida(s)</Selo>}
-          <Selo cor="neutro">CNPJ {m.cnpj}</Selo>
+          <Selo cor="neutro">CNPJ <Doc valor={m.cnpj} /></Selo>
           <Selo cor="neutro">{salaoTxt}</Selo>
           <Selo cor="neutro">{m.mensal ? `Mensalidade ${brl(m.mensal)}${m.mensalNF ? " (NF)" : ""}` : "Sem mensalidade"}</Selo>
           {m.cidade && <Selo cor="neutro">{m.cidade}{m.uf ? `/${m.uf}` : ""}</Selo>}
@@ -143,7 +143,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
           </div>
           <div style={st.card}>
             <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Titular</h3>
-            <Info k="Nome" v={m.socio} /><Info k="CPF" v={m.cpf} /><Info k="Nascimento" v={dt(m.nasc)} /><Info k="RG" v={m.rg} />
+            <Info k="Nome" v={m.socio} /><Info k="CPF" v={m.cpf ? <Doc valor={m.cpf} /> : ""} /><Info k="Nascimento" v={dt(m.nasc)} /><Info k="RG" v={m.rg} />
             <Info k="Título de eleitor" v={m.titulo} /><Info k="Nome da mãe" v={m.mae} />
           </div>
           <div style={st.card}>

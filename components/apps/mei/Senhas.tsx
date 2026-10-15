@@ -4,7 +4,7 @@
 // e "Senhas Nacional" (controle_senhas_nacional/editar_senha_nacional).
 // A API nunca lista a senha: ela só é revelada sob pedido (GET .../segredo, com registro em log).
 import { useCallback, useEffect, useState } from "react";
-import { api, st, Tabela, Campo, Mensagem, Modal, SelectSalao, baixarCsv, resumoGravacao, mensagemErro, type Mei } from "./ui";
+import { api, st, Tabela, Campo, Mensagem, Modal, SelectSalao, baixarCsv, resumoGravacao, mensagemErro, Doc, soNumeros, type Mei } from "./ui";
 
 export type TipoCred = "PREFEITURA" | "SIMPLES_NACIONAL" | "GOVBR" | "POSTO_FISCAL" | "REGULARIZE" | "EMISSOR_NACIONAL";
 export const TIPOS: { tipo: TipoCred; nome: string; usuario: string; doc?: string; cod?: boolean }[] = [
@@ -51,13 +51,15 @@ const ehDoc = (rotulo?: string) => rotulo === "CNPJ" || rotulo === "CPF";
 const docOk = (rotulo: string | undefined, v: string) => !ehDoc(rotulo) || !v || v.replace(/\D/g, "").length === (rotulo === "CPF" ? 11 : 14);
 
 function Editor({ cred, codigoempresa, tipoFixo, fechar, aoSalvar }: { cred: Partial<Credencial> | null; codigoempresa?: number; tipoFixo?: TipoCred; fechar: () => void; aoSalvar: () => void }) {
-  const [d, setD] = useState({ tipo: (cred?.tipo ?? tipoFixo ?? "PREFEITURA") as TipoCred, codigoempresa: String(cred?.codigoempresa ?? codigoempresa ?? ""), usuario: cred?.usuario ?? "", documento: cred?.documento ? mascaraDoc(TIPOS.find((x) => x.tipo === (cred?.tipo ?? tipoFixo ?? "PREFEITURA"))?.doc ?? "CNPJ", cred.documento) : "", cod_acesso: cred?.cod_acesso ?? "", senha: "" });
+  const [d, setD] = useState({ tipo: (cred?.tipo ?? tipoFixo ?? "PREFEITURA") as TipoCred, codigoempresa: String(cred?.codigoempresa ?? codigoempresa ?? ""), usuario: cred?.usuario && ["CNPJ", "CPF"].includes(TIPOS.find((x) => x.tipo === (cred?.tipo ?? tipoFixo ?? "PREFEITURA"))?.usuario ?? "") ? mascaraDoc(TIPOS.find((x) => x.tipo === (cred?.tipo ?? tipoFixo ?? "PREFEITURA"))!.usuario, cred.usuario) : cred?.usuario ?? "", documento: cred?.documento ? mascaraDoc(TIPOS.find((x) => x.tipo === (cred?.tipo ?? tipoFixo ?? "PREFEITURA"))?.doc ?? "CNPJ", cred.documento) : "", cod_acesso: cred?.cod_acesso ?? "", senha: "" });
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const t = TIPOS.find((x) => x.tipo === d.tipo)!;
   async function salvar() {
     if (!docOk(t.usuario, d.usuario)) { setMsg({ ok: false, texto: `${t.usuario} incompleto.` }); return; }
     if (!docOk(t.doc, d.documento)) { setMsg({ ok: false, texto: `${t.doc} incompleto.` }); return; }
-    const corpo: Record<string, unknown> = { usuario: d.usuario || null, documento: d.documento || null, cod_acesso: d.cod_acesso || null };
+    // CNPJ/CPF gravam SÓ números (o site do Simples Nacional não aceita pontuação); a tela mostra formatado.
+    const limpar = (rotulo: string | undefined, v: string) => (ehDoc(rotulo) ? v.replace(/\D/g, "") : v);
+    const corpo: Record<string, unknown> = { usuario: limpar(t.usuario, d.usuario) || null, documento: limpar(t.doc, d.documento) || null, cod_acesso: d.cod_acesso ? d.cod_acesso.replace(/\D/g, "") || d.cod_acesso : null };
     if (d.senha) corpo.senha = d.senha;
     const r = cred?.id
       ? await api("PATCH", `/mei/credenciais/${cred.id}`, { corpo })
@@ -97,7 +99,7 @@ export function SenhasEmpresa({ m }: { m: Mei }) {
       <Tabela cab={["Tipo", "Usuário / login", "Documento", "Cód. acesso", "Senha", ""]}
         linhas={TIPOS.map((t) => {
           const c = (lista ?? []).find((x) => x.tipo === t.tipo && x.ativo);
-          return [t.nome, c?.usuario ?? "—", c?.documento ?? "", c?.cod_acesso ?? "", c?.tem_senha ? <Revelar key="r" id={c.id} /> : "—",
+          return [t.nome, ehDoc(t.usuario) && c?.usuario ? <Doc key="u" valor={c.usuario} /> : c?.usuario ?? "—", c?.documento ? <Doc key="d" valor={c.documento} /> : "", c?.cod_acesso ?? "", c?.tem_senha ? <Revelar key="r" id={c.id} /> : "—",
             <button key="e" style={st.btn} onClick={() => setEd({ cred: c ?? null, tipo: t.tipo })}>{c ? "Editar" : "Cadastrar"}</button>];
         })} />
       {ed && <Editor cred={ed.cred} codigoempresa={m.cod} tipoFixo={ed.tipo} fechar={() => setEd(null)} aoSalvar={carregar} />}
@@ -136,14 +138,14 @@ export function SenhasLista({ tipo, mei }: { tipo: "PREFEITURA" | "EMISSOR_NACIO
         <Campo label="Situação"><select style={st.input} value={sit} onChange={(e) => setSit(e.target.value)}>{["Ativos", "Inativos", "Todos"].map((x) => <option key={x}>{x}</option>)}</select></Campo>
         <SelectSalao mei={mei} valor={sal} onChange={setSal} />
         <button style={st.btn} onClick={() => baixarCsv(tipo === "PREFEITURA" ? "senhas_prefeitura.csv" : "senhas_nacional.csv", ["Cód.", "Razão", "CNPJ", "Usuário", "Tem senha", "Cidade"],
-          L.map((m) => { const c = porCod.get(m.cod); return [m.cod, m.razao, c?.documento || m.cnpj, c?.usuario ?? "", c?.tem_senha ? "sim" : "", m.cidade]; }))}>Exportar CSV</button>
+          L.map((m) => { const c = porCod.get(m.cod); return [m.cod, m.razao, soNumeros(c?.documento || m.cnpj), c?.usuario ?? "", c?.tem_senha ? "sim" : "", m.cidade]; }))}>Exportar CSV</button>
       </div>
       {erro && <div style={{ ...st.aviso, color: "var(--div)" }}>{erro}</div>}
       <Mensagem msg={msg} />
       <Tabela total={L.length} cab={["Cód.", "Razão", "CNPJ", "Usuário", "Senha", "Cidade", ""]}
         linhas={L.slice(0, 300).map((m) => {
           const c = porCod.get(m.cod);
-          return [m.cod, m.razao, c?.documento || m.cnpj, c?.usuario ?? "—", c?.tem_senha ? <Revelar key="r" id={c.id} /> : "—", m.cidade,
+          return [m.cod, m.razao, <Doc key="d" valor={c?.documento || m.cnpj} />, c?.usuario ?? "—", c?.tem_senha ? <Revelar key="r" id={c.id} /> : "—", m.cidade,
             <span key="b" style={{ display: "flex", gap: 6 }}>
               <button style={st.btn} onClick={() => setEd(c ?? { codigoempresa: m.cod, tipo })}>{c ? "Editar" : "Cadastrar"}</button>
               {c && <button style={st.btnD} onClick={() => excluir(c)}>Excluir</button>}
