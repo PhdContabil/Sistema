@@ -33,7 +33,7 @@ export function lerEntrada(c: Record<string, unknown>): EntradaLucro {
     rendimento: numero(c.rendimento),
     baseIrrf: numero(c.baseIrrf),
     imposto: numero(c.imposto),
-    tisencao: Number(c.tisencao ?? 1),
+    tisencao: Number(c.tisencao ?? 0),
   };
 }
 

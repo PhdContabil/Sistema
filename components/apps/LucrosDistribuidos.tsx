@@ -66,7 +66,7 @@ export default function LucrosDistribuidos({
   const [rendimento, setRendimento] = useState("");
   const [base, setBase] = useState("");
   const [imposto, setImposto] = useState("");
-  const [tisencao, setTisencao] = useState(1);
+  const [tisencao, setTisencao] = useState(0);
 
   const [res, setRes] = useState<Resultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -210,7 +210,7 @@ export default function LucrosDistribuidos({
     setAjuste({
       item, competencia: item.competencia.slice(0, 7), dataPagamento: item.datalctofis.slice(0, 10),
       rendimento: texto(item.valorrendpago), base: texto(item.basecalcirrf ?? 0), imposto: texto(item.valorimposto ?? 0),
-      tisencao: item.tipoisencao ?? 1,
+      tisencao: item.tipoisencao ?? 0,
     });
   }
 

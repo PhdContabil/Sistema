@@ -14,10 +14,15 @@ export const LIMITE_IRRF = 50000;
 export const ALIQUOTA_IRRF = 10;
 export const ANO_INICIO_IRRF = 2026;
 
-/** Tipos de isenção oferecidos na tela (TIPOISENCAO). Só 1 e 12 têm regra de cálculo. */
+/**
+ * Tipos de isenção oferecidos na tela (TIPOISENCAO). Só 0 e 12 têm regra de cálculo.
+ * O Access gravava `Nz(tisencao, 0)`: campo em branco = 0 ("não se aplica"), e o
+ * valor isento só era preenchido com o código 12. O histórico do Questor só tem
+ * 0, 11 e 12 — o 1 que a tela enviava antes nunca aparece lá.
+ */
 export const ISENCOES: Array<{ codigo: number; rotulo: string }> = [
-  { codigo: 1, rotulo: "Não se aplica" },
-  { codigo: 12, rotulo: "Isento (código 12)" },
+  { codigo: 0, rotulo: "Não se aplica" },
+  { codigo: 12, rotulo: "Lucros e dividendos — Lei 15.270/2025 (código 12)" },
 ];
 export const ISENCAO_TOTAL = 12;
 
@@ -79,7 +84,7 @@ export function validarEntrada(e: EntradaLucro): EntradaLucro {
   if (centavos(e.imposto) > centavos(e.rendimento)) throw new LucroInvalido("O imposto retido não pode ser maior que o rendimento.");
   if (e.imposto > 0 && e.baseIrrf <= 0) throw new LucroInvalido("Com imposto retido, informe a base do IRRF.");
   // Aceita qualquer código do Questor (um lançamento antigo pode ter outro tipo de isenção).
-  if (!Number.isInteger(e.tisencao) || e.tisencao < 1 || e.tisencao > 99) throw new LucroInvalido("Tipo de isenção inválido.");
+  if (!Number.isInteger(e.tisencao) || e.tisencao < 0 || e.tisencao > 99) throw new LucroInvalido("Tipo de isenção inválido.");
   return e;
 }
 
