@@ -7,6 +7,7 @@ import {
   api, ler, st, Tabela, Campo, Mensagem, Modal, SelectSalao, brl, dt, hojeISO, situacao, semHtml, resumoGravacao, mensagemErro, type Mei,
 Doc, } from "./ui";
 import { SenhasEmpresa } from "./Senhas";
+import { ParceriaFicha } from "./Parceria";
 
 export function Clientes({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }) {
   const [q, setQ] = useState("");
@@ -52,7 +53,7 @@ function Info({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
-const ABAS = ["Resumo", "Tarefas", "O.S.", "Notas", "Senhas", "Observação"] as const;
+const ABAS = ["Resumo", "Tarefas", "O.S.", "Notas", "Senhas", "Parceria", "Observação"] as const;
 type Aba = (typeof ABAS)[number];
 
 /** Ficha do MEI como central: dados, tarefas, O.S., notas, senhas e observação da empresa numa tela só. */
@@ -95,7 +96,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
   const vencidas = abertas.filter((t) => (t.data_servico ?? "9999") < hojeISO());
   const salaoTxt = !m.salaoCod || m.salaoCod === 53278 ? "Cliente avulso" : m.salao;
   const totalNotas = (notas ?? []).reduce((a, n) => a + (n.valorcontabil || 0), 0);
-  const contagem: Record<Aba, number | null> = { Resumo: null, Tarefas: tarefas ? abertas.length : null, "O.S.": oss?.length ?? null, Notas: notas?.length ?? null, Senhas: null, "Observação": null };
+  const contagem: Record<Aba, number | null> = { Resumo: null, Tarefas: tarefas ? abertas.length : null, "O.S.": oss?.length ?? null, Notas: notas?.length ?? null, Senhas: null, Parceria: null, "Observação": null };
 
   return (
     <div>
@@ -191,6 +192,8 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
       )}
 
       {aba === "Senhas" && <SenhasEmpresa m={m} />}
+
+      {aba === "Parceria" && <ParceriaFicha m={m} />}
 
       {aba === "Observação" && (
         <div style={st.card}>
