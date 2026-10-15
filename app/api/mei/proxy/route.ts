@@ -14,11 +14,9 @@ async function usuarioLiberado() {
   return podeAcessarApp(nivel, "mei", "Sistema MEI") ? (user?.email ?? "desconhecido") : null;
 }
 
-/** Usuários (responsáveis) do MEI: só T.I. e Diretoria gravam. */
+/** Usuários (responsáveis) do MEI: setor MEI, T.I. e Diretoria gravam (quem tem acesso ao Sistema MEI). */
 async function ehAdmin() {
-  const user = await getCurrentUser().catch(() => null);
-  const nivel = await obterNivelAcesso(user?.email);
-  return nivel.ti || nivel.acessoTotal;
+  return !!(await usuarioLiberado());
 }
 
 export async function GET() {
@@ -36,7 +34,7 @@ export async function POST(req: Request) {
   if (!rotaPermitida(metodo, caminho)) return NextResponse.json({ error: `Rota não permitida: ${metodo} ${caminho}` }, { status: 403 });
   let liberar = false;
   if (metodo !== "GET" && recursoDaRota(caminho) === "usuarios") {
-    if (!(await ehAdmin())) return NextResponse.json({ error: "Só T.I. e Diretoria podem alterar os usuários do MEI." }, { status: 403 });
+    if (!(await ehAdmin())) return NextResponse.json({ error: "Sem permissão para alterar os usuários do MEI." }, { status: 403 });
     liberar = true;
   }
   const r = await chamar(metodo, caminho, { query: b.query, corpo: b.corpo, usuario, idempotencia: b.idempotencia, liberar });
