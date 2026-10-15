@@ -14,6 +14,12 @@
 // Gabriel (TI) incluído para acompanhar a implantação e importar do Questor.
 export const CONTROLE_FERIAS = ["marcio@phdcontabil.com.br", "gabriel.santos@phdcontabil.com.br"];
 
+/** Sócios: não entram no controle de férias (pedido do Gabriel, 15/10/2026). */
+export const SOCIOS_SEM_FERIAS = {
+  emails: ["edcarlos@phdcontabil.com.br", "eduardo@phdcontabil.com.br", "junior@phdcontabil.com.br"],
+  nomesQuestor: ["ED CARLOS CASTRO SOUSA", "EDUARDO GELOTTI BUENO", "MANOEL GARCIA DE SOUSA JUNIOR"],
+};
+
 /** Empresas do grupo no Questor (raiz do CNPJ): PHD Contábil, PHD Digital e PHD Negócios. */
 export const EMPRESAS_PHD = [
   { raiz: "11274011", nome: "PHD Contábil" },

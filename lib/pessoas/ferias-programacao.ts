@@ -1,6 +1,6 @@
 // Programação de férias pelo líder / RH e controle de períodos aquisitivos — SERVIDOR.
 import { admin, temVisaoDeGestores, formatarPeriodos, type PeriodoFerias } from "./ferias";
-import { ehControleFerias, casarNomes, limiteSugerido, EMPRESAS_PHD, CONTROLE_FERIAS } from "./ferias-controle";
+import { ehControleFerias, casarNomes, limiteSugerido, EMPRESAS_PHD, CONTROLE_FERIAS, SOCIOS_SEM_FERIAS } from "./ferias-controle";
 import { enviarEmail, notificarTeams, layoutEmail } from "./notificar";
 import { getFeriasAVencer } from "../questor";
 
@@ -47,8 +47,9 @@ export async function listarControle(papel: Papel): Promise<PessoaControle[]> {
   let q = sb.from("pessoas_perfil").select("id,nome,setor,email")
     .eq("ativo", true).neq("modelo", true).order("setor").order("nome");
   if (!papel.todos && papel.perfil) q = q.eq("setor", papel.perfil.setor);
-  const { data: pessoas } = await q;
-  const ids = (pessoas ?? []).map((p) => p.id);
+  const { data: todas } = await q;
+  const pessoas = (todas ?? []).filter((p) => !SOCIOS_SEM_FERIAS.emails.includes(String(p.email ?? "").toLowerCase()));
+  const ids = pessoas.map((p) => p.id);
   if (ids.length === 0) return [];
 
   const [{ data: aqs }, { data: sols }] = await Promise.all([
@@ -60,7 +61,7 @@ export async function listarControle(papel: Papel): Promise<PessoaControle[]> {
       .in("pessoa_id", ids).in("status", ["pendente", "aprovada"]),
   ]);
 
-  return (pessoas ?? []).map((p) => ({
+  return pessoas.map((p) => ({
     id: p.id, nome: p.nome, setor: p.setor, email: p.email,
     aquisitivos: (aqs ?? []).filter((a) => a.pessoa_id === p.id).map((a) => ({
       id: a.id, inicio_aquisitivo: a.inicio_aquisitivo, fim_aquisitivo: a.fim_aquisitivo,
@@ -186,9 +187,11 @@ export async function importarDoQuestor(papel: Papel) {
   if (!papel.controle) throw new Error("Só o controle de férias (Márcio) importa do Questor.");
 
   const respostas = await Promise.all(EMPRESAS_PHD.map((e) => getFeriasAVencer({ cnpj: e.raiz })));
-  const dados = respostas.flatMap((r) => r.dados ?? []);
-  const { data: pessoas } = await sb.from("pessoas_perfil")
-    .select("id,nome").eq("ativo", true).neq("modelo", true);
+  const dados = respostas.flatMap((r) => r.dados ?? [])
+    .filter((d) => !SOCIOS_SEM_FERIAS.nomesQuestor.includes(d.nomefunc));
+  const { data: todas } = await sb.from("pessoas_perfil")
+    .select("id,nome,email").eq("ativo", true).neq("modelo", true);
+  const pessoas = (todas ?? []).filter((p) => !SOCIOS_SEM_FERIAS.emails.includes(String(p.email ?? "").toLowerCase()));
   const vinculo = casarNomes(pessoas ?? [], dados.map((d) => d.nomefunc));
   const pessoaDoNome = new Map([...vinculo.entries()].map(([id, nome]) => [nome, id]));
   const umAnoAtras = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);

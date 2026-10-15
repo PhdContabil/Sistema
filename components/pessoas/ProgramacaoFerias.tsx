@@ -120,7 +120,7 @@ export default function ProgramacaoFerias() {
       {msg && <div className={`banner ${msg.ok ? "" : "error"}`}>{msg.texto}</div>}
 
       <div className="table-wrap" style={{ boxShadow: "none" }}>
-        <table className="grid">
+        <table className="grid fpg-tabela">
           <thead>
             <tr>
               <th className="col-empresa">Pessoa</th>
@@ -128,7 +128,7 @@ export default function ProgramacaoFerias() {
               <th>Limite p/ início</th>
               <th className="c-res">Situação</th>
               <th>Programado</th>
-              <th></th>
+              <th className="c-res">Ações</th>
             </tr>
           </thead>
           <tbody>
