@@ -51,6 +51,13 @@ function hoje(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Último dia do mês corrente: o Questor grava o lançamento fiscal no último dia da competência. */
+function fimDoMes(): string {
+  const d = new Date();
+  const u = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${u.getFullYear()}-${String(u.getMonth() + 1).padStart(2, "0")}-${String(u.getDate()).padStart(2, "0")}`;
+}
+
 export default function LucrosDistribuidos({
   empresas, logInicial, erroServidor,
 }: {
@@ -81,7 +88,7 @@ export default function LucrosDistribuidos({
 
   // Lançamentos já gravados no Questor (de onde se ajusta e se exclui).
   const [inicio, setInicio] = useState(`${new Date().getFullYear()}-01-01`);
-  const [fim, setFim] = useState(hoje());
+  const [fim, setFim] = useState(fimDoMes());
   const [lista, setLista] = useState<LucroLancadoQuestor[] | null>(null);
   // Filtros da lista "Lançamentos no Questor" (no navegador, sobre o que a Busca trouxe).
   const [fEmpresa, setFEmpresa] = useState("");
