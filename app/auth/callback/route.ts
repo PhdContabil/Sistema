@@ -7,7 +7,9 @@ const DOMINIO = "@phdcontabil.com.br";
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") || "/";
+  let next = url.searchParams.get("next") || "/";
+  // Só caminhos internos: bloqueia "//site", "@site" e URLs absolutas (open redirect).
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) next = "/";
 
   if (url.searchParams.get("error") || !code) {
     return NextResponse.redirect(`${url.origin}/login?erro=oauth`);

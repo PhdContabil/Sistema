@@ -16,3 +16,10 @@ next-env.d.ts
 scripts/phddc01/nome-pastas.token
 scripts/phddc01/nome-pastas.ultimo.txt
 scripts/phddc01/nome-pastas.log
+
+# logs e relatórios locais
+*.log
+dev_log.txt
+relatorio-*.json
+app/api/_tmp*/
+app/api/tmp*/

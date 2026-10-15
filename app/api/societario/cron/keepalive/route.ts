@@ -13,7 +13,7 @@ export const maxDuration = 30;
 
 function hasCronSecret(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
+  if (!secret) return false; // sem secret configurado, recusa
   const auth = req.headers.get("authorization");
   if (auth && auth === `Bearer ${secret}`) return true;
   const x = req.headers.get("x-cron-secret");

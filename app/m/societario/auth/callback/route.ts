@@ -5,7 +5,9 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") || "/m/societario";
+  let next = url.searchParams.get("next") || "/m/societario";
+  // Só caminhos internos (evita open redirect).
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) next = "/m/societario";
   const errorParam = url.searchParams.get("error");
   const errorDesc = url.searchParams.get("error_description");
 
