@@ -292,7 +292,7 @@ export default function InventarioTI() {
                       <td className="px-4 py-2.5 text-center">{i.quantidade}</td>
                     </>}
                     <td className="px-4 py-2.5"><Badge tom={tomStatus(i.status)}>{i.status}</Badge></td>
-                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 max-w-[220px] truncate" title={i.observacao ?? undefined}>{i.observacao ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 max-w-[420px] whitespace-pre-line text-xs font-mono" title={i.observacao ?? undefined}>{i.observacao ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <button onClick={() => abrirEdicao(i)} title="Editar" className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 mr-1">
                         <svg viewBox="0 0 20 20" className="w-4 h-4" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-8.5 8.5a2 2 0 01-.878.507l-3 .857a.5.5 0 01-.62-.62l.857-3a2 2 0 01.507-.878l8.5-8.5z" /></svg>
