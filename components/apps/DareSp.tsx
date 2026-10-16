@@ -129,7 +129,9 @@ export default function DareSp({
       const r = await fetch("/api/fiscal/dare-sp/sincronizar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(competencia ? { competencia } : { meses: 6 }),
+        // Sempre os últimos 6 meses: assim a competência nova (ex.: o mês recém-apurado) entra na lista,
+        // mesmo com outra competência selecionada.
+        body: JSON.stringify({ meses: 6 }),
       });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao sincronizar."); return; }
