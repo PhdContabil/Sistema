@@ -28,6 +28,7 @@ import {
   type DocVencedor,
 } from "./busca-parcial";
 import { cnpjValido, sugerirDigitosCnpj } from "./cnpj";
+import { ehErroTransitorio, ehStatusTransitorio } from "./transitorio";
 import * as dbz from "./db";
 
 // Categorias fixas (pra bater com o vocabulário que a Júlia já conhece dos
@@ -129,6 +130,10 @@ interface ResultadoExtracao {
   /** Candidatos que ficaram sem ser lidos (só faz sentido se `incompleta`). */
   naoLidos: number;
   totalCandidatos: number;
+  /** O SharePoint falhou de forma passageira (429/502/503/504) ao baixar um
+   * documento: a busca parou ali SEM registrar esse documento como "ilegível" —
+   * quem chamou guarda o que já foi lido e tenta de novo depois. */
+  falhaTransitoria: unknown | null;
 }
 
 /** Já lidos antes, sem CNPJ, e o vencedor da última vez (ver busca-parcial.ts). */
@@ -218,6 +223,7 @@ async function extrairDadosComFallback(
         incompleta: true,
         naoLidos,
         totalCandidatos: candidatos.length,
+        falhaTransitoria: null,
       };
     }
 
@@ -227,6 +233,25 @@ async function extrairDadosComFallback(
       const bytes = await baixarConteudo(ctx, candidato.id);
       dados = await extrairDadosCertidao(bytes);
     } catch (e) {
+      // SharePoint pediu pra esperar (429) ou ficou fora do ar por instantes
+      // (502/503/504): isso não diz NADA sobre o documento. Registrá-lo como
+      // "ilegível" seria um falso negativo (e, com a busca guardada, ele nem seria
+      // relido) — então a busca para aqui e a tentativa é repetida depois.
+      if (ehStatusTransitorio(e)) {
+        tocados.delete(candidato.id);
+        return {
+          dados: null,
+          arquivoUsado: null,
+          problemas,
+          escaneados,
+          tocados,
+          tentadosAgora,
+          incompleta: false,
+          naoLidos: 0,
+          totalCandidatos: candidatos.length,
+          falhaTransitoria: e,
+        };
+      }
       const problema = `${candidato.nome}: erro ao ler (${e instanceof Error ? e.message : String(e)})`;
       problemas.push(problema);
       // Mesma regra "à prova de falha" do pdfPareceEscaneado() original:
@@ -291,6 +316,7 @@ async function extrairDadosComFallback(
       incompleta: false,
       naoLidos: 0,
       totalCandidatos: candidatos.length,
+      falhaTransitoria: null,
     };
   }
   return {
@@ -303,6 +329,7 @@ async function extrairDadosComFallback(
     incompleta: false,
     naoLidos: 0,
     totalCandidatos: candidatos.length,
+    falhaTransitoria: null,
   };
 }
 
@@ -358,6 +385,10 @@ export async function prepararDadosParaEnvio(
   try {
     contratos = await listarContratos(ctx, empresa);
   } catch (e) {
+    // Falha passageira do SharePoint não é resultado da empresa: sobe pra quem
+    // chamou repetir (a varredura tenta de novo no passo seguinte; as telas mostram
+    // "tente de novo em instantes"), em vez de gravar um ERRO falso.
+    if (ehErroTransitorio(e)) throw e;
     resultado.status = `Erro ao listar a pasta: ${e instanceof Error ? e.message : String(e)}`;
     resultado.motivo = MOTIVO_ERRO;
     return resultado;
@@ -487,8 +518,25 @@ export async function prepararDadosParaEnvio(
   // Busca o CNPJ tentando os candidatos em ordem de prioridade — já
   // aproveita essa mesma extração pra marcar quem "parece escaneado"
   // (dados.pareceEscaneado), em vez de reprocessar tudo de novo abaixo.
-  const { dados, arquivoUsado, problemas, escaneados, tocados, tentadosAgora, incompleta, naoLidos, totalCandidatos } =
+  const { dados, arquivoUsado, problemas, escaneados, tocados, tentadosAgora, incompleta, naoLidos, totalCandidatos, falhaTransitoria } =
     await extrairDadosComFallback(ctx, elegiveis, prazoFinal, { tentados: aprov.tentados, vencedor });
+
+  // SharePoint falhou de forma passageira no meio da busca: guarda o que já foi lido
+  // (pra não refazer) e devolve a falha — a tentativa se repete depois, sem nenhum
+  // documento marcado como ilegível por causa disso.
+  if (falhaTransitoria) {
+    const lidos = [...aprov.tentados.values(), ...tentadosAgora];
+    if (memoriaDisponivel && lidos.length > 0) {
+      await deps
+        .salvarBuscaParcial(empresa.codigo, {
+          documentos: lidos,
+          vencedor: busca?.vencedor ?? null,
+          passos: continuando ? passosAgora : aprov.passos,
+        })
+        .catch(() => {});
+    }
+    throw falhaTransitoria;
+  }
 
   // Só falta checar "parece escaneado" dos elegíveis que a busca acima
   // NÃO chegou a tocar (ela para assim que acha o CNPJ, então o que vier

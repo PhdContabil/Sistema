@@ -26,6 +26,7 @@
 // avançar aos pedaços em vez de rodar tudo numa chamada só.
 
 import { obterCredenciaisMS, tokenGraph } from "../pessoas/msconfig";
+import { esperaDoRetryAfter, STATUS_HTTP_TRANSITORIOS } from "./transitorio";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -42,7 +43,7 @@ export class RoboZenSharePointErro extends Error {
   }
 }
 
-function amigavel(status: number, corpo: string): string {
+function amigavel(status: number, corpo: string, retryAfter?: string | null): string {
   if (status === 401) return "Credencial do Microsoft 365 inválida ou expirada.";
   if (status === 403) {
     return (
@@ -51,8 +52,47 @@ function amigavel(status: number, corpo: string): string {
     );
   }
   if (status === 404) return `Site, biblioteca ou pasta não encontrada em ${HOSTNAME}${SITE_PATH}.`;
-  if (status === 429) return "Muitas consultas em pouco tempo ao SharePoint. Tente de novo em instantes.";
+  if (status === 429) {
+    const espera = esperaDoRetryAfter(retryAfter);
+    const dica = espera !== null && espera >= 5_000 ? ` (o SharePoint pediu para esperar uns ${Math.ceil(espera / 1000)} s)` : "";
+    return `Muitas consultas em pouco tempo ao SharePoint. Tente de novo em instantes${dica}.`;
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return `O SharePoint não respondeu agora (erro ${status}). Tente de novo em instantes.`;
+  }
   return `Erro ${status} ao consultar o SharePoint: ${corpo.slice(0, 200)}`;
+}
+
+// Repetição curta das chamadas ao Graph. O SharePoint responde 429 (muitas consultas)
+// ou 502/503/504 (fora do ar por instantes) e quase sempre atende na repetição. As
+// esperas são CURTAS de propósito: a função serverless tem 60 s e parte disso já é da
+// busca do CNPJ. Se o SharePoint pedir uma espera maior que isto (Retry-After), repetir
+// em poucos segundos não adianta — devolve a resposta e quem chamou decide (a varredura
+// tenta de novo no passo seguinte, o usuário vê "tente de novo em instantes").
+const TENTATIVAS_GRAPH = 4; // a chamada + até 3 repetições
+const ESPERA_MAX_RETRY_MS = 4_000;
+const ESPERAS_PADRAO_MS = [500, 1_500, 3_000];
+
+const esperar = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function fetchGraph(url: string, init: RequestInit): Promise<Response> {
+  for (let i = 0; i < TENTATIVAS_GRAPH; i++) {
+    const ultima = i === TENTATIVAS_GRAPH - 1;
+    let r: Response;
+    try {
+      r = await fetch(url, init);
+    } catch (e) {
+      if (ultima) throw e;
+      await esperar(ESPERAS_PADRAO_MS[i]);
+      continue;
+    }
+    if (ultima || !STATUS_HTTP_TRANSITORIOS.has(r.status)) return r;
+    const pedida = esperaDoRetryAfter(r.headers.get("retry-after"));
+    if (pedida !== null && pedida > ESPERA_MAX_RETRY_MS) return r;
+    await r.body?.cancel().catch(() => {});
+    await esperar(pedida ?? ESPERAS_PADRAO_MS[i]);
+  }
+  throw new Error("fetchGraph: sem resposta"); // inalcançável
 }
 
 async function obterToken(): Promise<string> {
@@ -70,10 +110,10 @@ const TTL_DRIVE_MS = 30 * 60 * 1000;
 
 async function graphGet<T>(token: string, caminho: string): Promise<T> {
   const url = caminho.startsWith("http") ? caminho : GRAPH + caminho;
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  const r = await fetchGraph(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
   if (!r.ok) {
     const corpo = await r.text().catch(() => "");
-    throw new RoboZenSharePointErro(amigavel(r.status, corpo), r.status);
+    throw new RoboZenSharePointErro(amigavel(r.status, corpo, r.headers.get("retry-after")), r.status);
   }
   return (await r.json()) as T;
 }
@@ -151,10 +191,10 @@ async function listarFilhos(ctx: ContextoGraph, itemId: string | null): Promise<
 /** GET /drives/{driveId}/items/{itemId}/content — bytes do arquivo. */
 export async function baixarConteudo(ctx: ContextoGraph, itemId: string): Promise<Uint8Array> {
   const url = `${GRAPH}/drives/${ctx.driveId}/items/${itemId}/content`;
-  const resp = await fetch(url, { headers: { Authorization: `Bearer ${ctx.token}` }, cache: "no-store" });
+  const resp = await fetchGraph(url, { headers: { Authorization: `Bearer ${ctx.token}` }, cache: "no-store" });
   if (!resp.ok) {
     const corpo = await resp.text().catch(() => "");
-    throw new RoboZenSharePointErro(amigavel(resp.status, corpo), resp.status);
+    throw new RoboZenSharePointErro(amigavel(resp.status, corpo, resp.headers.get("retry-after")), resp.status);
   }
   return new Uint8Array(await resp.arrayBuffer());
 }
@@ -182,7 +222,7 @@ export async function obterLinkDownload(ctx: ContextoGraph, itemId: string): Pro
   const direto = item["@microsoft.graph.downloadUrl"];
   if (direto) return { nome, url: direto };
 
-  const resp = await fetch(`${GRAPH}/drives/${ctx.driveId}/items/${itemId}/content`, {
+  const resp = await fetchGraph(`${GRAPH}/drives/${ctx.driveId}/items/${itemId}/content`, {
     headers: { Authorization: `Bearer ${ctx.token}` },
     redirect: "manual",
     cache: "no-store",
@@ -191,7 +231,7 @@ export async function obterLinkDownload(ctx: ContextoGraph, itemId: string): Pro
   if (resp.status >= 300 && resp.status < 400 && destino && /^https:\/\//i.test(destino)) return { nome, url: destino };
   if (resp.status >= 400) {
     const corpo = await resp.text().catch(() => "");
-    throw new RoboZenSharePointErro(amigavel(resp.status, corpo), resp.status);
+    throw new RoboZenSharePointErro(amigavel(resp.status, corpo, resp.headers.get("retry-after")), resp.status);
   }
   return { nome, url: null };
 }

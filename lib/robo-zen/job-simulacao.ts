@@ -10,8 +10,36 @@
  */
 
 import { type ContextoGraph, type Empresa, obterContextoGraph, processarPastaTopo } from "./empresas-sharepoint";
-import { prepararDadosParaEnvio } from "./preparar-empresa";
+import { MOTIVO_ERRO, prepararDadosParaEnvio, type ResultadoPreparo } from "./preparar-empresa";
+import {
+  ehErroTransitorio,
+  ESPERA_ENTRE_TENTATIVAS_MS,
+  lerMarcaDeFalha,
+  marcaDeFalha,
+  MAX_FALHAS_SEGUIDAS_VARREDURA,
+  MAX_TENTATIVAS_EMPRESA,
+  MOTIVO_SHAREPOINT_INSTAVEL,
+  tentativasDaEmpresa,
+} from "./transitorio";
 import * as dbz from "./db";
+
+/** O que o passo precisa do resultado de uma empresa (o de `prepararDadosParaEnvio`
+ * tem mais campos; este recorte também serve pro "desisti" montado aqui). */
+type ResultadoLinha = Pick<
+  ResultadoPreparo,
+  | "pronta"
+  | "motivo"
+  | "status"
+  | "cnpj"
+  | "qtdDocumentosElegiveis"
+  | "documentosElegiveis"
+  | "qtdDocumentosEscaneados"
+  | "documentosEscaneados"
+  | "qtdDocumentosIgnorados"
+  | "documentosIgnorados"
+  | "documentoCnpjOrigem"
+  | "buscaIncompleta"
+>;
 
 export interface EstadoSimulacao {
   id: string;
@@ -73,31 +101,54 @@ export async function avancarSimulacao(id: string): Promise<EstadoSimulacao> {
     return serializarSimulacao(atualizada);
   }
 
-  let ctx: ContextoGraph;
-  try {
-    ctx = await obterContextoGraph();
-  } catch (e) {
-    const atualizada = await dbz.atualizarSimulacao(id, {
-      status: "erro",
-      terminado_em: new Date().toISOString(),
-      erro: e instanceof Error ? e.message : String(e),
-    });
-    return serializarSimulacao(atualizada);
+  // Houve uma falha passageira há pouco (SharePoint/rede/banco fora do ar por
+  // instantes)? Espera um pouco antes de tentar de novo — o navegador e o
+  // agendador chamam este passo sem parar, e repetir em segundos não adianta.
+  const falhaAnterior = lerMarcaDeFalha(simulacao.erro);
+  if (falhaAnterior && Date.now() - falhaAnterior.quando < ESPERA_ENTRE_TENTATIVAS_MS) {
+    return serializarSimulacao(simulacao);
   }
 
   try {
-    if (simulacao.status === "mapeando") {
-      return await avancarMapeamento(ctx, simulacao);
-    }
-    return await avancarProcessamento(ctx, simulacao);
+    const estado = await executarPasso(simulacao);
+    // Passo funcionou: some a marca de "falha seguida".
+    if (falhaAnterior) await dbz.atualizarSimulacao(id, { erro: "" }).catch(() => {});
+    return estado;
   } catch (e) {
+    const mensagem = e instanceof Error ? e.message : String(e);
+    // Falha passageira: NÃO derruba a varredura — fica como está e o próximo passo
+    // tenta de novo. Só desiste depois de várias falhas SEGUIDAS.
+    if (ehErroTransitorio(e)) {
+      const n = (falhaAnterior?.n ?? 0) + 1;
+      if (n < MAX_FALHAS_SEGUIDAS_VARREDURA) {
+        const atualizada = await dbz.atualizarSimulacao(id, {
+          erro: marcaDeFalha(n, Date.now(), mensagem || "falha sem mensagem"),
+          empresa_atual: `Aguardando o SharePoint/banco responder — tentando de novo (falha ${n} de ${MAX_FALHAS_SEGUIDAS_VARREDURA})`,
+        });
+        return serializarSimulacao(atualizada);
+      }
+      const atualizada = await dbz.atualizarSimulacao(id, {
+        status: "erro",
+        terminado_em: new Date().toISOString(),
+        erro: `Parei depois de ${n} falhas seguidas: ${mensagem || "falha sem mensagem"}`,
+      });
+      return serializarSimulacao(atualizada);
+    }
     const atualizada = await dbz.atualizarSimulacao(id, {
       status: "erro",
       terminado_em: new Date().toISOString(),
-      erro: e instanceof Error ? e.message : String(e),
+      erro: mensagem,
     });
     return serializarSimulacao(atualizada);
   }
+}
+
+async function executarPasso(simulacao: dbz.SimulacaoRow): Promise<EstadoSimulacao> {
+  const ctx = await obterContextoGraph();
+  if (simulacao.status === "mapeando") {
+    return await avancarMapeamento(ctx, simulacao);
+  }
+  return await avancarProcessamento(ctx, simulacao);
 }
 
 async function avancarMapeamento(ctx: ContextoGraph, simulacao: dbz.SimulacaoRow): Promise<EstadoSimulacao> {
@@ -173,9 +224,54 @@ async function avancarProcessamento(ctx: ContextoGraph, simulacao: dbz.Simulacao
   // PDFs, OCR, consultar o Questor) — deixa o polling do navegador mostrar
   // o progresso em vez de ficar "parado" enquanto uma empresa demorada
   // (várias páginas escaneadas) está sendo processada.
+  // Esta empresa falhou de forma passageira há pouco (SharePoint fora do ar ou
+  // pedindo pra esperar)? Dá um tempo antes de insistir — o navegador e o agendador
+  // chamam este passo sem parar.
+  const tentativasAntes = tentativasDaEmpresa(proxima.motivo, proxima.status);
+  if (tentativasAntes > 0 && Date.now() - Date.parse(proxima.atualizado_em) < ESPERA_ENTRE_TENTATIVAS_MS) {
+    return serializarSimulacao(simulacao);
+  }
+
   await dbz.atualizarSimulacao(simulacao.id, { empresa_atual: rotuloEmpresa });
 
-  const resultado = await prepararDadosParaEnvio(ctx, empresa);
+  let resultado: ResultadoLinha;
+  try {
+    resultado = await prepararDadosParaEnvio(ctx, empresa);
+  } catch (e) {
+    if (!ehErroTransitorio(e)) throw e;
+    // Falha PASSAGEIRA (429/502/503/504, rede): não diz nada sobre a empresa. Ela fica
+    // como não processada e o próximo passo tenta de novo — em vez de virar um ERRO
+    // falso (ou de derrubar a varredura). Só depois de várias tentativas seguidas ela
+    // é dada como erro e a varredura segue pra próxima.
+    const n = tentativasAntes + 1;
+    const mensagem = (e instanceof Error ? e.message : String(e)) || "falha sem mensagem";
+    if (n < MAX_TENTATIVAS_EMPRESA) {
+      await dbz.atualizarEmpresaSimulacao(proxima.id, {
+        processada: false,
+        pronta: false,
+        motivo: MOTIVO_SHAREPOINT_INSTAVEL,
+        status: `SHAREPOINT INSTÁVEL (tentativa ${n} de ${MAX_TENTATIVAS_EMPRESA}): ${mensagem}`,
+      });
+      const atualizada = await dbz.atualizarSimulacao(simulacao.id, {
+        empresa_atual: `${rotuloEmpresa} — SharePoint instável, tentando de novo (tentativa ${n} de ${MAX_TENTATIVAS_EMPRESA})`,
+      });
+      return serializarSimulacao(atualizada);
+    }
+    resultado = {
+      pronta: false,
+      motivo: MOTIVO_ERRO,
+      status: `Desisti depois de ${n} tentativas seguidas: ${mensagem}`,
+      cnpj: null,
+      qtdDocumentosElegiveis: proxima.qtd_documentos_elegiveis,
+      documentosElegiveis: [],
+      qtdDocumentosEscaneados: proxima.qtd_documentos_escaneados,
+      documentosEscaneados: proxima.documentos_escaneados,
+      qtdDocumentosIgnorados: proxima.qtd_documentos_ignorados,
+      documentosIgnorados: proxima.documentos_ignorados,
+      documentoCnpjOrigem: null,
+      buscaIncompleta: false,
+    };
+  }
 
   // A busca do CNPJ estourou o orçamento de tempo mas o que já foi lido ficou
   // guardado: a empresa NÃO é dada como processada. O próximo passo pega a mesma
