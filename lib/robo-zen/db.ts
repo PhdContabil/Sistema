@@ -95,6 +95,9 @@ export interface LoteEnvioRow {
   empresa_atual: string | null;
   parar_pedido: boolean;
   erro: string | null;
+  /** Trava do passo em andamento: enquanto estiver no futuro, só quem a tomou
+   * mexe no lote (ver `tomarPassoDoLote`). Null = livre. */
+  passo_ate: string | null;
 }
 
 export interface EnvioPendenteRow {
@@ -116,6 +119,49 @@ async function assertOk<T>(query: PromiseLike<{ data: unknown; error: { message:
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data as T;
+}
+
+/** Uma consulta do Supabase devolve NO MÁXIMO 1.000 linhas (limite padrão da API),
+ * e corta o resto SEM avisar. Tabela que pode passar disso (o registro de envios
+ * já passa de 1.800 documentos numa rodada) tem de ser lida página a página. */
+const TAMANHO_PAGINA_LEITURA = 1000;
+
+/** Lê TODAS as linhas de uma consulta. `montar(de, ate)` monta a consulta com
+ * `select(..., { count: "exact" })`, ordem ESTÁVEL e `.range(de, ate)`. */
+async function lerTudo<T>(
+  montar: (de: number, ate: number) => PromiseLike<{ data: unknown; error: { message: string } | null; count?: number | null }>
+): Promise<T[]> {
+  const todas: T[] = [];
+  let de = 0;
+  for (;;) {
+    const { data, error, count } = await montar(de, de + TAMANHO_PAGINA_LEITURA - 1);
+    if (error) throw new Error(error.message);
+    const pagina = (data ?? []) as T[];
+    todas.push(...pagina);
+    // Avança pelo que CHEGOU (não pelo tamanho pedido): um projeto com o limite da
+    // API abaixo de 1.000 devolve páginas menores, e pular linhas seria pior que
+    // o corte que esta função existe pra evitar.
+    de += pagina.length;
+    if (pagina.length === 0) break;
+    if (typeof count === "number") {
+      if (todas.length >= count) break;
+    } else if (pagina.length < TAMANHO_PAGINA_LEITURA) {
+      break;
+    }
+  }
+  return todas;
+}
+
+/** A migração migration_robo_zen_envio_seguro.sql ainda não foi aplicada? Diz isso
+ * com todas as letras em vez de um "column does not exist" solto. */
+function explicarFaltaDeMigracao(mensagem: string): string {
+  if (/passo_ate|robo_zen_envio_reservas/i.test(mensagem)) {
+    return (
+      `${mensagem} — a migração do banco migration_robo_zen_envio_seguro.sql ainda não foi aplicada ` +
+      "(o envio fica parado de propósito enquanto isso, para não arriscar duplicar)."
+    );
+  }
+  return mensagem;
 }
 
 // ------------------------------------------------------------------
@@ -270,23 +316,31 @@ export async function atualizarEmpresaSimulacao(
 }
 
 export async function listarEmpresasDaSimulacao(simulacaoId: string): Promise<SimulacaoEmpresaRow[]> {
-  return assertOk(
+  // Ordem estável (nome e, no empate, código): a leitura é em páginas.
+  return lerTudo<SimulacaoEmpresaRow>((de, ate) =>
     db()
       .from("robo_zen_simulacao_empresas")
-      .select()
+      .select("*", { count: "exact" })
       .eq("simulacao_id", simulacaoId)
       .order("nome", { ascending: true })
+      .order("codigo", { ascending: true })
+      .range(de, ate)
   );
 }
 
+/** Empresas PRONTA de uma simulação, na ordem em que o envio em lote as percorre
+ * (nome e, no empate, código — o lote guarda a posição, então a ordem não pode
+ * mudar de uma chamada pra outra). */
 export async function listarEmpresasProntas(simulacaoId: string): Promise<SimulacaoEmpresaRow[]> {
-  return assertOk(
+  return lerTudo<SimulacaoEmpresaRow>((de, ate) =>
     db()
       .from("robo_zen_simulacao_empresas")
-      .select()
+      .select("*", { count: "exact" })
       .eq("simulacao_id", simulacaoId)
       .eq("pronta", true)
       .order("nome", { ascending: true })
+      .order("codigo", { ascending: true })
+      .range(de, ate)
   );
 }
 
@@ -354,13 +408,18 @@ export async function registrarEnvio(envio: NovoEnvio): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** (código da empresa, nome do arquivo) de tudo que já foi enviado de
- * verdade antes — usado pra pular no envio em lote e nunca duplicar. */
-export async function chavesJaEnviadas(): Promise<Set<string>> {
-  const linhas = await assertOk<{ empresa_codigo: string; arquivo_nome: string }[]>(
-    db().from("robo_zen_envios").select("empresa_codigo,arquivo_nome")
+/** Tudo o que já foi enviado de verdade, de todas as empresas — usado pra MOSTRAR
+ * a situação de envio no resultado da simulação. Lido em páginas (o registro passa
+ * de 1.000 linhas). Quem decide se um documento vai ou não ao Zen NÃO usa isto:
+ * usa `enviosDaEmpresa` (só a empresa em questão) e a reserva. */
+export async function todosOsEnvios(): Promise<{ empresa_codigo: string; arquivo_nome: string; cnpj: string; enviado_em: string }[]> {
+  return lerTudo((de, ate) =>
+    db()
+      .from("robo_zen_envios")
+      .select("empresa_codigo,arquivo_nome,cnpj,enviado_em", { count: "exact" })
+      .order("id", { ascending: true })
+      .range(de, ate)
   );
-  return new Set(linhas.map((l) => `${l.empresa_codigo}\u0000${l.arquivo_nome}`));
 }
 
 /** Envios já registrados de UMA empresa (do mais recente pro mais antigo) —
@@ -426,31 +485,85 @@ export async function limparBuscaParcial(codigo: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export function chaveEnvio(codigo: string, arquivoNome: string): string {
-  return `${codigo}\u0000${arquivoNome}`;
+// ------------------------------------------------------------------
+// robo_zen_envio_reservas — "quem reserva primeiro envia" (lib/robo-zen/envio-seguro.ts)
+// ------------------------------------------------------------------
+
+/** Reserva (empresa, arquivo) de forma atômica: a chave primária garante que
+ * só UMA reserva existe por vez. "ja_reservado" = outro envio já segura esse
+ * documento (em andamento, ou interrompido sem certeza se o Zen gravou). */
+export async function reservarEnvio(
+  empresaCodigo: string,
+  arquivoNome: string,
+  reservadoPor: string
+): Promise<"reservado" | "ja_reservado"> {
+  const { error } = await db()
+    .from("robo_zen_envio_reservas")
+    .insert({ empresa_codigo: empresaCodigo, arquivo_nome: arquivoNome, reservado_por: reservadoPor });
+  if (!error) return "reservado";
+  if (error.code === "23505") return "ja_reservado";
+  throw new Error(explicarFaltaDeMigracao(error.message));
+}
+
+export async function liberarReservaEnvio(empresaCodigo: string, arquivoNome: string): Promise<void> {
+  const { error } = await db()
+    .from("robo_zen_envio_reservas")
+    .delete()
+    .eq("empresa_codigo", empresaCodigo)
+    .eq("arquivo_nome", arquivoNome);
+  if (error) throw new Error(error.message);
+}
+
+/** Reservas que sobraram (envios interrompidos sem certeza) — a tela mostra como
+ * "ENVIO INTERROMPIDO". Em andamento agora também aparecem por instantes. */
+export async function listarReservasEnvio(): Promise<
+  { empresa_codigo: string; arquivo_nome: string; reservado_por: string; reservado_em: string }[]
+> {
+  return lerTudo((de, ate) =>
+    db()
+      .from("robo_zen_envio_reservas")
+      .select("empresa_codigo,arquivo_nome,reservado_por,reservado_em", { count: "exact" })
+      .order("empresa_codigo", { ascending: true })
+      .order("arquivo_nome", { ascending: true })
+      .range(de, ate)
+  );
 }
 
 // ------------------------------------------------------------------
 // robo_zen_lotes_envio
 // ------------------------------------------------------------------
 
+/** Já existe um lote com status "processando" (o banco só admite UM — ver
+ * migration_robo_zen_envio_seguro.sql). */
+export class LoteJaAtivoError extends Error {
+  constructor() {
+    super("Já tem um envio em lote rodando.");
+    this.name = "LoteJaAtivoError";
+  }
+}
+
 export async function criarLoteEnvio(
   criadoPor: string,
   simulacaoOrigemId: string,
   totalEmpresasProntas: number
 ): Promise<LoteEnvioRow> {
-  return assertOk(
-    db()
-      .from("robo_zen_lotes_envio")
-      .insert({
-        criado_por: criadoPor,
-        simulacao_origem_id: simulacaoOrigemId,
-        status: "processando",
-        total_empresas_prontas: totalEmpresasProntas,
-      })
-      .select()
-      .single()
-  );
+  const { data, error } = await db()
+    .from("robo_zen_lotes_envio")
+    .insert({
+      criado_por: criadoPor,
+      simulacao_origem_id: simulacaoOrigemId,
+      status: "processando",
+      total_empresas_prontas: totalEmpresasProntas,
+    })
+    .select()
+    .single();
+  if (error) {
+    // Dois cliques ao mesmo tempo: a checagem "tem lote ativo?" das rotas não é
+    // atômica, mas o índice único parcial do banco é — o segundo cai aqui.
+    if (error.code === "23505") throw new LoteJaAtivoError();
+    throw new Error(error.message);
+  }
+  return data as LoteEnvioRow;
 }
 
 export async function obterLoteEnvio(id: string): Promise<LoteEnvioRow | null> {
@@ -473,6 +586,40 @@ export async function obterLoteEnvioAtivo(): Promise<LoteEnvioRow | null> {
 
 export async function atualizarLoteEnvio(id: string, patch: Partial<LoteEnvioRow>): Promise<LoteEnvioRow> {
   return assertOk(db().from("robo_zen_lotes_envio").update(patch).eq("id", id).select().single());
+}
+
+/**
+ * Toma a TRAVA do próximo passo do lote: devolve o lote se conseguiu, ou null se
+ * outro navegador/aba está no meio de um passo (ou esperando entre tentativas).
+ * Cada tentativa é UM comando atômico do banco ("só atualiza se estiver livre ou
+ * vencida"), então dois navegadores nunca processam a mesma empresa ao mesmo tempo.
+ * A trava vence sozinha em `duracaoMs` (a função da Vercel morre aos 60 s e não
+ * consegue devolvê-la), e é devolvida ao fim de cada passo.
+ */
+export async function tomarPassoDoLote(id: string, agoraMs: number, duracaoMs: number): Promise<LoteEnvioRow | null> {
+  const ate = new Date(agoraMs + duracaoMs).toISOString();
+  const tentativas = [
+    () => db().from("robo_zen_lotes_envio").update({ passo_ate: ate }).eq("id", id).eq("status", "processando").is("passo_ate", null).select(),
+    () =>
+      db()
+        .from("robo_zen_lotes_envio")
+        .update({ passo_ate: ate })
+        .eq("id", id)
+        .eq("status", "processando")
+        .lt("passo_ate", new Date(agoraMs).toISOString())
+        .select(),
+  ];
+  for (const tentar of tentativas) {
+    const { data, error } = await tentar();
+    if (error) throw new Error(explicarFaltaDeMigracao(error.message));
+    if (data && data.length > 0) return data[0] as LoteEnvioRow;
+  }
+  return null;
+}
+
+export async function liberarPassoDoLote(id: string): Promise<void> {
+  const { error } = await db().from("robo_zen_lotes_envio").update({ passo_ate: null }).eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 // ------------------------------------------------------------------

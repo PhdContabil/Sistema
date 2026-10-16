@@ -1,10 +1,17 @@
 // GET: resultado completo de uma simulação — uma linha por empresa
 // mapeada, mais um resumo por motivo (equivalente a /api/resultado-completo
 // do app Python, que gerava a planilha "Robo_Zen_resultado_*.xlsx").
+//
+// A situação de ENVIO é calculada AO VIVO: o resultado guardado é o retrato do
+// momento da varredura, e depois dele o envio em lote manda documentos ao Zen
+// sem mudar esse retrato. Aqui cada linha PRONTA é cruzada com o registro de
+// envios (lib/robo-zen/situacao-envio.ts) — "ENVIADA" pro que já foi, "ENVIO
+// PARCIAL" pro que falta uma parte — sem alterar nada no banco.
 
 import { NextResponse } from "next/server";
 import { ehResposta, exigirAcessoParalegal } from "@/lib/robo-zen/guard";
 import * as dbz from "@/lib/robo-zen/db";
+import { agruparPorEmpresa, aplicarSituacaoDeEnvio } from "@/lib/robo-zen/situacao-envio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,15 +26,27 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 
   const empresas = await dbz.listarEmpresasDaSimulacao(params.id);
-  const resumo: Record<string, number> = {};
-  for (const empresa of empresas) {
-    const chave = empresa.motivo ?? "NÃO PROCESSADA";
-    resumo[chave] = (resumo[chave] ?? 0) + 1;
-  }
 
-  return NextResponse.json({
-    ok: true,
-    resultados: empresas.map((e) => ({
+  // Registro de envios + reservas que sobraram. Se o registro não puder ser lido, o
+  // resultado sai como estava (retrato da varredura) e a resposta avisa — o envio
+  // em si continua protegido, ele não depende desta tela.
+  let situacaoDeEnvioConferida = true;
+  let enviosPorEmpresa = new Map<string, Awaited<ReturnType<typeof dbz.todosOsEnvios>>>();
+  let reservasPorEmpresa = new Map<string, Awaited<ReturnType<typeof dbz.listarReservasEnvio>>>();
+  try {
+    enviosPorEmpresa = agruparPorEmpresa(await dbz.todosOsEnvios());
+  } catch {
+    situacaoDeEnvioConferida = false;
+  }
+  try {
+    reservasPorEmpresa = agruparPorEmpresa(await dbz.listarReservasEnvio());
+  } catch {
+    // Sem a tabela de reservas (migração ainda não aplicada): só não mostra "interrompido".
+  }
+  const agora = Date.now();
+
+  const linhas = empresas.map((e) => {
+    const base = {
       codigo: e.codigo,
       empresa: e.nome,
       qtdDocumentosElegiveis: e.qtd_documentos_elegiveis,
@@ -44,7 +63,25 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       status: e.status ?? "",
       motivo: e.motivo ?? "",
       pronta: e.pronta,
-    })),
+    };
+    return aplicarSituacaoDeEnvio(
+      base,
+      enviosPorEmpresa.get(e.codigo) ?? [],
+      reservasPorEmpresa.get(e.codigo) ?? [],
+      agora
+    );
+  });
+
+  const resumo: Record<string, number> = {};
+  for (const linha of linhas) {
+    const chave = linha.motivo || "NÃO PROCESSADA";
+    resumo[chave] = (resumo[chave] ?? 0) + 1;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    resultados: linhas,
     resumo,
+    situacaoDeEnvioConferida,
   });
 }
