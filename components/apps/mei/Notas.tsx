@@ -130,6 +130,10 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
   const [erro, setErro] = useState("");
   const [res, setRes] = useState<{ r: ResultadoNota; simulacao: boolean } | null>(null);
   const [soSaida, setSoSaida] = useState(false);
+  // Tomador: o salão do cadastro (padrão), sem tomador, ou outro CNPJ/CPF digitado.
+  const [tomadorModo, setTomadorModo] = useState<"salao" | "sem" | "outro">("salao");
+  const [tomadorOutro, setTomadorOutro] = useState("");
+  const tomador = tomadorModo === "salao" ? tomadorDoc(m) : tomadorModo === "outro" ? tomadorOutro.replace(/\D/g, "") : "";
   const [enviando, setEnviando] = useState(false);
   useEffect(() => {
     api<{ dados: Nota[] }>("GET", "/fiscal/lancamentos", { query: { tipo: "saida", codigoempresa: m.cod, data_inicio: new Date(Date.now() - 91 * 864e5).toISOString().slice(0, 10), data_fim: hojeISO() } }).then((r) => {
@@ -147,7 +151,8 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     setErro("");
     const valor = Number(d.valor.replace(/\./g, "").replace(",", "."));
     if (!valor || !d.data) { setErro("Informe a data e o valor antes de preencher no portal."); return; }
-    if (!tomadorDoc(m)) { setErro("Salão sem CNPJ no cadastro — não dá para preencher o tomador."); return; }
+    if (tomadorModo === "salao" && !tomador) { setErro("Salão sem CNPJ no cadastro — escolha \"Outro\" e digite o tomador, ou \"Sem tomador\"."); return; }
+    if (tomadorModo === "outro" && ![11, 14].includes(tomador.length)) { setErro("Tomador: digite um CPF (11 números) ou CNPJ (14 números)."); return; }
     const estado = await verificarRobo();
     setRoboEstado(estado);
     if (estado !== "ok") return;
@@ -156,7 +161,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     const jc = await rc.json();
     if (!rc.ok) { setRobo({ status: "erro", erro: jc.error ?? "Falha ao buscar a senha (sem senha cadastrada?).", passos: [] }); return; }
     const r = await fetch("http://localhost:3199/preparar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-      cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: tomadorDoc(m), descricao: d.obs,
+      cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: tomador, descricao: d.obs,
       municipio: m.cidade, uf: m.uf, codigoativmunic: (m.ativMunic || "").split(" ")[0], creds: jc.creds,
     }) });
     const j = await r.json();
@@ -184,7 +189,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     setEnviando(true);
     try {
       const r = await api<ResultadoNota & { detail?: unknown }>("POST", "/fiscal/nota-servico", {
-        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: lancarEntrada },
+        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: lancarEntrada && tomadorModo === "salao" && tomadorDoc(m) !== "00000000000" },
         idempotencia: `nota-mei-${m.cod}-${d.numero}-${d.serie}-${d.data}`,
       });
       if (r.status >= 300) {
@@ -202,7 +207,14 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     <Modal titulo={`Nota — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
       {m.bloqueado && <div style={{ ...st.aviso, color: "var(--div)" }}>Empresa BLOQUEADA — no Access a emissão fica desabilitada.</div>}
       <div style={st.grid}>
-        <Campo label="Tomador (salão)"><input style={st.input} readOnly value={`${m.salao} ${fmtDoc(tomadorDoc(m))}`} /></Campo>
+        <Campo label="Tomador">
+          <select style={st.input} value={tomadorModo} onChange={(e) => setTomadorModo(e.target.value as "salao" | "sem" | "outro")}>
+            <option value="salao">{`Salão: ${m.salao} ${fmtDoc(tomadorDoc(m))}`}</option>
+            <option value="sem">Sem tomador (não identificado)</option>
+            <option value="outro">Outro tomador (digitar CPF/CNPJ)</option>
+          </select>
+          {tomadorModo === "outro" && <input style={{ ...st.input, marginTop: 6 }} placeholder="CPF ou CNPJ do tomador" value={tomadorOutro} onChange={(e) => setTomadorOutro(e.target.value)} />}
+        </Campo>
         <Campo label="Número da NFS-e (do portal) *"><input style={st.input} value={d.numero} onChange={(e) => setD({ ...d, numero: e.target.value.replace(/\D/g, "") })} /></Campo>
         <Campo label="Série"><input style={st.input} value={d.serie} maxLength={4} onChange={(e) => setD({ ...d, serie: e.target.value.toUpperCase() })} /></Campo>
         <Campo label="Data *"><input type="date" style={st.input} value={d.data} onChange={(e) => setD({ ...d, data: e.target.value })} /></Campo>

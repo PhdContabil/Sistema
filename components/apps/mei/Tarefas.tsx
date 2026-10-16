@@ -68,7 +68,7 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
   const [erro, setErro] = useState("");
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
-  const [modal, setModal] = useState<"" | "avulso" | "programacao" | "transferencia">("");
+  const [modal, setModal] = useState<"" | "avulso" | "programacao" | "transferencia" | "ajuda">("");
   const [obs, setObs] = useState<Tarefa | null>(null);
   const [vencidas, setVencidas] = useState<Tarefa[]>([]);
   const [lote, setLote] = useState<{ atual: number; total: number; razao: string; job: JobDas | null; parar: boolean } | null>(null);
@@ -181,6 +181,7 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
           <button style={st.btn} onClick={() => setModal("avulso")}>+ Avulso</button>
           <button style={st.btn} onClick={() => setModal("programacao")}>Programação</button>
           <button style={st.btn} onClick={() => setModal("transferencia")}>Transferência</button>
+        <button style={st.btn} onClick={() => setModal("ajuda")}>? Como funciona</button>
           <button style={st.btn} onClick={exportar}>Exportar Excel (CSV)</button>
           <button style={st.btn} onClick={dasEmLote} disabled={!!lote}>Emitir DAS das selecionadas ({dasSelecionadas.length})</button>
           <span style={{ flex: 1 }} />
@@ -224,6 +225,7 @@ export default function Tarefas({ mei }: { mei: Mei[] }) {
       {obs && <ObsTarefa t={obs} fechar={() => setObs(null)} aoSalvar={carregar} />}
       {modal === "avulso" && <Avulso ativos={ativos} resp={resp.dados.filter((r) => r.ativo)} serv={serv.dados.filter((s) => s.ativo)} fechar={() => setModal("")} aoSalvar={carregar} />}
       {modal === "programacao" && <Programacao ativos={ativos} resp={resp.dados.filter((r) => r.ativo)} serv={serv.dados.filter((s) => s.ativo)} fechar={() => setModal("")} aoSalvar={carregar} />}
+      {modal === "ajuda" && <AjudaTarefas fechar={() => setModal("")} />}
       {modal === "transferencia" && <Transferencia filtro={filtroApi} total={total} resp={resp.dados.filter((r) => r.ativo)} fechar={() => setModal("")} aoSalvar={carregar} />}
     </div>
   );
@@ -356,6 +358,25 @@ function Transferencia({ filtro, total, resp, fechar, aoSalvar }: { filtro: Reco
       <Campo label="Novo responsável"><select style={st.input} value={destino} onChange={(e) => setDestino(e.target.value)}><option value="">Selecione…</option>{resp.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></Campo>
       <div style={{ ...st.bar, marginTop: 10 }}><button style={st.btnP} onClick={confirmar}>Confirmar</button></div>
       <Mensagem msg={msg} />
+    </Modal>
+  );
+}
+
+/** Guia rápido da tela de Tarefas (para a equipe do MEI). */
+function AjudaTarefas({ fechar }: { fechar: () => void }) {
+  const item = (titulo: string, texto: string) => (<div style={{ marginBottom: 12 }}><b>{titulo}</b><p style={{ margin: "4px 0 0", fontSize: 13 }}>{texto}</p></div>);
+  return (
+    <Modal titulo="Tarefas — como funciona" fechar={fechar} largura={720}>
+      {item("O que é uma tarefa", "Cada serviço que precisa ser feito para um MEI numa competência (ex.: DAS 10/2026, Senha NF). A tarefa nasce \"Em Aberto\" e sai da lista quando é baixada.")}
+      {item("Vencidas", "Tarefas em aberto com data de entrega já passada. Aparecem em vermelho e no aviso do topo — priorize essas.")}
+      {item("Como adicionar uma tarefa única — \"+ Avulso\"", "Escolha o MEI, o serviço, o responsável e a competência, e clique em Gerar. Use para um pedido pontual do cliente.")}
+      {item("Como criar as tarefas recorrentes — \"Programação\"", "Escolha o MEI e o serviço; o sistema cria as tarefas das próximas competências (como o gerartarefa do Access). Tarefas que já existem são ignoradas, não duplica.")}
+      {item("Dar baixa", "Marque as tarefas feitas na lista e clique em Baixar (uma ou várias de uma vez). A baixa grava de verdade e some da lista de abertas.")}
+      {item("DAS em lote", "Marque as tarefas de DAS e use o botão de DAS: o robô do seu computador gera as guias. Se o robô estiver desatualizado, a tela avisa e mostra como instalar.")}
+      {item("Observação", "O botão Obs abre a observação da tarefa (o ponto • indica que já tem texto). Salve para gravar.")}
+      {item("Transferência", "Passa as tarefas do filtro atual para outro responsável — útil em férias ou troca de carteira.")}
+      {item("Exportar", "Gera a planilha (CSV/Excel) com as tarefas do filtro.")}
+      <p style={st.mut}>Dúvida ou erro? Abra um chamado na T.I. pelo Núcleo.</p>
     </Modal>
   );
 }

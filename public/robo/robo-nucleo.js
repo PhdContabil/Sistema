@@ -13,7 +13,8 @@ const { preparar, codigoServico, hoje } = require('./emissor');
 const { guiaDAS } = require('./das');
 
 const PORTA = +(process.env.ROBO_PORTA || 3199);
-const ORIGENS = ['https://system-contabilidade.vercel.app', 'http://localhost:3000'];
+// Só o site do Núcleo manda comandos. localhost só com ROBO_DEV=1 (testes de desenvolvimento).
+const ORIGENS = ['https://system-contabilidade.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
 
@@ -26,7 +27,8 @@ function cors(req, res) {
     res.setHeader('Access-Control-Allow-Private-Network', 'true');
     res.setHeader('Vary', 'Origin');
   }
-  return ORIGENS.includes(o) || !o;
+  // Sem Origin (ex.: <img> do print, curl local) só pode LER; comandos (POST) exigem o site do Núcleo.
+  return ORIGENS.includes(o) || (!o && req.method === 'GET');
 }
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
 const publico = (j) => { const { creds, ctx, printB64, ...p } = j; void creds; void ctx; return { ...p, temPrint: !!printB64 }; };
@@ -38,7 +40,7 @@ http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   try {
     if (req.method === 'GET' && u.pathname === '/status') {
-      return send(res, 200, { ok: true, versao: 3, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
+      return send(res, 200, { ok: true, versao: 4, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
     }
     let m;
     if (req.method === 'GET' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)$/))) {

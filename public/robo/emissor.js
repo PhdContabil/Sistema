@@ -136,10 +136,12 @@ async function preparar(job, creds, ctl) {
     if (job.data === hoje()) {
       ctl.log('Emissão do dia → DPS Simplificada.');
       await page.goto(`${BASE}/DPS/Simplificada`, { waitUntil: 'domcontentloaded' });
-      await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/input', 'input[id*="Tomador" i]'], (l) => l.fill(tomador), { nome: 'campo do tomador' });
-      await sleep(500);
-      await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/span/button[1]'], (l) => l.click(), { nome: 'botão pesquisar tomador' });
-      await sleep(1500);
+      if (tomador) {
+        await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/input', 'input[id*="Tomador" i]'], (l) => l.fill(tomador), { nome: 'campo do tomador' });
+        await sleep(500);
+        await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/span/button[1]'], (l) => l.click(), { nome: 'botão pesquisar tomador' });
+        await sleep(1500);
+      } else ctl.log('Sem tomador: campo do tomador deixado em branco.');
       await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[2]/div/div/div/div/a/span'], (l) => l.click(), { nome: 'lista de serviço' });
       await acao(page, ['xpath=//li[contains(text(), "padrao")]', 'li:has-text("padrao")'], (l) => l.click(), { nome: 'serviço "padrao" (cadastre-o no portal)' });
       await sleep(1500);
@@ -152,11 +154,13 @@ async function preparar(job, creds, ctl) {
       await acao(page, ['xpath=//*[@id="pnlInfoIBSCBS"]/div[1]/div/div[2]/label'], (l) => l.click(), { nome: 'pergunta IBS/CBS', timeout: 6000 }).catch(() => ctl.log('Pergunta IBS/CBS não apareceu (ok).'));
       await acao(page, '#DataCompetencia', async (l) => { await l.fill(''); await l.type(brDate(job.data), { delay: 40 }); await l.press('Tab'); }, { nome: 'data de competência' });
       await sleep(2500);
-      await cliqueRobusto(page, ['xpath=//*[@id="pnlTomador"]/div[1]/div/div/div[1]/label/span', 'xpath=//*[@id="pnlTomador"]/div[1]/div/div/div[1]/label', '#pnlTomador label:has-text("Brasil")'], 'tipo de tomador (Brasil)');
-      await sleep(1000);
-      await acao(page, '#Tomador_Inscricao', (l) => l.fill(tomador), { nome: 'inscrição do tomador' });
-      await acao(page, '#btn_Tomador_Inscricao_pesquisar', (l) => l.click(), { nome: 'pesquisar tomador' });
-      await sleep(2000);
+      if (tomador) {
+        await cliqueRobusto(page, ['xpath=//*[@id="pnlTomador"]/div[1]/div/div/div[1]/label/span', 'xpath=//*[@id="pnlTomador"]/div[1]/div/div/div[1]/label', '#pnlTomador label:has-text("Brasil")'], 'tipo de tomador (Brasil)');
+        await sleep(1000);
+        await acao(page, '#Tomador_Inscricao', (l) => l.fill(tomador), { nome: 'inscrição do tomador' });
+        await acao(page, '#btn_Tomador_Inscricao_pesquisar', (l) => l.click(), { nome: 'pesquisar tomador' });
+        await sleep(2000);
+      } else ctl.log('Sem tomador: tomador não informado no portal (confira antes de emitir).');
       await acao(page, '#btnAvancar', (l) => l.click(), { nome: 'botão Avançar' });
       await sleep(2000);
       // município + serviço
