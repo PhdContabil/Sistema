@@ -771,11 +771,11 @@ export function excluirProgramacaoFeriasQuestor(id: number, usuario: string, opt
   );
 }
 
-/** Serviços do escritório (SERVICOESCRIT) de um plano de caixa — ex.: 2709 = Paralegal. Valor: valorant quando a API mandar, senão o valor atual. */
+/** Serviços do escritório (SERVICOESCRIT) de um plano de caixa — ex.: 2709 = Paralegal. Valor: o atual (valorservicoescrit); se estiver zerado, o anterior (valorantservicoescrit). */
 export async function getServicosEscritorio(conta: number): Promise<{ codigo: number; descricao: string; valor: number }[]> {
   const j = await get<{ dados?: Record<string, unknown>[] }>(`/lookups/servicos?limit=2000`);
   return (j.dados ?? [])
     .filter((x) => Number(x.conta) === conta)
-    .map((x) => ({ codigo: Number(x.codigo), descricao: String(x.descricao ?? "").trim(), valor: Number(x.valorant ?? x.valor_anterior ?? x.valorantservicoescrit ?? x.valor ?? 0) }))
+    .map((x) => ({ codigo: Number(x.codigo), descricao: String(x.descricao ?? "").trim(), valor: Number(x.valor) || Number(x.valorant) || 0 }))
     .sort((a, b) => a.descricao.localeCompare(b.descricao));
 }
