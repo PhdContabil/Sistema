@@ -109,8 +109,8 @@ export async function chamar(
   if (metodo !== "GET" && !opts.liberar && !gravacaoLiberada(recursoDaRota(caminho))) {
     url.searchParams.set("dry_run", "true");
     dryRunForcado = true;
-  } else if (metodo !== "GET" && !url.searchParams.has("dry_run") && (caminho.startsWith("/mei/") || caminho.startsWith("/cadastro/servico-") || caminho.startsWith("/fiscal/nota-servico"))) {
-    // Algumas rotas da API (ex.: O.S.) simulam por padrão; com a área liberada, grava de verdade.
+  } else if (metodo !== "GET" && !url.searchParams.has("dry_run")) {
+    // Várias rotas da API simulam por padrão (O.S., nota, ficha, encerrar...); com a área liberada, grava de verdade.
     url.searchParams.set("dry_run", "false");
   }
   const h = cabecalhos(metodo, caminho, opts.usuario ?? null);

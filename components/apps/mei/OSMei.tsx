@@ -146,7 +146,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
   const [linhas, setLinhas] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState<OS | null>(null);
-  const [emailAuto, setEmailAuto] = useState(true);
+  const emailAuto = false; // como no Paralegal: primeiro salva, depois a pessoa escolhe enviar ao Financeiro ou ao Geral
 
   useEffect(() => {
     if (!nova) return;
@@ -328,18 +328,12 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
         <label><span>Observações gerais <small style={{ opacity: 0.7 }}>(só no PDF Geral)</small></span><textarea rows={2} value={o.obsgerais ?? ""} onChange={(e) => set("obsgerais", e.target.value)} /></label>
         <label><span>Observações financeiro <small style={{ opacity: 0.7 }}>(só no PDF Financeiro)</small></span><textarea rows={2} value={o.obs ?? ""} onChange={(e) => set("obs", e.target.value)} /></label>
 
-        {nova && !salvo && (
-          <label style={{ display: "flex", alignItems: "center", gap: 8, flexDirection: "row", marginTop: 8 }}>
-            <input type="checkbox" checked={emailAuto} onChange={(e) => setEmailAuto(e.target.checked)} style={{ width: "auto" }} />
-            <span>Ao salvar, enviar a O.S. por e-mail para o Financeiro e o Geral</span>
-          </label>
-        )}
         {msg && <div className={`pl-banner${msg.ok ? "" : " error"}`} style={{ marginTop: 8 }}>{msg.texto}</div>}
         {linhas.map((l, i) => <p key={i} style={{ fontSize: 13, margin: "4px 0" }}>{l}</p>)}
-        {salvo && <div className="pl-banner" style={{ marginTop: 8 }}>O.S. {salvo.nos} salva. Feche e use a lista para imprimir ou mandar por e-mail ao Financeiro.</div>}
+        {salvo && <div className="pl-banner" style={{ marginTop: 8 }}>O.S. {salvo.nos} salva. Agora, se quiser, envie por e-mail: ✉ Financeiro ou ✉ Geral (botões abaixo).</div>}
 
         <div className="pl-toolbar" style={{ marginTop: 8 }}>
-          <button className="pl-btn" onClick={() => { if (confirm("Fechar sem salvar? O que foi preenchido será perdido.")) fechar(); }} disabled={salvando}>Cancelar</button>
+          <button className="pl-btn" onClick={() => { if (salvo || confirm("Fechar sem salvar? O que foi preenchido será perdido.")) fechar(); }} disabled={salvando}>{salvo ? "Fechar" : "Cancelar"}</button>
           {!nova && <button className="pl-btn danger" onClick={excluir} disabled={salvando}>Excluir</button>}
           {(!nova || salvo) && (
             <>
@@ -349,7 +343,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
               <button className="pl-btn" onClick={() => email({ ...o, ...(salvo ?? {}) }, "geral")}>✉ Geral</button>
             </>
           )}
-          <button className="pl-btn primary" onClick={salvar} disabled={salvando}>{salvando ? "Salvando…" : "Salvar"}</button>
+          <button className="pl-btn primary" onClick={salvar} disabled={salvando || (nova && !!salvo)}>{salvando ? "Salvando…" : "Salvar"}</button>
         </div>
       </div>
     </div>

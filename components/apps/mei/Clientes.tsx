@@ -59,6 +59,8 @@ type Aba = (typeof ABAS)[number];
 /** Ficha do MEI como central: dados, tarefas, O.S., notas, senhas e observação da empresa numa tela só. */
 export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => void; mudou: () => void; emitirNota?: (m: Mei) => void }) {
   const [aba, setAba] = useState<Aba>("Resumo");
+  const [nomeSocial, setNomeSocial] = useState("");
+  useEffect(() => { fetch(`/api/mei/extra?cod=${m.cod}`).then((r) => r.json()).then((j) => setNomeSocial(j.dados?.[0]?.nome_social ?? "")).catch(() => null); }, [m.cod]);
   const [tarefas, setTarefas] = useState<Tarefa[] | null>(null);
   const [oss, setOss] = useState<OSResumo[] | null>(null);
   const [notas, setNotas] = useState<NotaResumo[] | null>(null);
@@ -107,6 +109,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
           <div style={{ flex: 1, minWidth: 240 }}>
             <div style={{ fontSize: 12, color: "var(--muted)" }}>Ficha MEI · cód. {m.cod}{m.codigocliente ? ` · financeiro ${m.codigocliente}` : ""}</div>
             <h2 style={{ margin: "2px 0 0", fontSize: 20 }}>{m.razao}</h2>
+          {nomeSocial && <div style={{ fontSize: 13, color: "var(--muted)" }}>Nome social: <b style={{ color: "var(--text)" }}>{nomeSocial}</b></div>}
           </div>
           {emitirNota && m.ativo && !m.bloqueado && <button style={st.btnP} onClick={() => emitirNota(m)}>Emitir nota</button>}
           <button style={st.btn} onClick={() => setEditar(true)}>Editar dados</button>
@@ -270,6 +273,10 @@ function EditarDados({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou: 
     fone: m.cel, celular: m.whats, nomemae: m.mae, numerorg: m.rg,
   };
   const [d, setD] = useState({ ...ini });
+  // Nome social: só no Núcleo (tabela mei_cliente_extra), não vai para o Questor.
+  const [nomeSocial, setNomeSocial] = useState<string | null>(null);
+  const [nomeSocialIni, setNomeSocialIni] = useState("");
+  useEffect(() => { fetch(`/api/mei/extra?cod=${m.cod}`).then((r) => r.json()).then((j) => { const v = j.dados?.[0]?.nome_social ?? ""; setNomeSocial(v); setNomeSocialIni(v); }).catch(() => setNomeSocial("")); }, [m.cod]);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const campo = (k: keyof typeof ini, label: string, tipo = "text") => (
     <Campo label={label}><input type={tipo} style={st.input} value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} /></Campo>
@@ -282,10 +289,17 @@ function EditarDados({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou: 
     for (const k of ["inscrfederal", "datanasc", "tituloeleitornumero", "email", "nomemae", "numerorg"] as const) if (d[k] !== ini[k]) socio[k] = d[k];
     if (d.fone !== ini.fone) { const t = tel(d.fone); socio.dddfone = t.ddd; socio.numerofone = t.num; }
     if (d.celular !== ini.celular) { const t = tel(d.celular); socio.dddcelular = t.ddd; socio.numerocelular = t.num; }
-    if (!Object.keys(estab).length && !Object.keys(socio).length) { setMsg({ ok: false, texto: "Nada foi alterado." }); return; }
-    if (!confirm("Gravar as alterações no Questor?")) return;
+    const mudouSocial = nomeSocial !== null && nomeSocial.trim() !== nomeSocialIni.trim();
+    if (!Object.keys(estab).length && !Object.keys(socio).length && !mudouSocial) { setMsg({ ok: false, texto: "Nada foi alterado." }); return; }
+    if ((Object.keys(estab).length || Object.keys(socio).length) && !confirm("Gravar as alterações no Questor?")) return;
     const linhas: string[] = [];
     let ok = true;
+    if (mudouSocial) {
+      const r = await fetch("/api/mei/extra", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codigoempresa: m.cod, nome_social: nomeSocial }) });
+      const j = await r.json().catch(() => ({}));
+      ok = ok && r.ok; linhas.push(r.ok ? "Nome social salvo." : `Nome social: ${j.error ?? "falha ao salvar"}`);
+      if (r.ok) setNomeSocialIni(nomeSocial ?? "");
+    }
     if (Object.keys(estab).length) {
       const r = await api("PATCH", `/cadastro/estabelecimento/${m.cod}/1`, { corpo: estab, idempotencia: `mei-estab-${m.cod}-${Date.now()}` });
       const x = resumoGravacao(r); ok = ok && x.ok; linhas.push(`Estabelecimento: ${x.texto}`);
@@ -299,6 +313,8 @@ function EditarDados({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou: 
   }
   return (
     <Modal titulo={`Editar dados — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
+      <h4 style={{ margin: "0 0 8px" }}>Núcleo (não vai para o Questor)</h4>
+      <div style={st.grid}><Campo label="Nome social"><input style={st.input} value={nomeSocial ?? ""} disabled={nomeSocial === null} placeholder={nomeSocial === null ? "Carregando…" : "Como a pessoa prefere ser chamada"} onChange={(e) => setNomeSocial(e.target.value)} /></Campo></div>
       <h4 style={{ margin: "0 0 8px" }}>Estabelecimento</h4>
       <div style={st.grid}>{campo("apelidoestab", "Salão (cód. financeiro; 53278 = avulso)")}{campo("inscrestad", "I.E.")}{campo("inscrmunic", "I.M.")}</div>
       <h4 style={{ margin: "0 0 8px" }}>Sócio (titular)</h4>

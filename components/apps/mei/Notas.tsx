@@ -3,7 +3,7 @@
 // Notas MEI (menu_mei): profissionais do salão, notas do período, Exportar Notas, Exportar DAS,
 // relatório rel_notas e a tela de emissão (emitirnota).
 import { useEffect, useMemo, useState } from "react";
-import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, ErroRobo, type RoboEstado, type Mei } from "./ui";
+import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, ErroRobo, fmtDoc, type RoboEstado, type Mei } from "./ui";
 
 interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
@@ -115,6 +115,13 @@ interface ResultadoNota {
 }
 
 /** emitirnota: lança no Questor a NFS-e já emitida no Portal Nacional (saída no MEI + entrada no salão + ISS). */
+/** Tomador da nota: no salão AVULSO o Questor guarda CNPJ fictício (555…); no portal vai o CPF 000.000.000-00. */
+function tomadorDoc(m: { salaoCod?: number | null; salaoCnpj?: string }): string {
+  const d = (m.salaoCnpj ?? "").replace(/\D/g, "");
+  if (m.salaoCod === AVULSO || /^5+$/.test(d)) return "00000000000";
+  return d;
+}
+
 export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
   const [d, setD] = useState({ data: data > hojeISO() ? hojeISO() : data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
   const [roboEstado, setRoboEstado] = useState<RoboEstado>("ok");
@@ -140,7 +147,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     setErro("");
     const valor = Number(d.valor.replace(/\./g, "").replace(",", "."));
     if (!valor || !d.data) { setErro("Informe a data e o valor antes de preencher no portal."); return; }
-    if (!m.salaoCnpj) { setErro("Salão sem CNPJ no cadastro — não dá para preencher o tomador."); return; }
+    if (!tomadorDoc(m)) { setErro("Salão sem CNPJ no cadastro — não dá para preencher o tomador."); return; }
     const estado = await verificarRobo();
     setRoboEstado(estado);
     if (estado !== "ok") return;
@@ -149,7 +156,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     const jc = await rc.json();
     if (!rc.ok) { setRobo({ status: "erro", erro: jc.error ?? "Falha ao buscar a senha (sem senha cadastrada?).", passos: [] }); return; }
     const r = await fetch("http://localhost:3199/preparar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-      cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: m.salaoCnpj, descricao: d.obs,
+      cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: tomadorDoc(m), descricao: d.obs,
       municipio: m.cidade, uf: m.uf, codigoativmunic: (m.ativMunic || "").split(" ")[0], creds: jc.creds,
     }) });
     const j = await r.json();
@@ -195,7 +202,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     <Modal titulo={`Nota — ${m.cod} - ${m.razao}`} fechar={fechar} largura={760}>
       {m.bloqueado && <div style={{ ...st.aviso, color: "var(--div)" }}>Empresa BLOQUEADA — no Access a emissão fica desabilitada.</div>}
       <div style={st.grid}>
-        <Campo label="Tomador (salão)"><input style={st.input} readOnly value={`${m.salao} ${m.salaoCnpj}`} /></Campo>
+        <Campo label="Tomador (salão)"><input style={st.input} readOnly value={`${m.salao} ${fmtDoc(tomadorDoc(m))}`} /></Campo>
         <Campo label="Número da NFS-e (do portal) *"><input style={st.input} value={d.numero} onChange={(e) => setD({ ...d, numero: e.target.value.replace(/\D/g, "") })} /></Campo>
         <Campo label="Série"><input style={st.input} value={d.serie} maxLength={4} onChange={(e) => setD({ ...d, serie: e.target.value.toUpperCase() })} /></Campo>
         <Campo label="Data *"><input type="date" style={st.input} value={d.data} onChange={(e) => setD({ ...d, data: e.target.value })} /></Campo>
