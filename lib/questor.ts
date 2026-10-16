@@ -770,3 +770,12 @@ export function excluirProgramacaoFeriasQuestor(id: number, usuario: string, opt
     "DELETE", `/rh/ferias/programacao/${id}?dry_run=${opts.dryRun ? "true" : "false"}`, { usuario }
   );
 }
+
+/** Serviços do escritório (SERVICOESCRIT) de um plano de caixa — ex.: 2709 = Paralegal. Valor: valorant quando a API mandar, senão o valor atual. */
+export async function getServicosEscritorio(conta: number): Promise<{ codigo: number; descricao: string; valor: number }[]> {
+  const j = await get<{ dados?: Record<string, unknown>[] }>(`/lookups/servicos?limit=2000`);
+  return (j.dados ?? [])
+    .filter((x) => Number(x.conta) === conta)
+    .map((x) => ({ codigo: Number(x.codigo), descricao: String(x.descricao ?? "").trim(), valor: Number(x.valorant ?? x.valor_anterior ?? x.valorantservicoescrit ?? x.valor ?? 0) }))
+    .sort((a, b) => a.descricao.localeCompare(b.descricao));
+}

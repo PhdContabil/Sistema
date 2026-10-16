@@ -616,6 +616,19 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
         setCnpjStatus({ texto: "", tipo: "" });
         setTipoDoc("cnpj");
         sugerirProximoCodigo();
+        // Igual ao Access (formCadastroQuestor): oferece sincronizar a empresa nova com o Questor Zen.
+        const codNovo = Number(corpo.codigoempresa);
+        if (codNovo && confirm("Deseja sincronizar a empresa para o Questor Zen?")) {
+          try {
+            const rz = await fetch("/api/zen/cliente", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codigoempresa: codNovo, codigoestab: 1 }) });
+            const jz = await rz.json().catch(() => ({}));
+            const linhaZen = !rz.ok ? `Questor Zen: não foi possível sincronizar — ${jz.error ?? `erro ${rz.status}`}.`
+              : jz.jaExistia ? "Questor Zen: a empresa já estava cadastrada no Zen." : "Questor Zen: empresa sincronizada com sucesso.";
+            setResultado((atual) => (atual ? { ...atual, linhas: [...atual.linhas, linhaZen] } : atual));
+          } catch {
+            setResultado((atual) => (atual ? { ...atual, linhas: [...atual.linhas, "Questor Zen: falha de rede ao sincronizar."] } : atual));
+          }
+        }
       } else {
         const { linhas, chaves } = extrairProblemas(corpo);
         destacar(chaves);

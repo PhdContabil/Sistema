@@ -448,3 +448,16 @@ export async function cadastrarContrato(
   const [resultado] = await cadastrarContratos(cnpj, [arquivo]);
   return resultado;
 }
+
+/**
+ * POST /clientes — cadastra a empresa em CRM > Clientes do Questor Zen (mesmo JSON do Access:
+ * CadastrarEmpresaQuestorZen). Usado logo após criar a empresa no Questor (Paralegal / MEI).
+ */
+export async function cadastrarCliente(dados: Record<string, unknown>): Promise<unknown> {
+  const url = `${montarUrlBaseApi()}/clientes`;
+  const resposta = await requisitar("POST", url, "Cadastrar Cliente", TIMEOUT_PADRAO_MS, {
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(dados),
+  });
+  return checarResposta(resposta, "Cadastrar Cliente");
+}

@@ -177,6 +177,10 @@ export default function OSTab() {
   // Para cada um dos 4 serviços: se está em modo "outro" (texto livre) — ativa
   // sozinho quando o valor salvo não bate com nenhuma opção fixa.
   const [servicoManual, setServicoManual] = useState<[boolean, boolean, boolean, boolean]>([false, false, false, false]);
+  // Serviços do Paralegal vindos do Questor (plano 2709), com valor; a lista fixa fica de reserva se a API falhar.
+  const [servicosQuestor, setServicosQuestor] = useState<{ descricao: string; valor: number }[]>([]);
+  useEffect(() => { fetch("/api/paralegal/cadastro-empresa/lookups?tipo=servicos-paralegal").then((r) => r.json()).then((j) => setServicosQuestor(j.dados ?? [])).catch(() => null); }, []);
+  const opcoesServico = servicosQuestor.length ? servicosQuestor.map((s) => s.descricao) : SERVICOS_OPCOES;
   // Quantas linhas de serviço aparecem no formulário (começa com 1, "+ Adicionar" libera até 4).
   const [qtdServicos, setQtdServicos] = useState(1);
 
@@ -418,7 +422,7 @@ export default function OSTab() {
     // Já tem CNPJ salvo — não precisa (nem deve) disparar a busca automática de novo.
     cnpjJaBuscadoRef.current = somenteDigitos(dados.cnpj) || null;
     setTipoDocOS(somenteDigitos(dados.cnpj).length === 11 ? "cpf" : "cnpj");
-    setServicoManual(dados.servicos.map((s) => !!s && !SERVICOS_OPCOES.includes(s)) as [boolean, boolean, boolean, boolean]);
+    setServicoManual(dados.servicos.map((s) => !!s && !opcoesServico.includes(s)) as [boolean, boolean, boolean, boolean]);
     const ultimoPreenchido = dados.servicos.reduce((max, s, i) => (s ? i : max), 0);
     setQtdServicos(Math.min(4, Math.max(1, ultimoPreenchido + 1)));
     garantirEmpresasCarregadas(); garantirIndicacoesCarregadas();
@@ -724,6 +728,9 @@ export default function OSTab() {
     const servicos = [...modal.dados.servicos] as OS["servicos"];
     servicos[i] = valor;
     setCampo("servicos", servicos);
+    // Já traz o valor do serviço cadastrado no Questor (pode ser ajustado à mão).
+    const sq = servicosQuestor.find((x) => x.descricao === valor);
+    if (sq && sq.valor > 0) { const v = [...modal.dados.valoresServ] as OS["valoresServ"]; v[i] = sq.valor; setCampo("valoresServ", v); }
   }
 
   function setServicoTexto(i: number, valor: string) {
@@ -965,12 +972,12 @@ export default function OSTab() {
                     />
                   ) : (
                     <select
-                      value={SERVICOS_OPCOES.includes(modal.dados.servicos[i]) ? modal.dados.servicos[i] : ""}
+                      value={opcoesServico.includes(modal.dados.servicos[i]) ? modal.dados.servicos[i] : ""}
                       onChange={(e) => setServicoOpcao(i, e.target.value)}
                       style={{ border: "1px solid var(--pl-border)", borderRadius: 8, padding: "9px 12px", fontSize: 13.5, width: "100%" }}
                     >
                       <option value="">Selecione...</option>
-                      {SERVICOS_OPCOES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {opcoesServico.map((s) => <option key={s} value={s}>{s}</option>)}
                       <option value={OUTRO_SERVICO}>{OUTRO_SERVICO}</option>
                     </select>
                   )}

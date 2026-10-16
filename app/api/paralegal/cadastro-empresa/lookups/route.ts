@@ -5,6 +5,7 @@ import {
   getLookupCadastroEmpresa,
   getLookupMunicipios,
   buscarCnaes,
+  getServicosEscritorio,
   QuestorError,
   type TipoLookupCadastro,
 } from "@/lib/questor";
@@ -42,6 +43,10 @@ export async function GET(req: Request) {
       const tabela = ativmunic as Record<string, { codigo: string; descricao: string }[] | { codigo: string; descricao: string }>;
       const v = tabela[`${uf}-${Number(codigomunic)}`];
       return NextResponse.json({ dados: v ? (Array.isArray(v) ? v : [v]) : [] });
+    }
+    if (tipo === "servicos-paralegal") {
+      // Serviços do Paralegal no Questor (SERVICOESCRIT com codigocaixaplano 2709).
+      return NextResponse.json({ dados: await getServicosEscritorio(2709) });
     }
     if (tipo === "cnaes") {
       const q = searchParams.get("q") ?? "";
