@@ -27,6 +27,7 @@ const PUBLIC_PATHS = [
   // Tarefas agendadas (executadas pela Vercel, sem sessão de usuário)
   "/api/societario/cron",
   "/api/pessoas/cron",
+  "/api/fiscal/dare-sp/cron",
   // Varredura agendada do Robô Zen: chamada pelo pg_cron do Supabase, sem
   // sessão de usuário. A própria rota exige CRON_SECRET ou o token dela
   // (ROBO_ZEN_VARREDURA_TOKEN) e recusa com 401 sem isso — por isso só ESTA
