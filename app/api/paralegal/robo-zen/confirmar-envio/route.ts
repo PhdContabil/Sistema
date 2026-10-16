@@ -9,12 +9,19 @@
 // robo_zen_envios (auditoria permanente) — assim, se o lote falhar no
 // meio (rede caiu etc.), os documentos já gravados não ficam invisíveis:
 // tanto o banco quanto a resposta mostram exatamente quais foram.
+//
+// Cada documento é RESERVADO antes de subir ao Zen (lib/robo-zen/envio-seguro.ts):
+// se o envio em lote (ou outra pessoa) estiver mandando o mesmo documento nesse
+// instante, só um dos dois manda — o outro recebe "já tem envio em andamento".
 
 import { NextResponse } from "next/server";
 import { ehResposta, exigirAcessoParalegal } from "@/lib/robo-zen/guard";
-import { baixarConteudo, obterContextoGraph, RoboZenSharePointErro } from "@/lib/robo-zen/empresas-sharepoint";
-import { buscarCodigoCategoria, consultarCliente, importarDocumento, QuestorZenError, uploadArquivo } from "@/lib/questor-zen";
+import { obterContextoGraph, RoboZenSharePointErro } from "@/lib/robo-zen/empresas-sharepoint";
+import { buscarCodigoCategoria, consultarCliente, QuestorZenError } from "@/lib/questor-zen";
 import * as dbz from "@/lib/robo-zen/db";
+import { classificarEnvios } from "@/lib/robo-zen/novidades-envio";
+import { enviarDocumentoSeguro, TEXTO_CONFERIR_NO_ZEN } from "@/lib/robo-zen/envio-seguro";
+import { depsEnvioSeguro } from "@/lib/robo-zen/envio-seguro-real";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,11 +68,12 @@ export async function POST(req: Request) {
 
   // Última barreira contra duplicar no Zen: entre "preparar" e "confirmar"
   // podem passar até 15 minutos, e nesse intervalo alguém (ou o envio em lote)
-  // pode ter mandado o mesmo documento. Confere o registro de novo na hora.
+  // pode ter mandado o mesmo documento. Confere o registro DESTA empresa de novo
+  // na hora (e cada documento ainda é reservado antes de subir).
   let documentosAEnviar = pendente.documentos;
   try {
-    const jaEnviados = await dbz.chavesJaEnviadas();
-    documentosAEnviar = pendente.documentos.filter((d) => !jaEnviados.has(dbz.chaveEnvio(pendente.empresa_codigo, d.nome)));
+    const envios = await dbz.enviosDaEmpresa(pendente.empresa_codigo);
+    documentosAEnviar = classificarEnvios(pendente.documentos, envios).novos;
   } catch (e) {
     return NextResponse.json(
       {
@@ -89,52 +97,56 @@ export async function POST(req: Request) {
     );
   }
 
-  const enviados: { arquivo: string; documentoId: string }[] = [];
-  let erroNoMeio: string | null = null;
+  const deps = depsEnvioSeguro({
+    ctx,
+    codigoCategoria,
+    codigoCliente,
+    empresa: { codigo: pendente.empresa_codigo, nome: pendente.empresa_nome, cnpj: pendente.cnpj },
+    enviadoPor: auth.email,
+  });
 
-  for (const doc of documentosAEnviar) {
-    try {
-      const bytes = await baixarConteudo(ctx, doc.id);
-      const codigoArquivo = await uploadArquivo(doc.nome, bytes);
-      const tituloSemExtensao = doc.nome.replace(/\.[^./\\]+$/, "");
-      const documentoId = await importarDocumento({
-        codigoCategoria,
-        codigoCliente,
-        codigoArquivo,
-        titulo: tituloSemExtensao,
-      });
-      await dbz.registrarEnvio({
-        empresaCodigo: pendente.empresa_codigo,
-        empresaNome: pendente.empresa_nome,
-        cnpj: pendente.cnpj,
-        arquivoNome: doc.nome,
-        documentoIdQuestor: documentoId,
-        codigoCategoriaQuestor: codigoCategoria,
-        codigoClienteQuestor: codigoCliente,
-        enviadoPor: auth.email,
-      });
-      enviados.push({ arquivo: doc.nome, documentoId });
-    } catch (e) {
-      erroNoMeio = e instanceof Error ? e.message : String(e);
-      break;
+  const enviados: { arquivo: string; documentoId: string }[] = [];
+  const avisos: string[] = [];
+  let erroNoMeio: string | null = null;
+  let bloqueado = false;
+  let incerto = false;
+  let indiceDaFalha = documentosAEnviar.length;
+
+  for (let i = 0; i < documentosAEnviar.length; i++) {
+    const doc = documentosAEnviar[i];
+    const r = await enviarDocumentoSeguro(deps, pendente.empresa_codigo, doc);
+    if (r.situacao === "enviado") {
+      enviados.push({ arquivo: doc.nome, documentoId: r.documentoId });
+      if (r.aviso) avisos.push(`${doc.nome}: ${r.aviso}`);
+      continue;
     }
+    if (r.situacao === "ja_enviado") continue; // outro envio terminou esse documento agora há pouco
+    erroNoMeio = r.mensagem;
+    bloqueado = r.situacao === "bloqueado";
+    incerto = r.situacao === "falhou" && r.incerto;
+    indiceDaFalha = i;
+    break;
   }
 
   if (erroNoMeio) {
-    const faltaram = documentosAEnviar.slice(enviados.length).map((d) => d.nome);
+    const faltaram = documentosAEnviar.slice(indiceDaFalha).map((d) => d.nome);
     const avisoParcial =
       enviados.length > 0
         ? `${enviados.length} documento(s) já tinham sido gravados com sucesso antes deste erro (já estão no ` +
           `registro de envios) — faltou: ${faltaram.join(", ")}.`
         : "Nenhum documento chegou a ser gravado.";
+    const conselho =
+      incerto || bloqueado
+        ? `Confira no Questor Zen (CRM > Clientes > ${pendente.empresa_nome} > Documentos) antes de tentar enviar ` +
+          "de novo, para não duplicar."
+        : "Pode tentar de novo: o que já foi enviado não é enviado outra vez.";
     return NextResponse.json(
       {
         ok: false,
-        erro:
-          `Erro ao cadastrar no Questor Zen: ${erroNoMeio}\n\n${avisoParcial} Confira no Questor Zen ` +
-          `(CRM > Clientes > ${pendente.empresa_nome} > Documentos) antes de tentar enviar de novo, para não duplicar.`,
+        erro: `Erro ao cadastrar no Questor Zen: ${erroNoMeio}\n\n${avisoParcial} ${conselho}`,
+        ...(bloqueado || incerto ? { conferirNoZen: TEXTO_CONFERIR_NO_ZEN } : {}),
       },
-      { status: 502 }
+      { status: bloqueado ? 409 : 502 }
     );
   }
 
@@ -143,5 +155,6 @@ export async function POST(req: Request) {
     empresa: pendente.empresa_nome,
     cnpj: pendente.cnpj,
     documentos: enviados,
+    ...(avisos.length > 0 ? { avisos } : {}),
   });
 }

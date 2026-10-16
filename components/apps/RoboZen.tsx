@@ -12,9 +12,11 @@
 // lib/robo-zen/job-simulacao.ts e job-lote-envio.ts): este componente só
 // chama repetidamente o endpoint .../continuar (polling a cada ~1500ms,
 // mesma cadência do app original) até a resposta trazer `concluida: true`.
-// Se a pessoa fechar a aba, o job fica parado onde estava — a próxima
-// simulação retomada automaticamente ao abrir a tela de novo é a que
-// estiver com status "mapeando"/"processando" (ver useEffect de montagem).
+// Se a pessoa fechar a aba, o job fica parado onde estava — ao abrir a tela de
+// novo, a simulação em status "mapeando"/"processando" e o envio em lote
+// "processando" são retomados do ponto onde pararam (ver useEffect de montagem).
+// O estado de ambos fica no banco; vários navegadores podem empurrar o mesmo lote
+// (o servidor roda um passo por vez).
 //
 // Os tipos abaixo espelham as respostas das rotas de API em
 // app/api/paralegal/robo-zen/** — definidos aqui (e não importados de
@@ -26,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TAMANHOS_PAGINA, chaveMotivo, filtrarResultados, paginar } from "@/lib/robo-zen/resultado-lista";
 
 import { MOTIVO_JA_ENVIADA_ALTERADA, MOTIVO_PRONTA_DOC_NOVO } from "@/lib/robo-zen/novidades-envio";
+import { MOTIVO_ENVIADA, MOTIVO_ENVIO_INTERROMPIDO, MOTIVO_ENVIO_PARCIAL } from "@/lib/robo-zen/situacao-envio";
 
 type StatusSimulacao = "mapeando" | "processando" | "concluida" | "erro" | "parada";
 type StatusLoteEnvio = "processando" | "concluida" | "erro" | "parada";
@@ -63,6 +66,9 @@ interface EstadoLoteEnvio {
   erro: string | null;
   pararPedido: boolean;
   concluida: boolean;
+  /** Falhas passageiras seguidas (SharePoint/Zen/banco) — 0 quando está tudo bem. */
+  falhasSeguidas: number;
+  iniciadoPor: string;
 }
 
 interface LinhaResultado {
@@ -85,6 +91,8 @@ interface LinhaResultado {
 interface ResultadoSimulacao {
   resultados: LinhaResultado[];
   resumo: Record<string, number>;
+  /** false = o registro de envios não pôde ser lido agora: o "Pronta" pode estar desatualizado. */
+  situacaoDeEnvioConferida?: boolean;
 }
 
 interface ResultadoConsultaEmpresa {
@@ -116,6 +124,12 @@ interface ResultadoEnvio {
 }
 
 const INTERVALO_POLL_MS = 1500;
+
+/** Se uma chamada do envio em lote falhar (rede caiu, servidor piscou), a tela tenta
+ * de novo antes de desistir — o lote está salvo no banco e cada passo é seguro de
+ * repetir (o servidor trava um passo por vez e confere o registro de envios). */
+const TENTATIVAS_REDE_LOTE = 8;
+const ESPERA_REDE_LOTE_MS = 5000;
 
 async function chamarApi<T extends object>(url: string, opcoes?: RequestInit): Promise<T & { ok: boolean; erro?: string }> {
   try {
@@ -178,6 +192,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   const [lote, setLote] = useState<EstadoLoteEnvio | null>(null);
   const [loteRodando, setLoteRodando] = useState(false);
   const [erroLote, setErroLote] = useState<string | null>(null);
+  const [avisoRedeLote, setAvisoRedeLote] = useState<string | null>(null);
   const timerLoteRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---------------- Seção 2: consultar uma empresa específica ----------------
@@ -244,7 +259,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
     setCarregandoResultado(true);
     const j = await chamarApi<ResultadoSimulacao>(`/api/paralegal/robo-zen/simulacoes/${id}/resultado`);
     if (j.ok) {
-      setResultado({ resultados: j.resultados, resumo: j.resumo });
+      setResultado({ resultados: j.resultados, resumo: j.resumo, situacaoDeEnvioConferida: j.situacaoDeEnvioConferida });
       setBuscaResultado("");
       setFiltroMotivo("");
       setPaginaResultado(1);
@@ -271,22 +286,48 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
     }, INTERVALO_POLL_MS);
   }
 
-  function avancarLote(id: string) {
-    timerLoteRef.current = setTimeout(async () => {
-      const j = await chamarApi<{ lote: EstadoLoteEnvio }>(`/api/paralegal/robo-zen/lotes-envio/${id}/continuar`, { method: "POST" });
-      if (!j.ok || !j.lote) {
-        setErroLote(j.erro ?? "Falha ao avançar o envio em lote.");
-        setLoteRodando(false);
-        return;
-      }
-      setLote(j.lote);
-      if (j.lote.concluida) {
-        setLoteRodando(false);
-        if (j.lote.status === "erro" && j.lote.erro) setErroLote(j.lote.erro);
-      } else {
-        avancarLote(id);
-      }
-    }, INTERVALO_POLL_MS);
+  function avancarLote(id: string, falhasDeRede = 0) {
+    timerLoteRef.current = setTimeout(
+      async () => {
+        const j = await chamarApi<{ lote: EstadoLoteEnvio }>(`/api/paralegal/robo-zen/lotes-envio/${id}/continuar`, { method: "POST" });
+        if (!j.ok || !j.lote) {
+          // A rede caiu ou o servidor falhou. O lote está salvo no banco (e o que já foi
+          // enviado está no registro), então tenta de novo em vez de largar o envio no meio.
+          const n = falhasDeRede + 1;
+          const naoExiste = /não encontrado/i.test(j.erro ?? "");
+          if (!naoExiste && n < TENTATIVAS_REDE_LOTE) {
+            setAvisoRedeLote(`Sem resposta do servidor (${j.erro ?? "falha"}) — tentando de novo (${n} de ${TENTATIVAS_REDE_LOTE - 1})…`);
+            avancarLote(id, n);
+            return;
+          }
+          setAvisoRedeLote(null);
+          setErroLote(
+            (j.erro ?? "Falha ao avançar o envio em lote.") +
+              " O envio ficou salvo no ponto onde parou — use “Continuar o envio” quando a conexão voltar."
+          );
+          setLoteRodando(false);
+          return;
+        }
+        setAvisoRedeLote(null);
+        setLote(j.lote);
+        if (j.lote.concluida) {
+          setLoteRodando(false);
+          if (j.lote.status === "erro" && j.lote.erro) setErroLote(j.lote.erro);
+          // O que foi enviado muda a situação das linhas ("Enviada"): recarrega a tabela.
+          void carregarResultado(j.lote.simulacaoOrigemId);
+        } else {
+          avancarLote(id);
+        }
+      },
+      falhasDeRede > 0 ? ESPERA_REDE_LOTE_MS : INTERVALO_POLL_MS
+    );
+  }
+
+  function retomarLote() {
+    if (!lote || lote.concluida) return;
+    setErroLote(null);
+    setLoteRodando(true);
+    avancarLote(lote.id);
   }
 
   // Ao abrir a tela: retoma o polling se já tinha uma simulação rodando
@@ -297,6 +338,17 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   useEffect(() => {
     let cancelado = false;
     (async () => {
+      // Envio em lote que ficou no meio (aba fechada, rede que caiu, outra pessoa do
+      // setor): reencontra e continua de onde parou. Sem isso o lote ficava parado e o
+      // botão respondia "Já tem um envio em lote rodando".
+      const loteResp = await chamarApi<{ ativo: EstadoLoteEnvio | null }>("/api/paralegal/robo-zen/lotes-envio?ativo=1");
+      if (cancelado) return;
+      if (loteResp.ok && loteResp.ativo) {
+        setLote(loteResp.ativo);
+        setLoteRodando(true);
+        avancarLote(loteResp.ativo.id);
+      }
+
       const ativaResp = await chamarApi<{ ativa: EstadoSimulacao | null }>("/api/paralegal/robo-zen/simulacoes?ativa=1");
       if (cancelado) return;
       if (ativaResp.ok && ativaResp.ativa) {
@@ -360,6 +412,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
   async function iniciarLote() {
     if (!simulacao || simulacao.status !== "concluida") return;
     setErroLote(null);
+    setAvisoRedeLote(null);
     setLoteRodando(true);
     const j = await chamarApi<{ lote: EstadoLoteEnvio }>("/api/paralegal/robo-zen/lotes-envio", {
       method: "POST",
@@ -377,7 +430,16 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
 
   async function pararLote() {
     if (!lote) return;
-    await chamarApi(`/api/paralegal/robo-zen/lotes-envio/${lote.id}/parar`, { method: "POST" });
+    const j = await chamarApi<{ lote: EstadoLoteEnvio }>(`/api/paralegal/robo-zen/lotes-envio/${lote.id}/parar`, { method: "POST" });
+    if (j.ok && j.lote) {
+      setLote(j.lote);
+      if (j.lote.concluida) {
+        setLoteRodando(false);
+        void carregarResultado(j.lote.simulacaoOrigemId);
+      }
+    } else if (j.erro) {
+      setErroLote(j.erro);
+    }
   }
 
   async function consultarEmpresa() {
@@ -464,6 +526,13 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
 
   const lotePct = lote && lote.totalEmpresasProntas > 0 ? (lote.empresasProcessadas / lote.totalEmpresasProntas) * 100 : 0;
 
+  // Quantas empresas ainda têm algo a enviar AGORA (o resultado já vem cruzado com o
+  // registro de envios: as "Enviada" não contam). null = resultado ainda não carregado.
+  const prontasAEnviar = resultado ? resultado.resultados.filter((r) => r.pronta).length : null;
+  const nadaAEnviar = prontasAEnviar === 0;
+  // Lote ativo que não está sendo empurrado por esta aba (rede caiu, desistiu das tentativas…).
+  const loteParado = !!lote && lote.status === "processando" && !loteRodando;
+
   return (
     <>
       <div className="banner">
@@ -482,7 +551,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
         </p>
 
         <div className="toolbar">
-          <button className="btn primary" onClick={iniciarSimulacao} disabled={simulando || loteRodando}>
+          <button className="btn primary" onClick={iniciarSimulacao} disabled={simulando || loteRodando || loteParado}>
             {simulando ? "Rodando…" : "▶ Rodar simulação completa"}
           </button>
           {simulando && <button className="btn danger" onClick={pararSimulacao}>⏹ Parar</button>}
@@ -518,6 +587,12 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                 </div>
               ))}
             </div>
+            {resultado.situacaoDeEnvioConferida === false && (
+              <div className="banner error">
+                Não consegui conferir o registro de envios agora — o “Pronta” abaixo pode incluir empresas que já foram
+                enviadas. O envio em si continua protegido: documento já enviado nunca é enviado de novo.
+              </div>
+            )}
             <div className="toolbar" ref={topoResultadoRef} style={{ scrollMarginTop: 12 }}>
               <button className="btn" onClick={exportarResultadoCsv} title="Baixa todas as empresas, não só as filtradas">⇩ Baixar CSV do resultado</button>
               <input
@@ -568,11 +643,21 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
                       <td>{r.empresa}</td>
                       <td>{r.cnpj || <span className="dash">–</span>}</td>
                       <td style={{ textAlign: "center" }}>
-                        <span className={`badge ${r.pronta ? "badge-ok" : "badge-mudo"}`}>{r.pronta ? "Pronta" : "—"}</span>
+                        {r.motivo === MOTIVO_ENVIADA ? (
+                          <span className="badge badge-ok">Enviada</span>
+                        ) : r.motivo === MOTIVO_ENVIO_INTERROMPIDO && !r.pronta ? (
+                          <span className="badge badge-mudo">Conferir</span>
+                        ) : (
+                          <span className={`badge ${r.pronta ? "badge-ok" : "badge-mudo"}`}>{r.pronta ? "Pronta" : "—"}</span>
+                        )}
                       </td>
                       <td>
                         {r.motivo}
-                        {(r.motivo === MOTIVO_PRONTA_DOC_NOVO || r.motivo === MOTIVO_JA_ENVIADA_ALTERADA) && r.status && (
+                        {(r.motivo === MOTIVO_PRONTA_DOC_NOVO ||
+                          r.motivo === MOTIVO_JA_ENVIADA_ALTERADA ||
+                          r.motivo === MOTIVO_ENVIADA ||
+                          r.motivo === MOTIVO_ENVIO_PARCIAL ||
+                          r.motivo === MOTIVO_ENVIO_INTERROMPIDO) && r.status && (
                           <div className="dash" style={{ fontSize: 11, marginTop: 2, maxWidth: 340, whiteSpace: "normal" }}>
                             {/* o status começa repetindo o motivo — corta pra não aparecer duas vezes */}
                             {r.status.startsWith(r.motivo) ? r.status.slice(r.motivo.length).replace(/^[:.]\s*/, "") : r.status}
@@ -634,9 +719,10 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
         <div className="rz-perigo-box">
           <p>
             Isso cadastra de verdade no Questor Zen os documentos de <strong>TODAS</strong> as empresas que estiverem
-            PRONTA na simulação acima{simulacao?.status === "concluida" ? ` (${simulacao.empresasProntas} agora)` : ""} —
-            não é simulação. Empresa/documento já enviado antes por esta tela é pulado automaticamente, não duplica
-            (empresa já enviada que ganhou contrato novo manda só o novo).
+            PRONTA na tabela acima{prontasAEnviar !== null ? ` (${prontasAEnviar} a enviar agora)` : ""} — não é
+            simulação. Quem já foi enviado aparece como <strong>Enviada</strong> e fica de fora: empresa/documento já
+            enviado por esta tela nunca é enviado de novo (empresa já enviada que ganhou contrato novo manda só o novo).
+            Se a conexão cair no meio, o envio continua de onde parou. Só uma pessoa roda o lote por vez.
             <strong> Não tem como desfazer depois.</strong>
           </p>
           <label className="rz-check">
@@ -644,7 +730,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
               type="checkbox"
               checked={checkLote}
               onChange={(e) => setCheckLote(e.target.checked)}
-              disabled={loteRodando || simulando || !simulacao || simulacao.status !== "concluida"}
+              disabled={loteRodando || loteParado || simulando || !simulacao || simulacao.status !== "concluida" || nadaAEnviar}
             />
             Sim, quero enviar de verdade os documentos de todas as empresas prontas agora.
           </label>
@@ -652,7 +738,7 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
             <button
               className="btn danger"
               onClick={iniciarLote}
-              disabled={!checkLote || loteRodando || simulando || !simulacao || simulacao.status !== "concluida"}
+              disabled={!checkLote || loteRodando || loteParado || simulando || !simulacao || simulacao.status !== "concluida" || nadaAEnviar}
             >
               🚀 Enviar de verdade TODAS as prontas
             </button>
@@ -663,11 +749,38 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
               Rode e conclua uma simulação completa primeiro — o envio em lote parte do resultado dela.
             </p>
           )}
+          {simulacao?.status === "concluida" && nadaAEnviar && (
+            <p className="footnote" style={{ marginTop: 10 }}>
+              Nada a enviar: todas as empresas prontas dessa simulação já foram enviadas ao Zen.
+            </p>
+          )}
         </div>
 
         {erroLote && <div className="banner error">{erroLote}</div>}
+        {avisoRedeLote && <div className="banner">{avisoRedeLote}</div>}
+        {loteRodando && lote && lote.falhasSeguidas > 0 && (
+          <div className="banner">
+            Aguardando o SharePoint/Zen/banco responder — tentando de novo (falha {lote.falhasSeguidas} de 10). Nada foi
+            enviado nessa tentativa; o envio continua sozinho quando voltar.
+          </div>
+        )}
+        {loteParado && lote && (
+          <div className="banner">
+            Há um envio em lote em andamento{lote.iniciadoPor ? ` (iniciado por ${lote.iniciadoPor})` : ""} que não está
+            sendo empurrado por esta tela — {lote.empresasProcessadas}/{lote.totalEmpresasProntas} empresa(s). O que já foi
+            enviado está salvo; ele continua de onde parou.{" "}
+            <button className="btn" onClick={retomarLote}>▶ Continuar o envio</button>{" "}
+            <button className="btn danger" onClick={pararLote}>⏹ Parar</button>
+          </div>
+        )}
         {lote && !loteRodando && lote.status === "parada" && (
-          <div className="banner">Envio em lote interrompido antes de concluir.</div>
+          <div className="banner">Envio em lote interrompido antes de concluir. Dá pra iniciar de novo: o que já foi enviado não é enviado outra vez.</div>
+        )}
+        {lote && !loteRodando && lote.status === "concluida" && lote.documentosComErro > 0 && (
+          <div className="banner error">
+            Envio em lote terminou com {lote.documentosComErro} documento(s) com erro — veja a lista abaixo. Depois de
+            resolver, dá pra iniciar o envio de novo: só o que falta é enviado.
+          </div>
         )}
 
         {lote && (
