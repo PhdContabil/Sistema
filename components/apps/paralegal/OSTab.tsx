@@ -179,7 +179,7 @@ export default function OSTab() {
   const [servicoManual, setServicoManual] = useState<[boolean, boolean, boolean, boolean]>([false, false, false, false]);
   // Serviços do Paralegal vindos do Questor (plano 2709), com valor; a lista fixa fica de reserva se a API falhar.
   const [servicosQuestor, setServicosQuestor] = useState<{ descricao: string; valor: number }[]>([]);
-  useEffect(() => { fetch("/api/paralegal/cadastro-empresa/lookups?tipo=servicos-paralegal").then((r) => r.json()).then((j) => setServicosQuestor(j.dados ?? [])).catch(() => null); }, []);
+  useEffect(() => { fetch("/api/paralegal/cadastro-empresa/lookups?tipo=servicos-paralegal").then((r) => r.json()).then((j) => { const m = new Map<string, { descricao: string; valor: number }>(); for (const s of (j.dados ?? []) as { descricao: string; valor: number }[]) { const x = m.get(s.descricao); if (!x || (!x.valor && s.valor)) m.set(s.descricao, s); } setServicosQuestor([...m.values()]); }).catch(() => null); }, []);
   const opcoesServico = servicosQuestor.length ? servicosQuestor.map((s) => s.descricao) : SERVICOS_OPCOES;
   // Quantas linhas de serviço aparecem no formulário (começa com 1, "+ Adicionar" libera até 4).
   const [qtdServicos, setQtdServicos] = useState(1);
