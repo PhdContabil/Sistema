@@ -181,21 +181,21 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     setRobo(null);
   }
 
-  async function lancar(lancarEntrada = true) {
+  async function lancar(_lancarEntrada = false) {
     setErro(""); setRes(null);
     const valor = d.valor.replace(/\./g, "").replace(",", ".");
     if (!d.numero || !Number(valor) || !d.data) { setErro("Informe o número da nota emitida no portal, a data e o valor."); return; }
-    if (!confirm(`Lançar no Questor a NF ${d.numero} série ${d.serie || "(última)"} de ${dt(d.data)}, valor R$ ${d.valor}?${lancarEntrada ? "" : " (SÓ A SAÍDA, sem entrada no salão)"}`)) return;
+    if (!confirm(`Lançar no Questor a NF ${d.numero} série ${d.serie || "(última)"} de ${dt(d.data)}, valor R$ ${d.valor}? (só no cadastro do profissional)`)) return;
     setEnviando(true);
     try {
       const r = await api<ResultadoNota & { detail?: unknown }>("POST", "/fiscal/nota-servico", {
-        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: lancarEntrada && tomadorModo === "salao" && tomadorDoc(m) !== "00000000000" },
+        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: false }, // pedido do contábil (Du, 19/10/2026): salva só no profissional; o salão pega a nota pelo portal
         idempotencia: `nota-mei-${m.cod}-${d.numero}-${d.serie}-${d.data}`,
       });
       if (r.status >= 300) {
         setErro(mensagemErro(r));
         // Salão é empresa mas o CNPJ do MEI não está em PESSOA: a API recusa tudo (409); dá para lançar só a saída.
-        if (r.status === 409 && /pessoa/i.test(JSON.stringify(r.dados))) setSoSaida(true);
+        void setSoSaida;
         return;
       }
       setRes({ r: r.dados, simulacao: r.dryRunForcado || !!r.dados.dry_run });
@@ -227,7 +227,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
         {robo && <button style={st.btn} onClick={cancelarRobo}>Cancelar robô</button>}
         <button style={st.btn} disabled={enviando || m.bloqueado} onClick={() => lancar(true)}>{enviando ? "Lançando…" : "2) Lançar no Questor"}</button>
         <button style={st.btn} onClick={() => navigator.clipboard?.writeText(d.obs)}>Copiar discriminação</button>
-        {soSaida && <button style={st.btnD} onClick={() => lancar(false)}>Lançar só a saída</button>}
+        
       </div>
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
       <AvisoRobo estado={roboEstado} fechar={() => setRoboEstado("ok")} />
