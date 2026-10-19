@@ -35,5 +35,7 @@ export async function getCurrentUser() {
   const {
     data: { user },
   } = await sb.auth.getUser();
+  // Só contas do domínio da PHD
+  if (!user?.email?.toLowerCase().endsWith("@phdcontabil.com.br")) return null;
   return user;
 }
