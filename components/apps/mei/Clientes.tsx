@@ -75,11 +75,21 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
     ler<{ dados: Tarefa[] }>("/mei/tarefas", { codigoempresa: m.cod, de: "2000-01-01", ate: "2100-12-31", limit: 300 }).then((j) => setTarefas(j.dados ?? [])).catch(() => setTarefas([]));
     api<{ obs?: string }>("GET", `/mei/observacoes/${m.cod}`).then((r) => setObs(r.status === 200 ? (r.dados?.obs ?? "") : "")).catch(() => setObs(""));
     ler<{ dados: OSResumo[] }>("/mei/os", { q: m.cnpj || m.razao, limit: 50 }).then((j) => setOss(j.dados ?? [])).catch(() => setOss([]));
-    if (m.salaoCod) {
-      ler<{ dados: NotaResumo[] }>("/fiscal/lancamentos", { tipo: "saida", salao: m.salaoCod, data_inicio: diasAtras(91), data_fim: hojeISO() })
-        .then((j) => setNotas((j.dados ?? []).filter((n) => n.codigoempresa === m.cod).sort((a, b) => b.datalctofis.localeCompare(a.datalctofis))))
-        .catch(() => setNotas([]));
-    } else setNotas([]);
+    // Notas do MEI dos últimos 12 meses, buscadas pelo código da empresa (a API aceita até ~92 dias por consulta).
+    {
+      const hoje = new Date(); const partes: [string, string][] = [];
+      for (let i = 0; i < 4; i++) {
+        const fim = new Date(hoje); fim.setDate(fim.getDate() - i * 91);
+        const ini = new Date(fim); ini.setDate(ini.getDate() - 90);
+        partes.push([ini.toISOString().slice(0, 10), fim.toISOString().slice(0, 10)]);
+      }
+      Promise.all(partes.map(([a, b]) => ler<{ dados: NotaResumo[] }>("/fiscal/lancamentos", { tipo: "saida", codigoempresa: m.cod, data_inicio: a, data_fim: b }).then((j) => j.dados ?? []).catch(() => [] as NotaResumo[])))
+        .then((ls) => {
+          const vistos = new Set<string>();
+          const todas = ls.flat().filter((n) => n.codigoempresa === m.cod).filter((n) => { const k = `${n.numeronf}|${n.serienf}|${n.datalctofis}|${n.valorcontabil}`; if (vistos.has(k)) return false; vistos.add(k); return true; });
+          setNotas(todas.sort((a, b) => b.datalctofis.localeCompare(a.datalctofis)));
+        });
+    }
   }, [m.cod, m.cnpj, m.razao, m.salaoCod]);
 
   async function salvarObs() {
@@ -159,7 +169,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
             <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Últimos movimentos</h3>
             <Info k="Tarefas em aberto" v={tarefas === null ? "…" : `${abertas.length}${vencidas.length ? ` (${vencidas.length} vencida(s))` : ""}`} />
             <Info k="Última O.S." v={oss === null ? "…" : oss[0] ? `nº ${oss[0].nos} · ${dt(oss[0].data)} · ${brl(oss[0].valortt ?? 0)}` : "nenhuma"} />
-            <Info k="Notas (90 dias)" v={notas === null ? "…" : `${notas.length} · ${brl(totalNotas)}`} />
+            <Info k="Notas (12 meses)" v={notas === null ? "…" : `${notas.length} · ${brl(totalNotas)}`} />
             <Info k="Observação" v={obs === null ? "…" : semHtml(obs).slice(0, 120) || "—"} />
           </div>
         </div>
@@ -187,7 +197,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
 
       {aba === "Notas" && (
         <div style={st.card}>
-          {notas === null ? <p style={st.mut}>Carregando…</p> : notas.length === 0 ? <p style={st.mut}>Nenhuma nota lançada nos últimos 90 dias.</p> : (
+          {notas === null ? <p style={st.mut}>Carregando…</p> : notas.length === 0 ? <p style={st.mut}>Nenhuma nota lançada nos últimos 12 meses.</p> : (
             <Tabela cab={["Nº", "Série", "Data", "Valor"]} linhas={notas.map((n) => [n.numeronf, n.serienf ?? "", dt(n.datalctofis), brl(n.valorcontabil)])} />
           )}
           {notas && notas.length > 0 && <p style={{ ...st.mut, textAlign: "right" }}>Total: <b>{brl(totalNotas)}</b></p>}
