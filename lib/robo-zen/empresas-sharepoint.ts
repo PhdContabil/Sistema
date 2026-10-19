@@ -27,6 +27,7 @@
 
 import { obterCredenciaisMS, tokenGraph } from "../pessoas/msconfig";
 import { esperaDoRetryAfter, STATUS_HTTP_TRANSITORIOS } from "./transitorio";
+import { escolherEmpresa } from "./busca-empresa";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -478,15 +479,9 @@ export async function listarTodasEmpresas(
  * aqui como busca "ao vivo" sob pedido explícito.
  */
 export async function localizarEmpresa(ctx: ContextoGraph, busca: string): Promise<Empresa | null> {
-  const buscaNormalizada = busca.trim().toLowerCase();
   const { empresas } = await listarTodasEmpresas(ctx);
-  for (const empresa of empresas) {
-    if (buscaNormalizada === empresa.codigo) return empresa;
-    if (empresa.nome.toLowerCase().includes(buscaNormalizada)) return empresa;
-    const nomePasta = empresa.caminho.split("/").pop() ?? "";
-    if (nomePasta.toLowerCase().includes(buscaNormalizada)) return empresa;
-  }
-  return null;
+  // Código exato vence nome parcial (ver lib/robo-zen/busca-empresa.ts) — antes, digitar 005 achava a 3005.
+  return escolherEmpresa(empresas, busca);
 }
 
 // ---------------------------------------------------------------------
