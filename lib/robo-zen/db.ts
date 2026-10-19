@@ -347,16 +347,26 @@ export async function listarEmpresasProntas(simulacaoId: string): Promise<Simula
 /** Busca por nome/código dentro das empresas já mapeadas por uma simulação — usado
  * por "consultar uma empresa específica" antes de cair numa busca ao vivo. */
 export async function buscarEmpresaMapeada(simulacaoId: string, busca: string): Promise<SimulacaoEmpresaRow | null> {
-  const buscaNormalizada = busca.trim().toLowerCase();
-  const { data, error } = await db()
-    .from("robo_zen_simulacao_empresas")
-    .select()
-    .eq("simulacao_id", simulacaoId)
-    .or(`codigo.eq.${buscaNormalizada},nome.ilike.%${busca.trim()}%`)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data;
+  const texto = busca.trim();
+  if (!texto) return null;
+  // Mesma ordem da busca ao vivo (lib/robo-zen/busca-empresa.ts): código EXATO, depois nome igual, depois nome
+  // que contém. Antes era um único OR com limit(1) sem ordem — se o código também aparecesse dentro do nome de
+  // outra empresa (ex.: CPF no nome), qual vinha era acaso. Cada etapa é uma consulta própria e ordenada.
+  const base = () => db().from("robo_zen_simulacao_empresas").select().eq("simulacao_id", simulacaoId);
+
+  const porCodigo = await base().eq("codigo", texto).limit(1).maybeSingle();
+  if (porCodigo.error) throw new Error(porCodigo.error.message);
+  if (porCodigo.data) return porCodigo.data;
+
+  // % e _ digitados valem como texto comum (no ilike são curingas).
+  const literal = texto.replace(/[\\%_]/g, (c) => "\\" + c);
+  const porNomeIgual = await base().ilike("nome", literal).order("nome", { ascending: true }).order("codigo", { ascending: true }).limit(1).maybeSingle();
+  if (porNomeIgual.error) throw new Error(porNomeIgual.error.message);
+  if (porNomeIgual.data) return porNomeIgual.data;
+
+  const porNomeParcial = await base().ilike("nome", `%${literal}%`).order("nome", { ascending: true }).order("codigo", { ascending: true }).limit(1).maybeSingle();
+  if (porNomeParcial.error) throw new Error(porNomeParcial.error.message);
+  return porNomeParcial.data;
 }
 
 /** Uma empresa de uma simulação pelo código exato — usado pra baixar um

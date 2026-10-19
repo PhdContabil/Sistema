@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { ehResposta, exigirAcessoParalegal } from "@/lib/robo-zen/guard";
 import { localizarEmpresa, obterContextoGraph, RoboZenSharePointErro } from "@/lib/robo-zen/empresas-sharepoint";
 import { prepararDadosParaEnvio } from "@/lib/robo-zen/preparar-empresa";
+import { pareceCodigo } from "@/lib/robo-zen/busca-empresa";
 import * as dbz from "@/lib/robo-zen/db";
 
 export const runtime = "nodejs";
@@ -30,6 +31,20 @@ export async function POST(req: Request) {
     const empresa = await localizarEmpresa(ctx, busca);
     if (!empresa) {
       return NextResponse.json({ ok: false, erro: `Nenhuma empresa encontrada para "${busca}".` }, { status: 404 });
+    }
+    // Trava final contra empresa trocada: o que se digita só com números é CÓDIGO, e o envio só prossegue se a
+    // empresa achada tiver exatamente esse código (a tela manda o código da empresa que a pessoa acabou de
+    // consultar). Antes, o código 005 chegou a preparar a 3005 por "conter" 005 na pasta.
+    if (pareceCodigo(busca) && empresa.codigo !== busca) {
+      return NextResponse.json(
+        {
+          ok: false,
+          erro:
+            `Nenhuma empresa tem o código ${busca} (a busca achou "${empresa.nome}", código ${empresa.codigo}, ` +
+            "que não é a mesma). Nada foi preparado nem enviado.",
+        },
+        { status: 404 }
+      );
     }
 
     const resultado = await prepararDadosParaEnvio(ctx, empresa);

@@ -481,6 +481,14 @@ export default function RoboZen({ userEmail: _userEmail }: { userEmail: string }
       setErroEnvio(j.erro ?? "Não foi possível preparar o envio.");
       return;
     }
+    // Segunda trava contra empresa trocada: o que o servidor preparou tem que ser a empresa que está na tela.
+    if (j.codigo !== consulta.resultado.codigo) {
+      setErroEnvio(
+        `O servidor preparou outra empresa (${j.empresa}, código ${j.codigo}) em vez da que você consultou ` +
+          `(código ${consulta.resultado.codigo}). Nada foi enviado — consulte a empresa de novo.`
+      );
+      return;
+    }
     setPendente({
       token: j.token, empresa: j.empresa, codigo: j.codigo, cnpj: j.cnpj, documentos: j.documentos, jaEnviados: j.jaEnviados ?? [],
     });
