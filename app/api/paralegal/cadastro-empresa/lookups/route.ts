@@ -6,6 +6,7 @@ import {
   getLookupMunicipios,
   buscarCnaes,
   getServicosEscritorio,
+  getAtividadesMunicipais,
   QuestorError,
   type TipoLookupCadastro,
 } from "@/lib/questor";
@@ -40,6 +41,11 @@ export async function GET(req: Request) {
       // A rota /lookups/servicos-municipais da API lê outra tabela (servicomunicipal, códigos "17.19"),
       // por isso usamos uma cópia da ATIVMUNIC (lib/mei/ativmunic.json) até a API ter a lista certa.
       const uf = searchParams.get("uf") ?? ""; const codigomunic = searchParams.get("codigomunic") ?? "";
+      // Agora vem da API (/lookups/atividades-municipais, lê a ATIVMUNIC). A cópia fixa fica só de reserva se a API falhar.
+      try {
+        const daApi = await getAtividadesMunicipais(uf, codigomunic);
+        if (daApi.length) return NextResponse.json({ dados: daApi });
+      } catch { /* cai na cópia fixa */ }
       const tabela = ativmunic as Record<string, { codigo: string; descricao: string }[] | { codigo: string; descricao: string }>;
       const v = tabela[`${uf}-${Number(codigomunic)}`];
       return NextResponse.json({ dados: v ? (Array.isArray(v) ? v : [v]) : [] });

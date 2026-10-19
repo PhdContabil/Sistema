@@ -779,3 +779,9 @@ export async function getServicosEscritorio(conta: number): Promise<{ codigo: nu
     .map((x) => ({ codigo: Number(x.codigo), descricao: String(x.descricao ?? "").trim(), valor: Number(x.valor) || Number(x.valorant) || 0 }))
     .sort((a, b) => a.descricao.localeCompare(b.descricao));
 }
+
+/** Atividades municipais (tabela ATIVMUNIC do Questor) de um município — o que o cadastro de empresa valida. */
+export async function getAtividadesMunicipais(uf: string, codigomunic: string | number): Promise<{ codigo: string; descricao: string }[]> {
+  const j = await get<{ dados?: { codigo: string; descricao: string }[] }>(`/lookups/atividades-municipais?uf=${encodeURIComponent(uf)}&codigomunic=${encodeURIComponent(String(codigomunic))}`);
+  return (j.dados ?? []).map((x) => ({ codigo: String(x.codigo), descricao: String(x.descricao ?? "").trim() }));
+}
