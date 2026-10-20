@@ -29,11 +29,19 @@ async function get<T>(path: string): Promise<T> {
       500
     );
   }
-  const res = await fetch(`${BASE}${path}`, {
+  // Uma nova tentativa se a conexão com a API cair no meio ("fetch failed" — oscilação de rede/dyndns).
+  const buscar = () => fetch(`${BASE}${path}`, {
     headers: { "X-API-Key": KEY },
     // dados lidos em tempo real; sem cache do Next
     cache: "no-store",
   });
+  let res: Response;
+  try { res = await buscar(); }
+  catch {
+    await new Promise((r) => setTimeout(r, 1500));
+    try { res = await buscar(); }
+    catch { throw new QuestorError("Não foi possível conectar à API do Questor (servidor fora do ar ou rede instável). Tente de novo em instantes.", 503); }
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
