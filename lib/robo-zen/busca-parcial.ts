@@ -37,6 +37,10 @@ export interface DocTentado {
   problema: string | null;
   /** O documento "parece escaneado" (ou nem deu pra ler)? */
   escaneado: boolean;
+  /** CNPJs VÁLIDOS que o documento cita, quando ele foi descartado por nenhum deles ser o
+   * do cadastro da empresa no Questor (ver conferencia-cnpj.ts). Guardado pra que a
+   * próxima tentativa não precise ler o PDF de novo só pra saber o que ele cita. */
+  cnpjs_lidos?: string[];
 }
 
 /** Documento de onde saiu o CNPJ da última vez. */

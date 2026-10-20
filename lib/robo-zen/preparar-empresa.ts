@@ -27,7 +27,21 @@ import {
   type DocTentado,
   type DocVencedor,
 } from "./busca-parcial";
-import { cnpjValido, sugerirDigitosCnpj } from "./cnpj";
+import { cnpjValido, formatarCnpj, sugerirDigitosCnpj } from "./cnpj";
+import {
+  avaliarDocumentoComReferencia,
+  avisoCnpjNaoConfirmado,
+  cnpjDeReferencia,
+  conferirCnpjComCadastro,
+  digitosDoCnpj,
+  statusCnpjDoEnvioAnteriorErrado,
+  statusCnpjErrado,
+  statusCnpjNaoConfirmado,
+  type CadastroEmpresa,
+  type CausaSemReferencia,
+  type CnpjsDoDocumento,
+} from "./conferencia-cnpj";
+import { cadastroDaEmpresa } from "./cadastro-questor";
 import { ehErroTransitorio, ehStatusTransitorio } from "./transitorio";
 import * as dbz from "./db";
 
@@ -38,6 +52,9 @@ export const MOTIVO_SEM_PDF = "SEM PDF em Contratos";
 export const MOTIVO_SEM_DOC_ELEGIVEL = "SEM DOCUMENTO ELEGÍVEL (só docs fora do escopo)";
 export const MOTIVO_CNPJ_NAO_ENCONTRADO = "CNPJ NÃO ENCONTRADO em nenhum documento";
 export const MOTIVO_CLIENTE_NAO_CADASTRADO = "CLIENTE NÃO CADASTRADO NO QUESTOR";
+/** O CNPJ lido não pôde ser comparado com o do cadastro da empresa no Questor (empresa
+ * fora do cadastro ou sem CNPJ válido lá): fica bloqueada por precaução. */
+export const MOTIVO_CNPJ_NAO_CONFIRMADO = "CNPJ NÃO CONFIRMADO NO QUESTOR";
 export const MOTIVO_ERRO = "ERRO AO CONSULTAR/LER";
 /** A busca do CNPJ foi cortada pelo tempo, mas o que já foi lido ficou guardado:
  * a próxima tentativa continua de onde parou (ver lib/robo-zen/busca-parcial.ts). */
@@ -71,6 +88,15 @@ export interface ResultadoPreparo {
   buscaIncompleta: boolean;
 }
 
+export interface OpcoesPreparo {
+  /** Uma PESSOA confere o CNPJ e o cliente do Zen na tela antes de confirmar o envio (consulta e
+   * envio individuais). Aí, CNPJ que não pôde ser comparado (empresa fora do cadastro, sem CNPJ
+   * válido lá, ou baixada) NÃO bloqueia: a empresa fica pronta COM um aviso visível — é assim que
+   * se envia uma empresa que a pessoa liberou à mão. Na varredura (sem ninguém olhando) é
+   * bloqueio. CNPJ DIFERENTE do cadastro ("puxando CNPJ errado") bloqueia nos dois casos. */
+  confirmacaoManual?: boolean;
+}
+
 /** Dependências que dá pra trocar nos testes (o padrão é o banco de verdade). */
 export interface DepsPreparo {
   enviosDaEmpresa: (codigo: string) => Promise<EnvioConhecido[]>;
@@ -82,6 +108,9 @@ export interface DepsPreparo {
     busca: { documentos: DocTentado[]; vencedor: DocVencedor | null; passos: number }
   ) => Promise<void>;
   limparBuscaParcial: (codigo: string) => Promise<void>;
+  /** Cadastro da empresa no Questor (o CNPJ de referência pra conferir o que o robô lê
+   * nos documentos). Lança se não conseguir consultar. */
+  cadastroDaEmpresa: (codigo: string) => Promise<CadastroEmpresa>;
 }
 
 const depsPadrao: DepsPreparo = {
@@ -89,6 +118,7 @@ const depsPadrao: DepsPreparo = {
   obterBuscaParcial: dbz.obterBuscaParcial,
   salvarBuscaParcial: dbz.salvarBuscaParcial,
   limparBuscaParcial: dbz.limparBuscaParcial,
+  cadastroDaEmpresa,
 };
 
 function resultadoVazio(empresa: Empresa): ResultadoPreparo {
@@ -134,6 +164,9 @@ interface ResultadoExtracao {
    * documento: a busca parou ali SEM registrar esse documento como "ilegível" —
    * quem chamou guarda o que já foi lido e tenta de novo depois. */
   falhaTransitoria: unknown | null;
+  /** Só com CNPJ de referência: documentos que citam CNPJs válidos, NENHUM deles o do
+   * cadastro da empresa (é o que fundamenta o "puxando CNPJ ERRADO"). */
+  outros: CnpjsDoDocumento[];
 }
 
 /** Já lidos antes, sem CNPJ, e o vencedor da última vez (ver busca-parcial.ts). */
@@ -190,12 +223,15 @@ async function extrairDadosComFallback(
   ctx: ContextoGraph,
   elegiveis: ArquivoContrato[],
   prazoFinal: number,
-  memoria: MemoriaBusca = { tentados: new Map(), vencedor: null }
+  memoria: MemoriaBusca = { tentados: new Map(), vencedor: null },
+  referencia: string | null = null
 ): Promise<ResultadoExtracao> {
   const problemas: string[] = [];
   const escaneados: string[] = [];
   const tocados = new Set<string>();
   const tentadosAgora: DocTentado[] = [];
+  const outros: CnpjsDoDocumento[] = [];
+  const alvo = referencia ? digitosDoCnpj(referencia) : null;
   // Na ordem de sempre — só o vencedor da última vez passa pra frente.
   const candidatos = ordenarComVencedor(ordenarCandidatosParaExtrairDados(elegiveis), memoria.vencedor);
   for (let i = 0; i < candidatos.length; i++) {
@@ -203,11 +239,15 @@ async function extrairDadosComFallback(
 
     // Já lido numa tentativa anterior (mesma versão do arquivo) e sem CNPJ: não
     // baixa nem faz OCR de novo — só reaproveita o que ficou registrado.
+    // Exceção: se a lista de CNPJs que ele citava inclui o do cadastro (que pode ter mudado
+    // desde então), vale ler de novo.
     const previo = memoria.tentados.get(candidato.id);
-    if (previo) {
+    const citaOCadastro = !!alvo && !!previo?.cnpjs_lidos?.some((c) => digitosDoCnpj(c) === alvo);
+    if (previo && !citaOCadastro) {
       tocados.add(candidato.id);
       if (previo.problema) problemas.push(previo.problema);
       if (previo.escaneado) escaneados.push(candidato.nome);
+      if (alvo && previo.cnpjs_lidos?.length) outros.push({ arquivo: candidato.nome, cnpjs: previo.cnpjs_lidos });
       continue;
     }
 
@@ -223,6 +263,7 @@ async function extrairDadosComFallback(
         incompleta: true,
         naoLidos,
         totalCandidatos: candidatos.length,
+        outros,
         falhaTransitoria: null,
       };
     }
@@ -249,6 +290,7 @@ async function extrairDadosComFallback(
           incompleta: false,
           naoLidos: 0,
           totalCandidatos: candidatos.length,
+          outros,
           falhaTransitoria: e,
         };
       }
@@ -263,6 +305,47 @@ async function extrairDadosComFallback(
       continue;
     }
     if (dados.pareceEscaneado) escaneados.push(candidato.nome);
+
+    // Com o CNPJ do cadastro em mãos, o que vale é CONFIRMÁ-LO no documento: um contrato cita
+    // vários CNPJs (sócia pessoa jurídica, sindicato, empresa anterior…) e o primeiro válido
+    // que aparece pode ser o de outra empresa — que, sendo cliente do Zen, faria o envio ir
+    // pro cliente errado. O documento que cita o CNPJ do cadastro é usado com esse CNPJ; o que
+    // só cita outros é descartado (e lembrado, pra explicar o "CNPJ errado" se nenhum servir).
+    if (alvo && referencia) {
+      const avaliacao = avaliarDocumentoComReferencia(
+        { nome: candidato.nome, cnpjDoLeitor: dados.cnpj, texto: dados.textoBruto },
+        referencia
+      );
+      if (avaliacao.tipo === "USAR") {
+        return {
+          dados: { ...dados, cnpj: avaliacao.cnpj },
+          arquivoUsado: candidato,
+          problemas,
+          escaneados,
+          tocados,
+          tentadosAgora,
+          incompleta: false,
+          naoLidos: 0,
+          falhaTransitoria: null,
+          totalCandidatos: candidatos.length,
+          outros,
+        };
+      }
+      if (avaliacao.tipo === "DESCARTAR") {
+        problemas.push(avaliacao.problema);
+        outros.push({ arquivo: candidato.nome, cnpjs: avaliacao.cnpjs });
+        tentadosAgora.push({
+          id: candidato.id,
+          nome: candidato.nome,
+          modificado_em: candidato.modificadoEm ?? null,
+          problema: avaliacao.problema,
+          escaneado: !!dados.pareceEscaneado,
+          cnpjs_lidos: avaliacao.cnpjs,
+        });
+        continue;
+      }
+    }
+
     if (!dados.cnpj) {
       const motivo = !dados.textoBruto
         ? "não consegui ler nenhum texto deste arquivo (nem mesmo com OCR) — pode ser um PDF " +
@@ -316,6 +399,7 @@ async function extrairDadosComFallback(
       incompleta: false,
       naoLidos: 0,
       totalCandidatos: candidatos.length,
+      outros,
       falhaTransitoria: null,
     };
   }
@@ -329,8 +413,70 @@ async function extrairDadosComFallback(
     incompleta: false,
     naoLidos: 0,
     totalCandidatos: candidatos.length,
+    outros,
     falhaTransitoria: null,
   };
+}
+
+/** O CNPJ da empresa no cadastro do Questor (referência), ou por que não há um. */
+interface Referencia {
+  cnpj: string | null;
+  /** Só vale quando `cnpj` é null: por que não há referência. */
+  causa: CausaSemReferencia;
+  /** A empresa está baixada (fora da lista de ativas): o CNPJ do cadastro serve pra comparar,
+   * mas a empresa que ainda não recebeu nada não é liberada sozinha (ver `prepararDadosParaEnvio`). */
+  baixada: boolean;
+}
+
+/**
+ * Consulta o cadastro do Questor. Devolve null (e já deixa o resultado como ERRO) se não deu
+ * pra consultar: sem a referência não dá pra saber se o CNPJ lido é o desta empresa, e
+ * seguir sem conferir é justamente o que mandava documentos pro cliente errado. Falha
+ * passageira (rede, 502/503/504) sobe pra quem chamou repetir.
+ */
+async function obterReferencia(
+  empresa: Empresa,
+  deps: DepsPreparo,
+  resultado: ResultadoPreparo
+): Promise<Referencia | null> {
+  try {
+    const cadastro = await deps.cadastroDaEmpresa(empresa.codigo);
+    if (!cadastro.encontrada) return { cnpj: null, causa: "ausente", baixada: false };
+    return { cnpj: cnpjDeReferencia(cadastro.cnpj), causa: "sem_cnpj", baixada: !cadastro.ativa };
+  } catch (e) {
+    if (ehErroTransitorio(e)) throw e;
+    resultado.status =
+      `Não consegui consultar o cadastro de empresas do Questor (${e instanceof Error ? e.message : String(e)}) — ` +
+      "sem o CNPJ do cadastro não dá para conferir se o CNPJ lido é o desta empresa";
+    resultado.motivo = MOTIVO_ERRO;
+    return null;
+  }
+}
+
+/**
+ * CNPJ lido que não ficou confirmado (sem referência pra comparar, ou empresa baixada): a empresa
+ * NÃO fica pronta. Ainda assim
+ * consulta o Zen (só leitura) pelo CNPJ lido, pra mostrar a quem for decidir o nome do
+ * cliente que ele tem lá. Mantém `cnpj`/`documentoCnpjOrigem` (é o que se confere).
+ */
+async function bloquearNaoConfirmada(
+  resultado: ResultadoPreparo,
+  empresa: Empresa,
+  lido: string,
+  causa: CausaSemReferencia
+): Promise<void> {
+  let clienteNoZen: string | null | undefined;
+  if (hasQuestorZenToken()) {
+    try {
+      clienteNoZen = (await consultarCliente(lido)).Nome ?? "";
+    } catch (e) {
+      if (e instanceof ClienteNaoEncontradoError) clienteNoZen = null;
+      else if (!(e instanceof QuestorZenError)) throw e;
+    }
+  }
+  resultado.pronta = false;
+  resultado.motivo = MOTIVO_CNPJ_NAO_CONFIRMADO;
+  resultado.status = statusCnpjNaoConfirmado({ codigo: empresa.codigo, lido, causa, clienteNoZen });
 }
 
 /**
@@ -356,7 +502,10 @@ async function conferirClienteNoQuestor(
     resultado.pronta = true;
   } catch (e) {
     if (e instanceof ClienteNaoEncontradoError) {
-      resultado.status = `${MOTIVO_CLIENTE_NAO_CADASTRADO} (CRM > Clientes)`;
+      // Aqui o CNPJ já foi conferido com o cadastro da empresa: é o CNPJ DELA que não é cliente no Zen.
+      resultado.status =
+        `${MOTIVO_CLIENTE_NAO_CADASTRADO} (CRM > Clientes): o CNPJ ${cnpj}, que confere com o cadastro desta ` +
+        "empresa no Questor, não é cliente no Zen.";
       resultado.motivo = MOTIVO_CLIENTE_NAO_CADASTRADO;
     } else if (e instanceof QuestorZenError) {
       resultado.status = `Erro ao consultar cliente no Questor: ${e.message}`;
@@ -376,7 +525,8 @@ async function conferirClienteNoQuestor(
 export async function prepararDadosParaEnvio(
   ctx: ContextoGraph,
   empresa: Empresa,
-  deps: DepsPreparo = depsPadrao
+  deps: DepsPreparo = depsPadrao,
+  opcoes: OpcoesPreparo = {}
 ): Promise<ResultadoPreparo> {
   const prazoFinal = Date.now() + ORCAMENTO_TEMPO_EXTRACAO_MS;
   const resultado = resultadoVazio(empresa);
@@ -456,6 +606,25 @@ export async function prepararDadosParaEnvio(
   // anterior (já foi lido e conferido no Questor naquela vez) — não precisa
   // baixar nem fazer OCR de novo, só conferir o cliente e mandar o documento novo.
   if (cls.jaEnviados.length > 0 && cls.cnpjConhecido) {
+    // O CNPJ do envio anterior também passa pela conferência com o cadastro: se ele não for o
+    // desta empresa, o documento novo iria pro mesmo cliente errado dos anteriores.
+    const referencia = await obterReferencia(empresa, deps, resultado);
+    if (!referencia) return resultado;
+    const anterior = digitosDoCnpj(cls.cnpjConhecido) ? formatarCnpj(cls.cnpjConhecido) : cls.cnpjConhecido;
+    let avisoNaoConfirmada = "";
+    if (!referencia.cnpj) {
+      if (!opcoes.confirmacaoManual) {
+        resultado.cnpj = cls.cnpjConhecido;
+        resultado.documentoCnpjOrigem = "(CNPJ do envio anterior)";
+        await bloquearNaoConfirmada(resultado, empresa, anterior, referencia.causa);
+        return resultado;
+      }
+      avisoNaoConfirmada = avisoCnpjNaoConfirmado(empresa.codigo, referencia.causa);
+    } else if (digitosDoCnpj(cls.cnpjConhecido) !== digitosDoCnpj(referencia.cnpj)) {
+      resultado.status = statusCnpjDoEnvioAnteriorErrado(anterior, referencia.cnpj);
+      resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
+      return resultado;
+    }
     resultado.cnpj = cls.cnpjConhecido;
     resultado.documentoCnpjOrigem = "(CNPJ do envio anterior)";
     const nomesNovos = cls.novos.map((d) => d.nome).join(", ");
@@ -465,10 +634,15 @@ export async function prepararDadosParaEnvio(
       MOTIVO_PRONTA_DOC_NOVO,
       (nomeCliente) =>
         `${MOTIVO_PRONTA_DOC_NOVO}: ${cls.novos.length} para enviar (${nomesNovos}); ${cls.jaEnviados.length} já enviado(s) ` +
-        `antes (cliente no Questor: ${nomeCliente}, CNPJ do envio anterior).${avisoAlterados}`
+        `antes (cliente no Questor: ${nomeCliente}, CNPJ do envio anterior).${avisoAlterados}${avisoNaoConfirmada}`
     );
     return resultado;
   }
+
+  // O CNPJ desta empresa no cadastro do Questor: é com ele que o CNPJ lido nos documentos é
+  // conferido (um contrato cita vários CNPJs, e o primeiro válido pode ser de outra empresa).
+  const referencia = await obterReferencia(empresa, deps, resultado);
+  if (!referencia) return resultado;
 
   // O que já foi lido numa tentativa anterior desta empresa (e não tinha CNPJ)?
   // Se a tabela não existir ou o banco falhar, segue como antes: a busca só
@@ -518,8 +692,8 @@ export async function prepararDadosParaEnvio(
   // Busca o CNPJ tentando os candidatos em ordem de prioridade — já
   // aproveita essa mesma extração pra marcar quem "parece escaneado"
   // (dados.pareceEscaneado), em vez de reprocessar tudo de novo abaixo.
-  const { dados, arquivoUsado, problemas, escaneados, tocados, tentadosAgora, incompleta, naoLidos, totalCandidatos, falhaTransitoria } =
-    await extrairDadosComFallback(ctx, elegiveis, prazoFinal, { tentados: aprov.tentados, vencedor });
+  const { dados, arquivoUsado, problemas, escaneados, tocados, tentadosAgora, incompleta, naoLidos, totalCandidatos, falhaTransitoria, outros } =
+    await extrairDadosComFallback(ctx, elegiveis, prazoFinal, { tentados: aprov.tentados, vencedor }, referencia.cnpj);
 
   // SharePoint falhou de forma passageira no meio da busca: guarda o que já foi lido
   // (pra não refazer) e devolve a falha — a tentativa se repete depois, sem nenhum
@@ -600,8 +774,14 @@ export async function prepararDadosParaEnvio(
       return resultado;
     }
 
-    // Leu tudo e não achou: resultado final (e a memória parcial não serve mais).
-    resultado.status = `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${detalhe})`;
+    // Leu tudo e não achou: resultado final (e a memória parcial não serve mais). Se havia
+    // CNPJs válidos nos documentos e NENHUM é o do cadastro, o robô estaria puxando o CNPJ
+    // errado: o status diz isso (com o que foi lido), pra quem confere saber onde olhar.
+    const conferencia = conferirCnpjComCadastro(outros, referencia.cnpj);
+    resultado.status =
+      conferencia.tipo === "DIFERENTE"
+        ? statusCnpjErrado(conferencia.lidos, conferencia.cadastro)
+        : `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${detalhe})`;
     resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
     if (busca && memoriaDisponivel) await deps.limparBuscaParcial(empresa.codigo).catch(() => {});
     return resultado;
@@ -625,6 +805,19 @@ export async function prepararDadosParaEnvio(
   resultado.cnpj = dados.cnpj;
   resultado.documentoCnpjOrigem = arquivoUsado?.nome ?? null;
 
+  // Sem CNPJ do cadastro pra comparar, o CNPJ lido não está confirmado: não fica pronta. Empresa
+  // BAIXADA que ainda não recebeu nada também fica de fora até alguém liberar (é a lista dos "CNPJ
+  // não confirmado" que a Júlia revisa; documento de distrato, por exemplo, pode ser o motivo).
+  let avisoNaoConfirmada = "";
+  if (!referencia.cnpj || referencia.baixada) {
+    const causa: CausaSemReferencia = referencia.cnpj ? "baixada" : referencia.causa;
+    if (!opcoes.confirmacaoManual) {
+      await bloquearNaoConfirmada(resultado, empresa, dados.cnpj, causa);
+      return resultado;
+    }
+    avisoNaoConfirmada = avisoCnpjNaoConfirmado(empresa.codigo, causa);
+  }
+
   const avisoEscaneados = escaneados.length > 0 ? `, ${escaneados.length} escaneado(s)/sem texto` : "";
 
   // Se a empresa já tinha envio (mas sem CNPJ aproveitável no registro), o que
@@ -639,7 +832,8 @@ export async function prepararDadosParaEnvio(
       `${avisoEscaneados}, CNPJ extraído de ${arquivoUsado?.nome ?? "?"})` +
       (cls.jaEnviados.length > 0
         ? ` — ${cls.novos.length} novo(s) para enviar, ${cls.jaEnviados.length} já enviado(s) antes.${avisoAlterados}`
-        : "")
+        : "") +
+      avisoNaoConfirmada
   );
 
   return resultado;
