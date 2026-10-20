@@ -72,7 +72,9 @@ export async function POST(req: Request) {
     if (!empresa) {
       return NextResponse.json({ ok: false, erro: `Nenhuma empresa encontrada para "${busca}".` }, { status: 404 });
     }
-    const resultado = await prepararDadosParaEnvio(ctx, empresa);
+    // Consulta com a pessoa olhando a tela: CNPJ que não pôde ser comparado com o cadastro vira aviso
+    // (e não bloqueio); CNPJ diferente do cadastro bloqueia sempre. Ver OpcoesPreparo.
+    const resultado = await prepararDadosParaEnvio(ctx, empresa, undefined, { confirmacaoManual: true });
     return NextResponse.json({ ok: true, origem: "ao_vivo", resultado: serializarResultado(resultado) });
   } catch (e) {
     const status = e instanceof RoboZenSharePointErro ? e.status : 500;

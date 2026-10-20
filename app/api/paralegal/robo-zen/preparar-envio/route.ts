@@ -47,7 +47,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const resultado = await prepararDadosParaEnvio(ctx, empresa);
+    // Envio individual: a pessoa confere CNPJ e cliente no quadro de confirmação (mesma regra da consulta).
+    const resultado = await prepararDadosParaEnvio(ctx, empresa, undefined, { confirmacaoManual: true });
     // `pronta` já exclui quem tem tudo enviado ("JÁ ENVIADA…"); e só vão os
     // documentos que ainda NÃO foram ao Zen (`documentosParaEnviar`), nunca os
     // que já constam em robo_zen_envios — senão o contrato duplicaria no Zen.
