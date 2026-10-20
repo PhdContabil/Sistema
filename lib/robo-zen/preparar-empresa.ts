@@ -9,7 +9,12 @@
 import type { ArquivoContrato, ContextoGraph, Empresa } from "./empresas-sharepoint";
 import { baixarConteudo, listarContratos } from "./empresas-sharepoint";
 import { filtrarDocumentosParaEnviar, ordenarCandidatosParaExtrairDados } from "./filtro-documentos";
-import { type DadosCertidao, extrairDadosCertidao, pdfPareceEscaneado } from "./certidao-parser";
+import {
+  type DadosCertidao,
+  extrairDadosCertidao,
+  lerDeNovoComSegmentacaoAutomatica,
+  pdfPareceEscaneado,
+} from "./certidao-parser";
 import { ClienteNaoEncontradoError, consultarCliente, hasQuestorZenToken, QuestorZenError } from "../questor-zen";
 import {
   classificarEnvios,
@@ -243,7 +248,10 @@ async function extrairDadosComFallback(
     // desde então), vale ler de novo.
     const previo = memoria.tentados.get(candidato.id);
     const citaOCadastro = !!alvo && !!previo?.cnpjs_lidos?.some((c) => digitosDoCnpj(c) === alvo);
-    if (previo && !citaOCadastro) {
+    // Escaneado que só passou pela primeira leitura do OCR (guardado antes da segunda existir, ou
+    // sem referência na época): com referência em mãos vale a segunda leitura, uma única vez.
+    const faltaSegundaLeitura = !!alvo && previo?.escaneado === true && previo.leitura_completa !== true;
+    if (previo && !citaOCadastro && !faltaSegundaLeitura) {
       tocados.add(candidato.id);
       if (previo.problema) problemas.push(previo.problema);
       if (previo.escaneado) escaneados.push(candidato.nome);
@@ -270,8 +278,9 @@ async function extrairDadosComFallback(
 
     tocados.add(candidato.id);
     let dados: DadosCertidao;
+    let bytes: Uint8Array | Buffer;
     try {
-      const bytes = await baixarConteudo(ctx, candidato.id);
+      bytes = await baixarConteudo(ctx, candidato.id);
       dados = await extrairDadosCertidao(bytes);
     } catch (e) {
       // SharePoint pediu pra esperar (429) ou ficou fora do ar por instantes
@@ -301,9 +310,59 @@ async function extrairDadosComFallback(
       // seguro avisar de mais do que deixar passar batido um documento
       // ilegível sem nenhum aviso).
       escaneados.push(candidato.nome);
-      tentadosAgora.push({ id: candidato.id, nome: candidato.nome, modificado_em: candidato.modificadoEm ?? null, problema, escaneado: true });
+      // Falhou ao ler: uma segunda leitura não ajuda (e não deve se repetir a cada tentativa).
+      tentadosAgora.push({
+        id: candidato.id,
+        nome: candidato.nome,
+        modificado_em: candidato.modificadoEm ?? null,
+        problema,
+        escaneado: true,
+        leitura_completa: true,
+      });
       continue;
     }
+
+    // SEGUNDA LEITURA. Com o CNPJ do cadastro em mãos, um documento ESCANEADO que não o confirma
+    // pode ter sido mal lido: a leitura de sempre (bloco único) às vezes atropela os quadros de
+    // um formulário e perde o campo do CNPJ (caso da empresa 302). Lê de novo com a análise
+    // automática de layout e SOMA o texto — nada do que a primeira achou se perde — e o número
+    // novo só vale se for IGUAL ao do cadastro (a conferência abaixo é a mesma de sempre).
+    const avaliar = (d: DadosCertidao) =>
+      alvo && referencia
+        ? avaliarDocumentoComReferencia({ nome: candidato.nome, cnpjDoLeitor: d.cnpj, texto: d.textoBruto }, referencia)
+        : null;
+    let avaliacao = avaliar(dados);
+    let segundaLeitura = false;
+    if (avaliacao && avaliacao.tipo !== "USAR" && dados.pareceEscaneado) {
+      // Sem tempo pra ela: só adia (o documento volta a ser lido do começo na próxima tentativa,
+      // com orçamento novo) — NUNCA registra como "lido sem CNPJ". Se este é o primeiro documento
+      // lido neste passo, ela roda de qualquer jeito: senão a busca nunca sairia do lugar.
+      if (Date.now() >= prazoFinal && tentadosAgora.length > 0) {
+        tocados.delete(candidato.id);
+        return {
+          dados: null,
+          arquivoUsado: null,
+          problemas,
+          escaneados,
+          tocados,
+          tentadosAgora,
+          incompleta: true,
+          naoLidos: candidatos.slice(i).filter((c) => c.id === candidato.id || !memoria.tentados.has(c.id)).length,
+          totalCandidatos: candidatos.length,
+          outros,
+          falhaTransitoria: null,
+        };
+      }
+      segundaLeitura = true;
+      try {
+        dados = await lerDeNovoComSegmentacaoAutomatica(dados, bytes);
+        avaliacao = avaliar(dados);
+      } catch (e) {
+        // A segunda leitura é um complemento: se ela falha, vale o que a primeira deu.
+        problemas.push(`${candidato.nome}: a segunda leitura do OCR falhou (${e instanceof Error ? e.message : String(e)})`);
+      }
+    }
+    const leituraCompleta = segundaLeitura ? true : undefined;
     if (dados.pareceEscaneado) escaneados.push(candidato.nome);
 
     // Com o CNPJ do cadastro em mãos, o que vale é CONFIRMÁ-LO no documento: um contrato cita
@@ -311,11 +370,7 @@ async function extrairDadosComFallback(
     // que aparece pode ser o de outra empresa — que, sendo cliente do Zen, faria o envio ir
     // pro cliente errado. O documento que cita o CNPJ do cadastro é usado com esse CNPJ; o que
     // só cita outros é descartado (e lembrado, pra explicar o "CNPJ errado" se nenhum servir).
-    if (alvo && referencia) {
-      const avaliacao = avaliarDocumentoComReferencia(
-        { nome: candidato.nome, cnpjDoLeitor: dados.cnpj, texto: dados.textoBruto },
-        referencia
-      );
+    if (avaliacao) {
       if (avaliacao.tipo === "USAR") {
         return {
           dados: { ...dados, cnpj: avaliacao.cnpj },
@@ -341,6 +396,7 @@ async function extrairDadosComFallback(
           problema: avaliacao.problema,
           escaneado: !!dados.pareceEscaneado,
           cnpjs_lidos: avaliacao.cnpjs,
+          leitura_completa: leituraCompleta,
         });
         continue;
       }
@@ -360,6 +416,7 @@ async function extrairDadosComFallback(
         modificado_em: candidato.modificadoEm ?? null,
         problema,
         escaneado: !!dados.pareceEscaneado,
+        leitura_completa: leituraCompleta,
       });
       continue;
     }
@@ -386,6 +443,7 @@ async function extrairDadosComFallback(
         modificado_em: candidato.modificadoEm ?? null,
         problema,
         escaneado: !!dados.pareceEscaneado,
+        leitura_completa: leituraCompleta,
       });
       continue;
     }

@@ -41,6 +41,10 @@ export interface DocTentado {
    * do cadastro da empresa no Questor (ver conferencia-cnpj.ts). Guardado pra que a
    * próxima tentativa não precise ler o PDF de novo só pra saber o que ele cita. */
   cnpjs_lidos?: string[];
+  /** Documento escaneado já lido pelas DUAS leituras do OCR (ver lerDeNovoComSegmentacaoAutomatica
+   * em certidao-parser.ts), ou que nem adianta ler de novo (falhou ao ler). Um escaneado SEM esta
+   * marca foi lido só pela primeira leitura: quando há CNPJ de referência ele é lido outra vez. */
+  leitura_completa?: boolean;
 }
 
 /** Documento de onde saiu o CNPJ da última vez. */
