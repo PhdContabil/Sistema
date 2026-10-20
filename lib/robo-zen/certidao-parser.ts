@@ -18,7 +18,7 @@
 
 import path from "node:path";
 import { cnpjValido } from "./cnpj";
-import { createWorker } from "tesseract.js";
+import { createWorker, PSM } from "tesseract.js";
 
 export const MIN_CARACTERES_TEXTO_NATIVO = 40;
 
@@ -112,6 +112,9 @@ export async function extrairTextoNativo(bytes: Uint8Array | Buffer): Promise<st
 // verdade; o certo é nunca deixar o bitmap passar desse tamanho.
 const MAX_LADO_PIXMAP_OCR = 6000;
 
+/** Como o Tesseract divide a página em regiões de texto (ver extrairTextoOcr). */
+export type SegmentacaoOcr = "bloco" | "automatica";
+
 /**
  * Extrai texto via OCR (tesseract.js) — só as primeiras `paginas` páginas,
  * igual ao `_extrair_texto_ocr(paginas=2)` do Python, já que o CNPJ
@@ -123,7 +126,8 @@ const MAX_LADO_PIXMAP_OCR = 6000;
  */
 export async function extrairTextoOcr(
   bytes: Uint8Array | Buffer,
-  paginas = 2
+  paginas = 2,
+  segmentacao: SegmentacaoOcr = "bloco"
 ): Promise<string> {
   const mupdf = await carregarMupdf();
   const doc = mupdf.Document.openDocument(bytes, "application/pdf");
@@ -132,6 +136,13 @@ export async function extrairTextoOcr(
     cacheMethod: "none",
     gzip: false,
   });
+  // "bloco" = o padrão do tesseract.js (trata a página como UM bloco de texto) — a leitura de
+  // sempre do robô. "automatica" = análise automática de layout (a do tesseract na linha de
+  // comando): lê melhor formulários em quadros, mas em outras páginas lê MENOS texto — por isso
+  // não substitui a primeira, só complementa (ver lerDeNovoComSegmentacaoAutomatica).
+  if (segmentacao === "automatica") {
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
+  }
 
   try {
     const partes: string[] = [];
@@ -173,6 +184,31 @@ export async function extrairTextoOcr(
     // reaproveitada pela Vercel.
     mupdf.emptyStore();
   }
+}
+
+/**
+ * SEGUNDA leitura de um documento escaneado, com a análise automática de layout.
+ *
+ * Existe por causa de um caso real (empresa 302, "Req. de Empresario 19.12.16.pdf"): o CNPJ está
+ * bem nítido no campo "Número de inscrição no CNPJ" do requerimento, mas a leitura em "bloco
+ * único" (a de sempre) atropela o quadro e devolve só lixo ("A 1 O O") depois do título do
+ * campo — o robô nunca chegou a ter o número. Na análise automática o mesmo OCR lê
+ * "74.371.014/0001-58" certinho. O inverso também acontece (outras páginas saem com menos texto
+ * na análise automática), então as duas leituras se SOMAM: o texto da primeira vem antes, nada
+ * que a primeira achou se perde.
+ *
+ * Devolve os mesmos dados da primeira leitura, com o texto somado e o CNPJ reavaliado nele.
+ * Quem chama só usa isto quando já tem o CNPJ de referência (cadastro do Questor) pra conferir:
+ * um número que só apareceu aqui só vale se for IGUAL ao da referência.
+ */
+export async function lerDeNovoComSegmentacaoAutomatica(
+  primeira: DadosCertidao,
+  bytes: Uint8Array | Buffer
+): Promise<DadosCertidao> {
+  const segundoTexto = await extrairTextoOcr(bytes, 2, "automatica");
+  const junto = [primeira.textoBruto, segundoTexto].filter((t) => t && t.trim()).join("\n");
+  const reavaliado = parseCertidao(junto, true);
+  return { ...primeira, cnpj: reavaliado.cnpj ?? primeira.cnpj, textoBruto: junto, pareceEscaneado: true };
 }
 
 /**
