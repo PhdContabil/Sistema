@@ -8,7 +8,7 @@ import test, { before, mock } from "node:test";
 import assert from "node:assert/strict";
 import type { CadastroEmpresa } from "./conferencia-cnpj";
 import type { DepsPreparo } from "./preparar-empresa";
-import type { BuscaParcial, DocTentado, DocVencedor } from "./busca-parcial";
+import { VERSAO_LEITURA, type BuscaParcial, type DocTentado, type DocVencedor } from "./busca-parcial";
 import { MOTIVO_PRONTA_DOC_NOVO } from "./novidades-envio";
 import type { EnvioConhecido } from "./novidades-envio";
 
@@ -57,6 +57,7 @@ mock.module("./certidao-parser", {
       const texto = textosPorId.get(id) ?? "";
       const m = texto.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g) ?? [];
       const { cnpjValido } = await import("./cnpj");
+      if (texto === "__ERRO_AO_LER__") throw new Error("PDF corrompido");
       const gasto = msGastosNaLeituraPorId.get(id);
       if (gasto && relogioFalso) mock.timers.tick(gasto); // OCR lento: o relógio anda
       return { cnpj: m.find((c) => cnpjValido(c)) ?? m[0] ?? null, textoBruto: texto, pareceEscaneado: escaneadosPorId.has(id) };
@@ -71,7 +72,8 @@ mock.module("./certidao-parser", {
       const { cnpjValido } = await import("./cnpj");
       return { ...primeira, cnpj: m.find((c) => cnpjValido(c)) ?? m[0] ?? primeira.cnpj, textoBruto: junto, pareceEscaneado: true };
     },
-    pdfPareceEscaneado: async () => false,
+    // A checagem rápida (sem OCR) dos documentos que a busca nem abriu: escaneado é o que o cenário disser.
+    pdfPareceEscaneado: async (bytes: Buffer) => escaneadosPorId.has(bytes.toString()),
   },
 });
 mock.module("../questor-zen", {
@@ -127,9 +129,6 @@ function montarDeps(opcoes: {
     obterBuscaParcial: async (codigo) => memoria.get(codigo) ?? null,
     salvarBuscaParcial: async (codigo, busca: { documentos: DocTentado[]; vencedor: DocVencedor | null; passos: number }) => {
       memoria.set(codigo, { ...busca, atualizado_em: new Date().toISOString() });
-    },
-    limparBuscaParcial: async (codigo) => {
-      memoria.delete(codigo);
     },
     cadastroDaEmpresa: async () => {
       if (opcoes.cadastro instanceof Error) throw opcoes.cadastro;
@@ -377,27 +376,13 @@ test("documento novo numa empresa já enviada: CNPJ do envio anterior DIFERENTE 
 test("memória da busca: a segunda tentativa não relê o documento que só citava outros CNPJs, e continua 'ERRADO'", async () => {
   cenario([{ nome: "Contrato Social.pdf", texto: `Sindicato ${SINDICATO}` }], { [SINDICATO]: "OUTRA EMPRESA S/A" });
   const memoria = new Map<string, BuscaParcial>();
-  // 1ª tentativa termina no ERRADO e (como é resultado final) limpa a memória; força uma memória
-  // como a de uma busca interrompida, com o que o documento citava.
+  // A 1ª tentativa termina no ERRADO (resultado final) e DEIXA guardado o que o documento citava.
   const primeira = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
   assert.match(primeira.status, /puxando CNPJ ERRADO/);
   assert.equal(baixados.length, 1);
+  assert.deepEqual(memoria.get("576")?.documentos.map((d) => d.cnpjs_lidos), [[SINDICATO]]);
+  assert.equal(memoria.get("576")?.passos, 0, "resultado final: a contagem de tentativas volta a zero");
 
-  memoria.set("576", {
-    documentos: [
-      {
-        id: "id-0",
-        nome: "Contrato Social.pdf",
-        modificado_em: "2026-01-01T00:00:00Z",
-        problema: "Contrato Social.pdf: li o CNPJ 62.811.096/0001-25, mas ele não é o CNPJ desta empresa",
-        escaneado: false,
-        cnpjs_lidos: [SINDICATO],
-      },
-    ],
-    vencedor: null,
-    passos: 1,
-    atualizado_em: new Date().toISOString(),
-  });
   baixados = [];
   const segunda = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
   assert.deepEqual(baixados, [], "não relê o PDF que já se sabe que cita só outros CNPJs");
@@ -419,6 +404,7 @@ test("memória da busca: se o cadastro passou a ser um CNPJ que o documento cita
             problema: "Contrato Social.pdf: li o CNPJ ...",
             escaneado: false,
             cnpjs_lidos: [SINDICATO, DA_EMPRESA],
+            leitura_versao: VERSAO_LEITURA,
           },
         ],
         vencedor: null,
@@ -582,6 +568,7 @@ const doc0 = (extra: Partial<DocTentado>): DocTentado => ({
   modificado_em: "2026-01-01T00:00:00Z",
   problema: "Req.pdf: tinha texto, mas não encontrei um CNPJ nele",
   escaneado: true,
+  leitura_versao: VERSAO_LEITURA,
   ...extra,
 });
 const memoriaCom = (d: DocTentado) =>
@@ -627,4 +614,272 @@ test("memória: sem referência (empresa fora do cadastro) o escaneado guardado 
   await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: { encontrada: false }, memoria: memoriaCom(doc0({})) }));
   assert.deepEqual(baixados, []);
   assert.deepEqual(segundasLeituras, []);
+});
+
+// ------------------------------------------------------------------
+// Reaproveitar a leitura: arquivo igual + cadastro igual = não baixa nem faz OCR de novo
+// ------------------------------------------------------------------
+
+const DIAS = 24 * 3_600_000;
+const CONTRATO_COM_CNPJ = { nome: "Contrato Social.pdf", texto: `Empresa ${DA_EMPRESA}.`, escaneado: true };
+const ZEN_OK = { [DA_EMPRESA]: "EMPRESA TESTE LTDA" };
+
+/** Roda a 1ª varredura (guarda a memória) e zera os contadores pra medir só a 2ª. */
+async function primeiraVarredura(opcoes: { cadastro: CadastroEmpresa; memoria: Map<string, BuscaParcial> }) {
+  const r = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps(opcoes));
+  baixados = [];
+  consultasAoZen = [];
+  segundasLeituras = [];
+  return r;
+}
+
+test("reaproveitar: achou o CNPJ — a varredura seguinte não baixa nada, dá o mesmo resultado e ainda consulta o Zen", async () => {
+  cenario([CONTRATO_COM_CNPJ], ZEN_OK);
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.equal(a.pronta, true);
+  const guardado = memoria.get("576")?.vencedor;
+  assert.equal(guardado?.cnpj, DA_EMPRESA);
+  assert.equal(guardado?.leitura_versao, VERSAO_LEITURA);
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, [], "nada baixado: o arquivo e o cadastro são os mesmos");
+  assert.deepEqual(segundasLeituras, []);
+  assert.equal(b.pronta, true);
+  assert.equal(b.motivo, MOTIVO_PRONTA);
+  assert.equal(b.cnpj, DA_EMPRESA);
+  assert.equal(b.documentoCnpjOrigem, "Contrato Social.pdf");
+  assert.equal(b.qtdDocumentosEscaneados, 1, "o 'parece escaneado' também vem do guardado");
+  assert.deepEqual(b.documentosEscaneados, ["Contrato Social.pdf"]);
+  assert.deepEqual(consultasAoZen, [DA_EMPRESA.replace(/\D/g, "")], "o cliente no Zen é conferido de novo (pode ter mudado)");
+});
+
+test("reaproveitar: o cliente no Zen continua sendo conferido a cada varredura (ele pode ser cadastrado depois)", async () => {
+  cenario([CONTRATO_COM_CNPJ], {});
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.equal(a.motivo, MOTIVO_CLIENTE_NAO_CADASTRADO);
+
+  clientesDoZen.set(DA_EMPRESA.replace(/\D/g, ""), "EMPRESA TESTE LTDA"); // alguém cadastrou o cliente no Zen
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, []);
+  assert.equal(b.pronta, true, "sem reler o PDF, a empresa passa a PRONTA assim que o cliente existe no Zen");
+});
+
+test("reaproveitar: o arquivo foi trocado no SharePoint (outra data) — é lido de novo", async () => {
+  cenario([CONTRATO_COM_CNPJ], ZEN_OK);
+  const memoria = new Map<string, BuscaParcial>();
+  await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  arquivosDaPasta[0].modificadoEm = "2026-03-01T00:00:00Z";
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-0"]);
+  assert.equal(b.pronta, true);
+  assert.equal(memoria.get("576")?.vencedor?.modificado_em, "2026-03-01T00:00:00Z", "guarda a versão nova");
+});
+
+test("reaproveitar: o CNPJ do cadastro mudou — o guardado não serve e o documento é lido de novo", async () => {
+  cenario([{ nome: "Contrato Social.pdf", texto: `Empresa ${DA_EMPRESA}. Sócia ${SOCIA}.` }], { [DA_EMPRESA]: "A", [SOCIA]: "B" });
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.equal(a.cnpj, DA_EMPRESA);
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(SOCIA), memoria }));
+  assert.deepEqual(baixados, ["id-0"]);
+  assert.equal(b.cnpj, SOCIA);
+});
+
+test("reaproveitar: CNPJ lido SEM referência não é usado depois que o cadastro aparece (nunca vai pro cliente errado)", async () => {
+  cenario([{ nome: "Contrato Social.pdf", texto: `Sindicato ${SINDICATO}. Empresa ${DA_EMPRESA}.` }], {
+    [SINDICATO]: "OUTRA EMPRESA S/A",
+    [DA_EMPRESA]: "EMPRESA TESTE LTDA",
+  });
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: { encontrada: false }, memoria });
+  assert.equal(a.motivo, MOTIVO_CNPJ_NAO_CONFIRMADO);
+  assert.equal(a.cnpj, SINDICATO, "sem referência vale o primeiro CNPJ válido — que aqui é o do sindicato");
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-0"], "o cadastro agora existe e é outro: lê de novo");
+  assert.equal(b.pronta, true);
+  assert.equal(b.cnpj, DA_EMPRESA);
+  assert.ok(!consultasAoZen.includes(SINDICATO.replace(/\D/g, "")), "o cliente do sindicato nunca é o escolhido");
+});
+
+test("reaproveitar: sem referência (fora do cadastro), o CNPJ guardado vale e o resultado é o mesmo", async () => {
+  cenario([CONTRATO_COM_CNPJ], ZEN_OK);
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: { encontrada: false }, memoria });
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: { encontrada: false }, memoria }));
+  assert.deepEqual(baixados, []);
+  assert.equal(b.motivo, a.motivo);
+  assert.equal(b.status, a.status);
+  assert.equal(b.cnpj, a.cnpj);
+});
+
+test("reaproveitar: guardado por uma versão antiga do leitor (ou sem versão) é ignorado", async () => {
+  for (const versao of [undefined, VERSAO_LEITURA - 1]) {
+    cenario([CONTRATO_COM_CNPJ], ZEN_OK);
+    const memoria = new Map<string, BuscaParcial>();
+    await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+    const g = memoria.get("576")!;
+    memoria.set("576", { ...g, vencedor: { ...g.vencedor!, leitura_versao: versao } });
+    await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+    assert.deepEqual(baixados, ["id-0"], `versão ${versao}: lê de novo`);
+    assert.equal(memoria.get("576")?.vencedor?.leitura_versao, VERSAO_LEITURA, "e guarda com a versão de hoje");
+  }
+});
+
+test("reaproveitar: passou da validade (90 dias) — lê de novo, como revalidação de segurança", async () => {
+  cenario([CONTRATO_COM_CNPJ], ZEN_OK);
+  const memoria = new Map<string, BuscaParcial>();
+  await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  const g = memoria.get("576")!;
+
+  memoria.set("576", { ...g, atualizado_em: new Date(Date.now() - 89 * DIAS).toISOString() });
+  await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, [], "89 dias: ainda vale");
+
+  memoria.set("576", { ...g, atualizado_em: new Date(Date.now() - 91 * DIAS).toISOString() });
+  await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-0"], "91 dias: lê de novo");
+});
+
+test("reaproveitar: 'li tudo e não achei' também fica guardado — a varredura seguinte não baixa nada e dá o mesmo status", async () => {
+  cenario([{ nome: "Req.pdf", texto: "lixo", escaneado: true, segundoTexto: "mais lixo" }]);
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.equal(a.motivo, MOTIVO_CNPJ_NAO_ENCONTRADO);
+  assert.equal(memoria.get("576")?.documentos.length, 1);
+  assert.equal(memoria.get("576")?.passos, 0);
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, [], "nem baixa o PDF, nem faz as duas leituras do OCR");
+  assert.deepEqual(segundasLeituras, []);
+  assert.equal(b.motivo, a.motivo);
+  assert.equal(b.status, a.status);
+  assert.equal(b.qtdDocumentosEscaneados, 1);
+});
+
+test("reaproveitar: apareceu um documento NOVO — só ele é lido, e o CNPJ que ele traz vale", async () => {
+  cenario([{ nome: "Req.pdf", texto: "lixo", escaneado: true, segundoTexto: "mais lixo" }], ZEN_OK);
+  const memoria = new Map<string, BuscaParcial>();
+  await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  arquivosDaPasta.push({ id: "id-1", nome: "Alteracao contratual.pdf", modificadoEm: "2026-02-01T00:00:00Z" });
+  textosPorId.set("id-1", `Empresa ${DA_EMPRESA}`);
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-1"], "o que já foi lido sem CNPJ não é aberto de novo");
+  assert.equal(b.pronta, true);
+  assert.equal(b.cnpj, DA_EMPRESA);
+  assert.equal(b.documentoCnpjOrigem, "Alteracao contratual.pdf");
+});
+
+test("reaproveitar: 'li tudo e não achei' + arquivo alterado — só o alterado é lido de novo", async () => {
+  cenario(
+    [
+      { nome: "Req.pdf", texto: "lixo", escaneado: true, segundoTexto: "mais lixo" },
+      { nome: "Outro.pdf", texto: "outro lixo" },
+    ],
+    ZEN_OK
+  );
+  const memoria = new Map<string, BuscaParcial>();
+  await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  arquivosDaPasta[1].modificadoEm = "2026-04-01T00:00:00Z";
+  textosPorId.set("id-1", `Agora tem o CNPJ ${DA_EMPRESA}`);
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-1"]);
+  assert.equal(b.pronta, true);
+});
+
+test("reaproveitar: o 'parece escaneado' dos outros documentos também não obriga a baixá-los de novo", async () => {
+  cenario(
+    [
+      { nome: "Contrato Social.pdf", texto: `Empresa ${DA_EMPRESA}.` },
+      { nome: "Aditivo 1.pdf", texto: "x", escaneado: true },
+      { nome: "Aditivo 2.pdf", texto: "y" },
+    ],
+    ZEN_OK
+  );
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.equal(a.documentoCnpjOrigem, "Contrato Social.pdf");
+  assert.deepEqual(a.documentosEscaneados, ["Aditivo 1.pdf"]);
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, [], "nenhum dos três é baixado");
+  assert.deepEqual(b.documentosEscaneados, ["Aditivo 1.pdf"]);
+  assert.equal(b.qtdDocumentosEscaneados, 1);
+});
+
+test("reaproveitar: a checagem de 'escaneado' guardada NÃO conta como documento lido sem CNPJ (se o vencedor sumir, os outros são lidos)", async () => {
+  cenario(
+    [
+      { nome: "Contrato Social.pdf", texto: `Empresa ${DA_EMPRESA}.` },
+      { nome: "Aditivo.pdf", texto: `Aditivo da empresa ${DA_EMPRESA}.` },
+    ],
+    ZEN_OK
+  );
+  const memoria = new Map<string, BuscaParcial>();
+  await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.ok(memoria.get("576")?.documentos.every((d) => d.apenas_escaneio));
+
+  // alguém apagou o contrato social da pasta: o aditivo tem que ser lido (não pode ser dado como "já lido sem CNPJ")
+  arquivosDaPasta.splice(0, 1);
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-1"]);
+  assert.equal(b.pronta, true);
+  assert.equal(b.documentoCnpjOrigem, "Aditivo.pdf");
+});
+
+test("reaproveitar: busca que desistiu (tentativas esgotadas) guarda o que leu e a varredura seguinte continua nos documentos que faltam", async () => {
+  cenario(
+    [
+      { nome: "Req.pdf", texto: "lixo", escaneado: true, segundoTexto: "mais lixo" },
+      { nome: "Outro.pdf", texto: `Empresa ${DA_EMPRESA}` },
+    ],
+    ZEN_OK
+  );
+  const memoria = new Map<string, BuscaParcial>([
+    ["576", { documentos: [doc0({ leitura_completa: true })], vencedor: null, passos: 8, atualizado_em: new Date().toISOString() }],
+  ]);
+  const a = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.match(a.status, /desisti depois de 8 tentativas/);
+  assert.deepEqual(baixados, []);
+  assert.equal(memoria.get("576")?.passos, 0, "a contagem recomeça");
+  assert.equal(memoria.get("576")?.documentos.length, 1, "e o que foi lido continua guardado");
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, ["id-1"], "só o documento que ainda não tinha sido lido");
+  assert.equal(b.pronta, true);
+});
+
+test("reaproveitar: sem nada guardado de novo, a varredura não escreve no banco à toa", async () => {
+  cenario([CONTRATO_COM_CNPJ], ZEN_OK);
+  const memoria = new Map<string, BuscaParcial>();
+  await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  const deps = montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria });
+  let gravacoes = 0;
+  const gravar = deps.salvarBuscaParcial;
+  deps.salvarBuscaParcial = async (...args) => {
+    gravacoes++;
+    return gravar(...args);
+  };
+  await prepararDadosParaEnvio(ctx, EMPRESA, deps);
+  assert.equal(gravacoes, 0);
+});
+
+test("reaproveitar: documento que falhou ao ler e o que só tinha um CNPJ inválido também não são lidos de novo (mesmo arquivo)", async () => {
+  cenario([
+    { nome: "Corrompido.pdf", texto: "__ERRO_AO_LER__" },
+    { nome: "Ruim.pdf", texto: `CNPJ ${INVALIDO}` },
+  ]);
+  const memoria = new Map<string, BuscaParcial>();
+  const a = await primeiraVarredura({ cadastro: cadastro(DA_EMPRESA), memoria });
+  assert.equal(a.motivo, MOTIVO_CNPJ_NAO_ENCONTRADO);
+  assert.match(a.status, /Corrompido\.pdf: erro ao ler \(PDF corrompido\)/);
+  assert.match(a.status, /Ruim\.pdf: li o CNPJ 11\.222\.333\/0001-82, mas ele não passa na conferência/);
+
+  const b = await prepararDadosParaEnvio(ctx, EMPRESA, montarDeps({ cadastro: cadastro(DA_EMPRESA), memoria }));
+  assert.deepEqual(baixados, []);
+  assert.equal(b.status, a.status);
+  assert.ok(memoria.get("576")?.documentos.every((d) => d.leitura_versao === VERSAO_LEITURA));
 });
