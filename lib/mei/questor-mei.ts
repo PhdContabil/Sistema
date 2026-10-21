@@ -63,6 +63,35 @@ export interface MeiItem {
 
 let cache: { t: number; v: MeiItem[] } | null = null;
 const TTL = 10 * 60 * 1000;
+// Cache compartilhado entre as instâncias da Vercel (Storage do Supabase, bucket privado cache-nucleo):
+// montar a lista são 3 consultas pesadas ao Questor (~8 s de CPU). Vale 6 h; "Atualizar dados",
+// cadastro de MEI novo e alterações na ficha forçam a atualização.
+const TTL_PERSISTIDO = 6 * 60 * 60 * 1000;
+const BUCKET_CACHE = "cache-nucleo";
+const ARQ_CACHE = "mei-lista.json";
+async function lerPersistido(): Promise<{ t: number; v: MeiItem[] } | null> {
+  try {
+    const { supabaseAdmin } = await import("@/lib/societario/supabase");
+    const { data } = await supabaseAdmin().storage.from(BUCKET_CACHE).download(ARQ_CACHE);
+    if (!data) return null;
+    const c = JSON.parse(await data.text()) as { t: number; v: MeiItem[] };
+    return Array.isArray(c?.v) && Date.now() - c.t < TTL_PERSISTIDO ? c : null;
+  } catch { return null; }
+}
+async function salvarPersistido(c: { t: number; v: MeiItem[] }) {
+  try {
+    const { supabaseAdmin } = await import("@/lib/societario/supabase");
+    await supabaseAdmin().storage.from(BUCKET_CACHE).upload(ARQ_CACHE, JSON.stringify(c), { upsert: true, contentType: "application/json" });
+  } catch { /* cache é só otimização */ }
+}
+/** Descarta o cache da lista (ex.: MEI novo cadastrado). */
+export async function invalidarListaMEI() {
+  cache = null;
+  try {
+    const { supabaseAdmin } = await import("@/lib/societario/supabase");
+    await supabaseAdmin().storage.from(BUCKET_CACHE).remove([ARQ_CACHE]);
+  } catch { /* ignora */ }
+}
 export const AVULSO_SALAO = 53278;
 const ATIVO_ATE = "2100-12-31";
 
@@ -78,6 +107,7 @@ const ATIVO_ATE = "2100-12-31";
  */
 export async function listaMEI(forcar = false): Promise<MeiItem[]> {
   if (!forcar && cache && Date.now() - cache.t < TTL) return cache.v;
+  if (!forcar) { const p = await lerPersistido(); if (p) { cache = p; return p.v; } }
   const [me, r] = await Promise.all([
     q("/mei/empresas", { limit: 5000 }),
     q("/empresas/cadastro", { apenas_ativas: "false", detalhado: "true" }),
@@ -127,6 +157,7 @@ export async function listaMEI(forcar = false): Promise<MeiItem[]> {
   }
   out.sort((a, b) => a.cod - b.cod);
   cache = { t: Date.now(), v: out };
+  await salvarPersistido(cache);
   return out;
 }
 

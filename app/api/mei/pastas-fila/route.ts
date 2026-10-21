@@ -20,7 +20,8 @@ export async function GET(req: Request) {
   if (!bearerConfere(req, process.env.MEI_PASTAS_TOKEN, process.env.PARALEGAL_PASTAS_TOKEN)) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
-  const lista = await listaMEI(true);
+  // Usa o cache (6 h, invalidado quando um MEI é cadastrado pelo Núcleo) — antes refazia a lista inteira a cada consulta.
+  const lista = await listaMEI(false);
   const maxCod = lista.reduce((m, x) => Math.max(m, Number(x.cod) || 0), 0);
   const desdeParam = new URL(req.url).searchParams.get("desde");
   if (desdeParam === null || desdeParam === "") return NextResponse.json({ maxNos: maxCod, itens: [] });

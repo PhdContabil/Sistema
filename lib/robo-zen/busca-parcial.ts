@@ -25,7 +25,9 @@ export const MAX_PASSOS_BUSCA = 8;
 /** Passado esse tempo, o que ficou guardado de uma busca incompleta não vale mais
  * (os arquivos podem ter mudado de jeito que o SharePoint não acusou, o leitor de
  * PDF pode ter melhorado...): a busca recomeça do zero. */
-export const VALIDADE_BUSCA_PARCIAL_MS = 7 * 24 * 3_600_000;
+// 90 dias (era 7): com a varredura semanal, 7 dias fazia TODA varredura refazer o OCR de todos os PDFs,
+// o que mais gastava CPU na Vercel. Arquivo trocado no SharePoint continua sendo relido (id + data de modificação).
+export const VALIDADE_BUSCA_PARCIAL_MS = 90 * 24 * 3_600_000;
 
 /** Documento já lido nesta empresa que NÃO tinha CNPJ. */
 export interface DocTentado {

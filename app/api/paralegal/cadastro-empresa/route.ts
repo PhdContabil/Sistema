@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 import { criarCadastroEmpresa, QuestorError, type DadosCadastroEmpresa } from "@/lib/questor";
 import { gravacaoLiberada } from "@/lib/mei/api";
+import { invalidarListaMEI } from "@/lib/mei/questor-mei";
 
 // Criação (com pré-visualização via dry_run) de empresa nova no Questor —
 // migrado de /api/cadastro-empresa do Paralegal System (index.html antigo).
@@ -70,7 +71,8 @@ export async function POST(req: Request) {
       confirmar: Boolean(body.confirmar),
       idempotencyKey: typeof body.idempotency_key === "string" ? body.idempotency_key : undefined,
     });
-    return NextResponse.json(simulacaoMei ? { ...corpo, simulacao_mei: true } : corpo, { status: ok ? 200 : status || 502 });
+    if (ok && body.mei && !body.dry_run) await invalidarListaMEI(); // MEI novo aparece na hora na lista
+  return NextResponse.json(simulacaoMei ? { ...corpo, simulacao_mei: true } : corpo, { status: ok ? 200 : status || 502 });
   } catch (e) {
     const status = e instanceof QuestorError ? e.status : 502;
     return NextResponse.json({ erro: e instanceof Error ? e.message : "Falha ao criar a empresa no Questor." }, { status });
