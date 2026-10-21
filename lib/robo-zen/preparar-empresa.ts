@@ -28,6 +28,7 @@ import {
   MAX_PASSOS_BUSCA,
   mesmaVersao,
   ordenarComVencedor,
+  VERSAO_LEITURA,
   type BuscaParcial,
   type DocTentado,
   type DocVencedor,
@@ -112,7 +113,6 @@ export interface DepsPreparo {
     codigo: string,
     busca: { documentos: DocTentado[]; vencedor: DocVencedor | null; passos: number }
   ) => Promise<void>;
-  limparBuscaParcial: (codigo: string) => Promise<void>;
   /** Cadastro da empresa no Questor (o CNPJ de referência pra conferir o que o robô lê
    * nos documentos). Lança se não conseguir consultar. */
   cadastroDaEmpresa: (codigo: string) => Promise<CadastroEmpresa>;
@@ -122,7 +122,6 @@ const depsPadrao: DepsPreparo = {
   enviosDaEmpresa: dbz.enviosDaEmpresa,
   obterBuscaParcial: dbz.obterBuscaParcial,
   salvarBuscaParcial: dbz.salvarBuscaParcial,
-  limparBuscaParcial: dbz.limparBuscaParcial,
   cadastroDaEmpresa,
 };
 
@@ -172,12 +171,16 @@ interface ResultadoExtracao {
   /** Só com CNPJ de referência: documentos que citam CNPJs válidos, NENHUM deles o do
    * cadastro da empresa (é o que fundamenta o "puxando CNPJ ERRADO"). */
   outros: CnpjsDoDocumento[];
+  /** O CNPJ veio do que ficou guardado (arquivo na mesma versão): nada foi baixado nem lido. */
+  reaproveitou?: boolean;
 }
 
 /** Já lidos antes, sem CNPJ, e o vencedor da última vez (ver busca-parcial.ts). */
 interface MemoriaBusca {
   tentados: Map<string, DocTentado>;
   vencedor: ArquivoContrato | null;
+  /** O vencedor com o CNPJ que se leu dele — dá pra usar sem abrir o PDF (ver `aproveitarBuscaParcial`). */
+  vencedorLido?: DocVencedor | null;
 }
 
 // Orçamento de tempo (ms), a partir do início de `prepararDadosParaEnvio`,
@@ -239,6 +242,31 @@ async function extrairDadosComFallback(
   const alvo = referencia ? digitosDoCnpj(referencia) : null;
   // Na ordem de sempre — só o vencedor da última vez passa pra frente.
   const candidatos = ordenarComVencedor(ordenarCandidatosParaExtrairDados(elegiveis), memoria.vencedor);
+
+  // O documento que deu o CNPJ da última vez continua o mesmo (mesmo id e mesma data no SharePoint),
+  // foi lido pelo leitor de hoje e o CNPJ que saiu dele ainda é o do cadastro: não precisa baixar o
+  // PDF nem fazer OCR de novo — é exatamente o que a leitura devolveria. Sem CNPJ de referência
+  // (empresa fora do cadastro) a leitura nunca depende dele, então vale o guardado do mesmo jeito.
+  // CNPJ do cadastro diferente do guardado: lê de novo (o documento pode nem citar o cadastro).
+  const lido = memoria.vencedorLido;
+  if (lido?.cnpj && memoria.vencedor && cnpjValido(lido.cnpj) && (!alvo || digitosDoCnpj(lido.cnpj) === alvo)) {
+    if (lido.escaneado) escaneados.push(memoria.vencedor.nome);
+    return {
+      dados: dadosReaproveitados(lido.cnpj, !!lido.escaneado),
+      arquivoUsado: memoria.vencedor,
+      problemas,
+      escaneados,
+      tocados: new Set([memoria.vencedor.id]),
+      tentadosAgora,
+      incompleta: false,
+      naoLidos: 0,
+      totalCandidatos: candidatos.length,
+      outros,
+      falhaTransitoria: null,
+      reaproveitou: true,
+    };
+  }
+
   for (let i = 0; i < candidatos.length; i++) {
     const candidato = candidatos[i];
 
@@ -315,6 +343,7 @@ async function extrairDadosComFallback(
         id: candidato.id,
         nome: candidato.nome,
         modificado_em: candidato.modificadoEm ?? null,
+        leitura_versao: VERSAO_LEITURA,
         problema,
         escaneado: true,
         leitura_completa: true,
@@ -393,6 +422,7 @@ async function extrairDadosComFallback(
           id: candidato.id,
           nome: candidato.nome,
           modificado_em: candidato.modificadoEm ?? null,
+        leitura_versao: VERSAO_LEITURA,
           problema: avaliacao.problema,
           escaneado: !!dados.pareceEscaneado,
           cnpjs_lidos: avaliacao.cnpjs,
@@ -414,6 +444,7 @@ async function extrairDadosComFallback(
         id: candidato.id,
         nome: candidato.nome,
         modificado_em: candidato.modificadoEm ?? null,
+        leitura_versao: VERSAO_LEITURA,
         problema,
         escaneado: !!dados.pareceEscaneado,
         leitura_completa: leituraCompleta,
@@ -441,6 +472,7 @@ async function extrairDadosComFallback(
         id: candidato.id,
         nome: candidato.nome,
         modificado_em: candidato.modificadoEm ?? null,
+        leitura_versao: VERSAO_LEITURA,
         problema,
         escaneado: !!dados.pareceEscaneado,
         leitura_completa: leituraCompleta,
@@ -473,6 +505,23 @@ async function extrairDadosComFallback(
     totalCandidatos: candidatos.length,
     outros,
     falhaTransitoria: null,
+  };
+}
+
+/** Os "dados" de um documento que NÃO foi aberto de novo: só o CNPJ (e se parece escaneado) vêm do
+ * que ficou guardado — é só isso que o resto do fluxo usa do resultado da leitura. */
+function dadosReaproveitados(cnpj: string, pareceEscaneado: boolean): DadosCertidao {
+  return {
+    nomeEmpresarial: null,
+    tituloEstabelecimento: null,
+    tipoJuridico: null,
+    nire: null,
+    cnpj,
+    dataArquivamento: null,
+    dataExpedicaoCertidao: null,
+    codigoControle: null,
+    textoBruto: "",
+    pareceEscaneado,
   };
 }
 
@@ -716,8 +765,9 @@ export async function prepararDadosParaEnvio(
   const documentoDe = (c: { id: string }) => elegiveis.find((d) => d.id === c.id) ?? null;
   const vencedor = aprov.vencedor ? documentoDe(aprov.vencedor) : null;
 
-  // Já gastou todas as chamadas permitidas e ainda não achou: desiste (e limpa a
-  // memória, pra uma nova tentativa manual recomeçar do zero).
+  // Já gastou todas as chamadas permitidas e ainda não achou: desiste por agora. O que já foi lido
+  // fica guardado (com a contagem de tentativas zerada): a próxima varredura continua pelos
+  // documentos que ainda não foram abertos, em vez de recomeçar abrindo tudo de novo.
   if (aprov.esgotada) {
     const lidos = [...aprov.tentados.values()];
     resultado.qtdDocumentosEscaneados = lidos.filter((d) => d.escaneado).length;
@@ -728,7 +778,11 @@ export async function prepararDadosParaEnvio(
       `${lidos.length} de ${elegiveis.length} documento(s) lidos${detalhe ? `: ${detalhe}` : ""} — ` +
       "confira os arquivos direto no SharePoint)";
     resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
-    if (memoriaDisponivel) await deps.limparBuscaParcial(empresa.codigo).catch(() => {});
+    if (memoriaDisponivel) {
+      await deps
+        .salvarBuscaParcial(empresa.codigo, { documentos: lidos, vencedor: busca?.vencedor ?? null, passos: 0 })
+        .catch(() => {});
+    }
     return resultado;
   }
 
@@ -750,8 +804,26 @@ export async function prepararDadosParaEnvio(
   // Busca o CNPJ tentando os candidatos em ordem de prioridade — já
   // aproveita essa mesma extração pra marcar quem "parece escaneado"
   // (dados.pareceEscaneado), em vez de reprocessar tudo de novo abaixo.
-  const { dados, arquivoUsado, problemas, escaneados, tocados, tentadosAgora, incompleta, naoLidos, totalCandidatos, falhaTransitoria, outros } =
-    await extrairDadosComFallback(ctx, elegiveis, prazoFinal, { tentados: aprov.tentados, vencedor }, referencia.cnpj);
+  const {
+    dados,
+    arquivoUsado,
+    problemas,
+    escaneados,
+    tocados,
+    tentadosAgora,
+    incompleta,
+    naoLidos,
+    totalCandidatos,
+    falhaTransitoria,
+    outros,
+    reaproveitou,
+  } = await extrairDadosComFallback(
+    ctx,
+    elegiveis,
+    prazoFinal,
+    { tentados: aprov.tentados, vencedor, vencedorLido: aprov.vencedorLido },
+    referencia.cnpj
+  );
 
   // SharePoint falhou de forma passageira no meio da busca: guarda o que já foi lido
   // (pra não refazer) e devolve a falha — a tentativa se repete depois, sem nenhum
@@ -776,14 +848,32 @@ export async function prepararDadosParaEnvio(
   // pra esses vale a pena a checagem RÁPIDA (sem OCR, pdfPareceEscaneado),
   // já que não precisam mais tentar achar CNPJ nenhum. Mesmo orçamento de
   // tempo de `extrairDadosComFallback`: se já estourou, nem vale a pena
-  // tentar mais downloads só pra essa checagem cosmética.
+  // tentar mais downloads só pra essa checagem cosmética. O que já foi checado numa
+  // varredura anterior (mesmo arquivo, mesma versão) não é baixado de novo: o resultado
+  // da checagem fica guardado junto da busca (`apenas_escaneio`).
+  const escaneioNovo: DocTentado[] = [];
   for (const doc of elegiveis) {
     if (incompleta) break;
     if (tocados.has(doc.id)) continue;
+    const conhecido = aprov.escaneio.get(doc.id);
+    if (conhecido !== undefined) {
+      if (conhecido) escaneados.push(doc.nome);
+      continue;
+    }
     if (Date.now() >= prazoFinal) break;
     try {
       const bytes = await baixarConteudo(ctx, doc.id);
-      if (await pdfPareceEscaneado(bytes)) escaneados.push(doc.nome);
+      const escaneado = await pdfPareceEscaneado(bytes);
+      if (escaneado) escaneados.push(doc.nome);
+      escaneioNovo.push({
+        id: doc.id,
+        nome: doc.nome,
+        modificado_em: doc.modificadoEm ?? null,
+        problema: null,
+        escaneado,
+        apenas_escaneio: true,
+        leitura_versao: VERSAO_LEITURA,
+      });
     } catch {
       // Falha ao baixar pra só checar isso não deve travar a simulação —
       // o documento simplesmente não aparece na lista de "escaneados".
@@ -832,8 +922,10 @@ export async function prepararDadosParaEnvio(
       return resultado;
     }
 
-    // Leu tudo e não achou: resultado final (e a memória parcial não serve mais). Se havia
-    // CNPJs válidos nos documentos e NENHUM é o do cadastro, o robô estaria puxando o CNPJ
+    // Leu tudo e não achou: resultado final. O que foi lido FICA guardado (contagem de tentativas
+    // zerada): enquanto os arquivos e o CNPJ do cadastro forem os mesmos, a próxima varredura
+    // chega ao mesmo resultado sem baixar nem fazer OCR de nada — só o documento NOVO (ou
+    // alterado) que aparecer é lido. Se havia CNPJs válidos nos documentos e NENHUM é o do cadastro, o robô estaria puxando o CNPJ
     // errado: o status diz isso (com o que foi lido), pra quem confere saber onde olhar.
     const conferencia = conferirCnpjComCadastro(outros, referencia.cnpj);
     resultado.status =
@@ -841,19 +933,46 @@ export async function prepararDadosParaEnvio(
         ? statusCnpjErrado(conferencia.lidos, conferencia.cadastro)
         : `${MOTIVO_CNPJ_NAO_ENCONTRADO} (${detalhe})`;
     resultado.motivo = MOTIVO_CNPJ_NAO_ENCONTRADO;
-    if (busca && memoriaDisponivel) await deps.limparBuscaParcial(empresa.codigo).catch(() => {});
+    if (memoriaDisponivel) {
+      const lidos = [...aprov.tentados.values(), ...tentadosAgora];
+      const mudou = !busca || tentadosAgora.length > 0 || busca.passos > 0 || busca.documentos.length !== lidos.length;
+      if (mudou) {
+        await deps
+          .salvarBuscaParcial(empresa.codigo, { documentos: lidos, vencedor: busca?.vencedor ?? null, passos: 0 })
+          .catch(() => {});
+      }
+    }
     return resultado;
   }
 
-  // Achou. Guarda de qual documento saiu (a próxima busca tenta ele primeiro) e
-  // zera o que havia de busca parcial — só escreve se mudou alguma coisa.
+  // Achou. Guarda de qual documento saiu E o CNPJ que saiu dele (a próxima busca tenta ele
+  // primeiro e, se o arquivo e o CNPJ do cadastro forem os mesmos, nem precisa abri-lo), mais o
+  // "parece escaneado" dos demais documentos — e zera o que havia de busca parcial. Só escreve
+  // se mudou alguma coisa.
   if (memoriaDisponivel && arquivoUsado) {
-    const igualAoGuardado = !!busca?.vencedor && mesmaVersao(arquivoUsado, busca.vencedor);
-    if (!igualAoGuardado || (busca?.documentos.length ?? 0) > 0 || (busca?.passos ?? 0) > 0) {
+    const vencedorNovo: DocVencedor = {
+      id: arquivoUsado.id,
+      nome: arquivoUsado.nome,
+      modificado_em: arquivoUsado.modificadoEm ?? null,
+      cnpj: dados.cnpj,
+      escaneado: !!dados.pareceEscaneado,
+      leitura_versao: VERSAO_LEITURA,
+    };
+    const escaneioConhecido = (busca?.documentos ?? []).filter(
+      (d) =>
+        d.apenas_escaneio && aprov.escaneio.has(d.id) && !tocados.has(d.id) && elegiveis.some((e) => mesmaVersao(e, d))
+    );
+    const mudou =
+      !busca ||
+      !reaproveitou ||
+      escaneioNovo.length > 0 ||
+      busca.passos > 0 ||
+      busca.documentos.some((d) => !d.apenas_escaneio);
+    if (mudou) {
       await deps
         .salvarBuscaParcial(empresa.codigo, {
-          documentos: [],
-          vencedor: { id: arquivoUsado.id, nome: arquivoUsado.nome, modificado_em: arquivoUsado.modificadoEm ?? null },
+          documentos: [...escaneioConhecido, ...escaneioNovo],
+          vencedor: vencedorNovo,
           passos: 0,
         })
         .catch(() => {});
