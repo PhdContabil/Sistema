@@ -223,9 +223,19 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
           const cod = Number(servs[i]); const valor = Number(vals[i] ?? 0);
           if (!cod || (i > 0 && valor <= 0)) continue;
           const questor = o.questor ?? "";
-          const rc = FIXOS.includes(cod)
-            ? await api("POST", "/cadastro/servico-fixo", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, competinicialvalid: o.datainicio, valorservicofixo: valor, periodoservicofixo: PERIODO, compldescr: i === 0 ? `${questor} - ${String(o.razao).slice(0, 40)}` : String(questor), observacaoservicofixo: `${questor} - ${o.razao}`.slice(0, 250), codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-fixo-${cod}` })
+          // Fixo: o Questor não aceita dois iguais no mesmo cliente com a mesma data de início
+          // (vários MEIs do mesmo salão). Como o Access, usa o próximo dia livre.
+          const fixo = (dia: string) => api("POST", "/cadastro/servico-fixo", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, competinicialvalid: dia, valorservicofixo: valor, periodoservicofixo: PERIODO, compldescr: i === 0 ? `${questor} - ${String(o.razao).slice(0, 40)}` : String(questor), observacaoservicofixo: `${questor} - ${o.razao}`.slice(0, 250), codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-fixo-${cod}-${dia}` });
+          let diaFixo: string = String(o.datainicio);
+          let rc: Awaited<ReturnType<typeof fixo>> = FIXOS.includes(cod)
+            ? await fixo(diaFixo)
             : await api("POST", "/cadastro/servico-variavel", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, dataservvar: o.datainicio, qtdadeservvar: 1, valorunitservvar: valor, observservvar: `${questor} - ${String(o.razao).slice(0, 40)}`, codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-var-${cod}` });
+          for (let t = 0; FIXOS.includes(cod) && rc.status === 409 && /j[aá] existe/i.test(JSON.stringify(rc.dados ?? "")) && t < 20; t++) {
+            const d = new Date(`${diaFixo}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1);
+            diaFixo = d.toISOString().slice(0, 10);
+            rc = await fixo(diaFixo);
+          }
+          if (FIXOS.includes(cod) && diaFixo !== o.datainicio && rc.status < 300) out.push(`Início da mensalidade ajustado para ${diaFixo.split("-").reverse().join("/")} (data ${String(o.datainicio).split("-").reverse().join("/")} já usada nesse cliente).`);
           const x = resumoGravacao(rc);
           out.push(`Cobrança serviço ${i + 1} (${cod}, ${FIXOS.includes(cod) ? "fixo mensal" : "variável"}, ${brl(valor)}, cliente ${clienteCobrado}): ${x.ok ? x.texto : mensagemErro(rc)}`);
         }
