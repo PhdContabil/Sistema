@@ -148,13 +148,15 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
   const [salvo, setSalvo] = useState<OS | null>(null);
   const emailAuto = false; // como no Paralegal: primeiro salva, depois a pessoa escolhe enviar ao Financeiro ou ao Geral
 
+  const [baixado, setBaixado] = useState(false);
   useEffect(() => {
     if (!nova) return;
     const t = setTimeout(async () => {
       const q = busca.trim();
       if (q.length < 3) { setAchados([]); return; }
       const dig = q.replace(/\D/g, "");
-      const query: Record<string, unknown> = { incluir_empresas: true };
+      // Inclui clientes baixados: inativo que volta pedindo serviço avulso não precisa ser reativado (como no Access).
+      const query: Record<string, unknown> = { incluir_empresas: true, incluir_baixados: true };
       if (dig.length >= 11) query.cpf_cnpj = dig; else if (/^\d+$/.test(q)) query.codigo = q; else query.nome = q;
       try { setAchados((await ler<{ dados: ClienteFin[] }>("/financeiro/clientes", query)).dados ?? []); } catch { setAchados([]); }
     }, 400);
@@ -177,6 +179,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
     setO((x) => ({ ...x, codigo: c.codigocliente, questor, razao: c.nome, cnpj: c.inscrfederal ?? "",
       logradouro: [c.tipologradouro, c.logradouro].filter(Boolean).join(" "), numero: c.numero ?? "", complemento: c.complemento ?? "", bairro: c.bairro ?? "",
       cidade: c.nomemunic ?? "", cep: c.cep ?? "", email: c.email ?? "", celular: c.telefone ?? "" }));
+    setBaixado(!!c.baixado);
     setAchados([]); setBusca(""); setCobranca("profissional");
   }
 
@@ -203,6 +206,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
     if (!o.razao || !o.codigo) { setMsg({ ok: false, texto: "Escolha o cliente." }); return; }
     if (!o.cidade || !o.datainicio) { setMsg({ ok: false, texto: "Cidade e início dos trabalhos são obrigatórios (regra do Access)." }); return; }
     if (nova && !o.servico1) { setMsg({ ok: false, texto: "Informe ao menos o serviço 1." }); return; }
+    if (nova && (baixado || (m && !m.ativo)) && !confirm("Este cliente está inativo/baixado. A O.S. e a cobrança serão lançadas mesmo assim (o cadastro continua inativo). Continuar?")) return;
     if (!confirm(nova ? "Salvar a O.S. e lançar a cobrança no Questor?" : `Salvar as alterações da O.S. ${o.nos}? (a cobrança no Questor não é alterada, como no Access)`)) return;
     setSalvando(true); setLinhas([]);
     try {
@@ -277,7 +281,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
                   {achados.slice(0, 30).map((c) => (
                     <div key={c.codigocliente} onClick={() => escolherCliente(c)} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--pl-border)" }}>
                       <strong>{c.nome}</strong>
-                      <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{c.inscrfederal ?? ""} · Cód. financeiro {c.codigocliente}{c.codigoempresa ? ` · Questor ${c.codigoempresa}` : " · Avulso"}</div>
+                      <div style={{ color: "var(--pl-ink-soft)", fontSize: 12 }}>{c.inscrfederal ?? ""} · Cód. financeiro {c.codigocliente}{c.codigoempresa ? ` · Questor ${c.codigoempresa}` : " · Avulso"}{c.baixado ? " · BAIXADO/INATIVO" : ""}</div>
                     </div>
                   ))}
                 </div>
