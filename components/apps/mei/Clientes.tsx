@@ -263,7 +263,14 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
     const r = await api("POST", `/empresas/${m.cod}/encerrar`, { corpo: { data_encerramento: data }, idempotencia: `mei-encerrar-${m.cod}-${data}` });
     const res = resumoGravacao(r);
     setMsg(r.status < 300 ? { ok: true, texto: `${res.texto} Resultado: ${JSON.stringify(r.dados).slice(0, 400)}` } : { ok: false, texto: mensagemErro(r) });
-    if (r.status < 300) { setFeito(true); if (!r.dryRunForcado) mudou(); }
+    if (r.status < 300) {
+      setFeito(true);
+      if (!r.dryRunForcado) {
+        // Guarda o dia do lançamento: o painel conta a saída no mês em que foi feita.
+        await fetch("/api/mei/saidas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cod: m.cod, data_encerramento: data }) }).catch(() => null);
+        mudou();
+      }
+    }
   }
 
   async function comunicado() {

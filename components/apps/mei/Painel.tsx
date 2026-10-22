@@ -21,11 +21,13 @@ function Numero({ titulo, valor, detalhe, cor, onClick }: { titulo: string; valo
 export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela: string) => void; abrirFicha: (m: Mei) => void }) {
   const [abertas, setAbertas] = useState<TarefaP[] | null>(null);
   const [oss, setOss] = useState<OSP[] | null>(null);
+  const [saidasNucleo, setSaidasNucleo] = useState<{ cod: number; lancada_em: string; data_encerramento: string }[]>([]);
   const hoje = hojeISO(); const ini = primeiroDiaMes(); const fim = ultimoDiaMes();
 
   useEffect(() => {
     ler<{ dados: TarefaP[] }>("/mei/tarefas", { status: "Em Aberto", de: "2000-01-01", ate: "2100-12-31", limit: 1000 }).then((j) => setAbertas(j.dados ?? [])).catch(() => setAbertas([]));
     ler<{ dados: OSP[] }>("/mei/os", { de: ini, ate: fim, limit: 500 }).then((j) => setOss(j.dados ?? [])).catch(() => setOss([]));
+    fetch("/api/mei/saidas").then((r) => r.json()).then((j) => setSaidasNucleo(j.dados ?? [])).catch(() => null);
   }, [ini, fim]);
 
   const n = useMemo(() => {
@@ -33,7 +35,6 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
     return {
       ativos: ativos.length,
       bloqueados: ativos.filter((m) => m.bloqueado).length,
-      saidas: mei.filter((m) => !m.ativo && (m.fim ?? "") >= ini && (m.fim ?? "") <= fim),
       mensal: ativos.reduce((a, m) => a + (m.mensal || 0), 0),
     };
   }, [mei, ini, fim]);
@@ -58,9 +59,24 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
     }
     return [...vistos.values()];
   }, [oss, mei, porCod, ini, fim]);
+  // Saídas: encerradas pelo Núcleo contam no mês em que o encerramento foi LANÇADO
+  // (a data de encerramento costuma ser retroativa ou futura); as antigas (Access) pela data de encerramento.
+  const saidas = useMemo(() => {
+    const porLanc = new Map(saidasNucleo.map((s) => [s.cod, s]));
+    const out: { m: Mei; d: string | null; enc: string | null }[] = [];
+    for (const m of mei) {
+      if (m.ativo) continue;
+      const s = porLanc.get(m.cod);
+      if (s) {
+        const lanc = s.lancada_em.slice(0, 10);
+        if (lanc >= ini && lanc <= fim) out.push({ m, d: lanc, enc: m.fim ?? s.data_encerramento });
+      } else if ((m.fim ?? "") >= ini && (m.fim ?? "") <= fim) out.push({ m, d: m.fim, enc: null });
+    }
+    return out;
+  }, [mei, saidasNucleo, ini, fim]);
   const movimento = [
     ...novos.map((x) => ({ ...x, tipo: "Entrada" })),
-    ...n.saidas.map((m) => ({ cod: String(m.cod), razao: m.razao, d: m.fim, m, tipo: "Saída" })),
+    ...saidas.map(({ m, d, enc }) => ({ cod: String(m.cod), razao: m.razao, d, m, tipo: "Saída", enc })),
   ].sort((a, b) => String(b.d).localeCompare(String(a.d)));
   const mes = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
@@ -72,7 +88,7 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
         <Numero titulo="Tarefas vencidas" valor={abertas === null ? "…" : vencidas.length} cor={vencidas.length ? "#dc2626" : "#16a34a"} detalhe={vencidas.length ? "precisam de atenção" : "tudo em dia"} onClick={() => ir("Tarefas")} />
         <Numero titulo={`O.S. de ${mes}`} valor={oss === null ? "…" : oss.length} detalhe={oss === null ? "" : brl(totalOS)} onClick={() => ir("Gerar O.S.")} />
         <Numero titulo="Entradas no mês" valor={oss === null ? "…" : novos.length} cor="#16a34a" detalhe="O.S. de MEI no mês" />
-        <Numero titulo="Saídas no mês" valor={n.saidas.length} cor="#a16207" detalhe="encerradas no mês" />
+        <Numero titulo="Saídas no mês" valor={saidas.length} cor="#a16207" detalhe="encerramentos lançados no mês" />
         <Numero titulo="Mensalidades ativas" valor={brl(n.mensal)} detalhe="soma das mensalidades vigentes" onClick={() => ir("Valores Mensal")} />
       </div>
 
@@ -109,11 +125,11 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
           <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Movimento de clientes no mês</h3>
           {oss === null ? <p style={st.mut}>Carregando…</p> : movimento.length === 0 ? <p style={st.mut}>Sem entradas ou saídas neste mês.</p> : (
             <div style={{ display: "grid" }}>
-              {movimento.slice(0, 12).map(({ cod, razao, m, tipo, d }) => (
+              {movimento.slice(0, 12).map(({ cod, razao, m, tipo, d, ...x }) => (
                 <button key={tipo + cod + razao} onClick={() => { if (m) abrirFicha(m); }} disabled={!m}
                   style={{ display: "flex", gap: 10, justifyContent: "space-between", padding: "7px 0", border: "none", borderBottom: "1px solid var(--border)", background: "none", cursor: m ? "pointer" : "default", textAlign: "left", font: "inherit", color: "inherit", fontSize: 13 }}>
                   <span>{cod ? `${cod} - ` : ""}{razao}</span>
-                  <span style={{ color: tipo === "Entrada" ? "#15803d" : "#a16207", whiteSpace: "nowrap" }}>{tipo} · {dt(d)}</span>
+                  <span style={{ color: tipo === "Entrada" ? "#15803d" : "#a16207", whiteSpace: "nowrap" }}>{tipo === "Saída" && "enc" in x && x.enc ? `Saída lançada ${dt(d)} · encerramento ${dt(x.enc as string)}` : `${tipo} · ${dt(d)}`}</span>
                 </button>
               ))}
               {movimento.length > 12 && <span style={{ ...st.mut, paddingTop: 6 }}>+{movimento.length - 12} no mês</span>}
