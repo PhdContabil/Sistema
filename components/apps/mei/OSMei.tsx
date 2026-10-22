@@ -12,7 +12,7 @@ import "@/components/apps/paralegal/controle.css";
 import { api, ler, brl, dt, hojeISO, resumoGravacao, mensagemErro, AVULSO, type Mei } from "./ui";
 import { gerarDocPdfOS, nomeArquivoPdfOS, pdfParaBase64 } from "@/components/apps/paralegal/os-pdf";
 
-interface ClienteFin { codigocliente: number; nome: string; inscrfederal?: string; codigoempresa?: number | null; tipologradouro?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; nomemunic?: string | null; siglaestado?: string | null; cep?: string | null; telefone?: string | null; email?: string | null }
+interface ClienteFin { codigocliente: number; nome: string; inscrfederal?: string; codigoempresa?: number | null; tipologradouro?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; nomemunic?: string | null; siglaestado?: string | null; cep?: string | null; telefone?: string | null; email?: string | null; baixado?: boolean }
 interface ServEscrit { codigo: number; descricao: string; valor: number | null }
 interface Fixo { codigoservicoescrit: number; valor: number; competinicialvalid: string | null }
 export interface OS {
