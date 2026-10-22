@@ -227,15 +227,20 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
           // (vários MEIs do mesmo salão). Como o Access, usa o próximo dia livre.
           const fixo = (dia: string) => api("POST", "/cadastro/servico-fixo", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, competinicialvalid: dia, valorservicofixo: valor, periodoservicofixo: PERIODO, compldescr: i === 0 ? `${questor} - ${String(o.razao).slice(0, 40)}` : String(questor), observacaoservicofixo: `${questor} - ${o.razao}`.slice(0, 250), codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-fixo-${cod}-${dia}` });
           let diaFixo: string = String(o.datainicio);
+          // Não duplica mensalidade: se este MEI já tem o mesmo serviço vigente nesse cliente, não lança.
+          if (FIXOS.includes(cod) && questor) {
+            try {
+              const j = await ler<{ dados: (Fixo & { codigocliente?: number; codigoempresa_mei?: number | null; competfinalvalid?: string | null })[] }>("/financeiro/servicos-fixos", { salao: clienteCobrado });
+              const vigente = (j.dados ?? []).find((x) => x.codigoservicoescrit === cod && Number(x.codigoempresa_mei) === Number(questor) && (!x.competfinalvalid || x.competfinalvalid >= String(o.datainicio)));
+              if (vigente) {
+                out.push(`Cobrança serviço ${i + 1} (${cod}) NÃO lançada: o MEI ${questor} já tem essa mensalidade vigente no cliente ${clienteCobrado} desde ${String(vigente.competinicialvalid ?? "").split("-").reverse().join("/")} (${brl(vigente.valor)}). Se for reajuste, encerre a antiga no financeiro e lance a nova.`);
+                continue;
+              }
+            } catch { /* sem a conferência, segue e o Questor recusa duplicata na mesma data */ }
+          }
           let rc: Awaited<ReturnType<typeof fixo>> = FIXOS.includes(cod)
             ? await fixo(diaFixo)
             : await api("POST", "/cadastro/servico-variavel", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, dataservvar: o.datainicio, qtdadeservvar: 1, valorunitservvar: valor, observservvar: `${questor} - ${String(o.razao).slice(0, 40)}`, codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-var-${cod}` });
-          for (let t = 0; FIXOS.includes(cod) && rc.status === 409 && /j[aá] existe/i.test(JSON.stringify(rc.dados ?? "")) && t < 20; t++) {
-            const d = new Date(`${diaFixo}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1);
-            diaFixo = d.toISOString().slice(0, 10);
-            rc = await fixo(diaFixo);
-          }
-          if (FIXOS.includes(cod) && diaFixo !== o.datainicio && rc.status < 300) out.push(`Início da mensalidade ajustado para ${diaFixo.split("-").reverse().join("/")} (data ${String(o.datainicio).split("-").reverse().join("/")} já usada nesse cliente).`);
           const x = resumoGravacao(rc);
           out.push(`Cobrança serviço ${i + 1} (${cod}, ${FIXOS.includes(cod) ? "fixo mensal" : "variável"}, ${brl(valor)}, cliente ${clienteCobrado}): ${x.ok ? x.texto : mensagemErro(rc)}`);
         }
