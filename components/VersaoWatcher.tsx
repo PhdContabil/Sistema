@@ -24,9 +24,10 @@ export default function VersaoWatcher() {
       }
     }
     checar();
+    // A cada 5 min e só com a aba visível (aba em segundo plano confere ao voltar).
     const id = setInterval(async () => {
-      if (ativo && (await checar())) setNovaVersao(true);
-    }, 60_000);
+      if (ativo && document.visibilityState === "visible" && (await checar())) setNovaVersao(true);
+    }, 300_000);
     async function aoVoltar() {
       if (document.visibilityState === "visible" && (await checar())) window.location.reload();
     }
