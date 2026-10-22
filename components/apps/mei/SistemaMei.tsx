@@ -27,6 +27,18 @@ const MENU: { grupo: string; itens: string[] }[] = [
   { grupo: "Migração", itens: ["Situação"] },
 ];
 
+// Cópia da carteira guardada no navegador: abrir/atualizar a página não chama a Vercel.
+// A busca no servidor só acontece no botão "Atualizar dados", após uma alteração ou se não houver cópia.
+const CHAVE_LOCAL = "nucleo-mei-carteira-v1";
+function lerLocal(): { em: string; dados: Mei[] } | null {
+  try { const t = localStorage.getItem(CHAVE_LOCAL); if (!t) return null; const j = JSON.parse(t); return Array.isArray(j?.dados) ? j : null; } catch { return null; }
+}
+function salvarLocal(dados: Mei[]) {
+  const em = new Date().toISOString();
+  try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify({ em, dados })); } catch { /* sem espaço ou bloqueado: segue só em memória */ }
+  return em;
+}
+
 interface Chaves { leitura: boolean; questor: boolean; mei: boolean; credenciais: boolean; gravacao: boolean; liberados?: string[] }
 
 export default function SistemaMei() {
@@ -38,6 +50,7 @@ export default function SistemaMei() {
   const [erro, setErro] = useState("");
   const [ficha, setFicha] = useState<Mei | null>(null);
   const [chaves, setChaves] = useState<Chaves | null>(null);
+  const [dadosDe, setDadosDe] = useState<string | null>(null);
 
   const carregar = useCallback(async (forcar = false) => {
     setCarregando(true); setErro("");
@@ -46,11 +59,16 @@ export default function SistemaMei() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `Erro ${r.status}`);
       setMei(j.dados ?? []);
+      setDadosDe(salvarLocal(j.dados ?? []));
       setFicha((f) => (f ? (j.dados ?? []).find((x: Mei) => x.cod === f.cod) ?? f : f));
     } catch (e) { setErro(e instanceof Error ? e.message : "Falha ao carregar a carteira."); }
     finally { setCarregando(false); }
   }, []);
-  useEffect(() => { carregar(); fetch("/api/mei/proxy").then((r) => r.json()).then(setChaves).catch(() => null); }, [carregar]);
+  useEffect(() => {
+    const local = lerLocal();
+    if (local && local.dados.length) { setMei(local.dados); setDadosDe(local.em); setCarregando(false); }
+    else carregar();
+    fetch("/api/mei/proxy").then((r) => r.json()).then(setChaves).catch(() => null); }, [carregar]);
 
   const ativos = mei.filter((m) => m.ativo).length;
   const abrir = (t: string) => { setTela(t); setFicha(null); };
@@ -80,7 +98,7 @@ export default function SistemaMei() {
         <Busca mei={mei} abrir={(m) => { setFicha(m); setGrupo(""); }} />
         {!grupo && <span style={st.mut}>Tela: <b>{ficha ? "Ficha MEI" : tela}</b></span>}
         <span style={{ flex: 1 }} />
-        <span style={st.mut}>{carregando ? "Carregando carteira MEI…" : `${mei.length} MEI · ${ativos} ativos`}</span>
+        <span style={st.mut}>{carregando ? "Carregando carteira MEI…" : `${mei.length} MEI · ${ativos} ativos${dadosDe ? ` · dados de ${new Date(dadosDe).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}`}</span>
         <button style={st.btn} onClick={() => carregar(true)} disabled={carregando}>Atualizar dados</button>
       </div>
       {erro && <div style={{ ...st.aviso, color: "var(--div)" }}>{erro}</div>}
