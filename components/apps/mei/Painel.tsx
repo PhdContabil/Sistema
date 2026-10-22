@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ler, st, brl, dt, hojeISO, primeiroDiaMes, ultimoDiaMes, type Mei } from "./ui";
 
 interface TarefaP { id: number; codigoempresa: number; razao: string; servico_descricao: string; responsavel_nome: string; data_servico: string | null }
-interface OSP { nos?: number; data: string | null; razao: string | null; tipo: string | null; valortt: number | null }
+interface OSP { nos?: number; data: string | null; razao: string | null; tipo: string | null; valortt: number | null; questor?: string | number | null; datainicio?: string | null }
 
 function Numero({ titulo, valor, detalhe, cor, onClick }: { titulo: string; valor: React.ReactNode; detalhe?: React.ReactNode; cor?: string; onClick?: () => void }) {
   return (
@@ -33,7 +33,6 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
     return {
       ativos: ativos.length,
       bloqueados: ativos.filter((m) => m.bloqueado).length,
-      novos: mei.filter((m) => (m.inicio ?? "") >= ini && (m.inicio ?? "") <= fim),
       saidas: mei.filter((m) => !m.ativo && (m.fim ?? "") >= ini && (m.fim ?? "") <= fim),
       mensal: ativos.reduce((a, m) => a + (m.mensal || 0), 0),
     };
@@ -41,6 +40,28 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
   const vencidas = (abertas ?? []).filter((t) => (t.data_servico ?? "9999") < hoje);
   const totalOS = (oss ?? []).reduce((a, o) => a + (o.valortt || 0), 0);
   const porCod = useMemo(() => new Map(mei.map((m) => [m.cod, m])), [mei]);
+  // Entradas = O.S. do tipo MEI emitidas no mês (é assim que o setor registra um profissional novo,
+  // venha do Access ou do Núcleo). Soma também quem tem início de atividade no Questor dentro do mês.
+  const novos = useMemo(() => {
+    const vistos = new Map<string, { cod: string; razao: string; d: string | null; m?: Mei }>();
+    for (const o of oss ?? []) {
+      if (String(o.tipo ?? "").trim().toUpperCase() !== "MEI") continue;
+      const cod = String(o.questor ?? "").trim();
+      const chave = cod || `os${o.nos}`;
+      if (vistos.has(chave)) continue;
+      const m = cod ? porCod.get(Number(cod)) ?? porCod.get(cod as never) : undefined;
+      vistos.set(chave, { cod, razao: m?.razao ?? String(o.razao ?? ""), d: o.datainicio || o.data, m });
+    }
+    for (const m of mei) {
+      if ((m.inicio ?? "") >= ini && (m.inicio ?? "") <= fim && !vistos.has(String(m.cod)))
+        vistos.set(String(m.cod), { cod: String(m.cod), razao: m.razao, d: m.inicio, m });
+    }
+    return [...vistos.values()];
+  }, [oss, mei, porCod, ini, fim]);
+  const movimento = [
+    ...novos.map((x) => ({ ...x, tipo: "Entrada" })),
+    ...n.saidas.map((m) => ({ cod: String(m.cod), razao: m.razao, d: m.fim, m, tipo: "Saída" })),
+  ].sort((a, b) => String(b.d).localeCompare(String(a.d)));
   const mes = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
   return (
@@ -50,7 +71,7 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
         <Numero titulo="Tarefas em aberto" valor={abertas === null ? "…" : abertas.length} detalhe="clique para abrir o painel" onClick={() => ir("Tarefas")} />
         <Numero titulo="Tarefas vencidas" valor={abertas === null ? "…" : vencidas.length} cor={vencidas.length ? "#dc2626" : "#16a34a"} detalhe={vencidas.length ? "precisam de atenção" : "tudo em dia"} onClick={() => ir("Tarefas")} />
         <Numero titulo={`O.S. de ${mes}`} valor={oss === null ? "…" : oss.length} detalhe={oss === null ? "" : brl(totalOS)} onClick={() => ir("Gerar O.S.")} />
-        <Numero titulo="Entradas no mês" valor={n.novos.length} cor="#16a34a" detalhe="início de atividade no mês" />
+        <Numero titulo="Entradas no mês" valor={oss === null ? "…" : novos.length} cor="#16a34a" detalhe="O.S. de MEI no mês" />
         <Numero titulo="Saídas no mês" valor={n.saidas.length} cor="#a16207" detalhe="encerradas no mês" />
         <Numero titulo="Mensalidades ativas" valor={brl(n.mensal)} detalhe="soma das mensalidades vigentes" onClick={() => ir("Valores Mensal")} />
       </div>
@@ -86,16 +107,16 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
         </div>
         <div style={{ ...st.card, margin: 0 }}>
           <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Movimento de clientes no mês</h3>
-          {[...n.novos.map((m) => ({ m, tipo: "Entrada", d: m.inicio })), ...n.saidas.map((m) => ({ m, tipo: "Saída", d: m.fim }))].length === 0 ? <p style={st.mut}>Sem entradas ou saídas neste mês.</p> : (
+          {oss === null ? <p style={st.mut}>Carregando…</p> : movimento.length === 0 ? <p style={st.mut}>Sem entradas ou saídas neste mês.</p> : (
             <div style={{ display: "grid" }}>
-              {[...n.novos.map((m) => ({ m, tipo: "Entrada", d: m.inicio })), ...n.saidas.map((m) => ({ m, tipo: "Saída", d: m.fim }))]
-                .sort((a, b) => String(b.d).localeCompare(String(a.d))).slice(0, 10).map(({ m, tipo, d }) => (
-                  <button key={tipo + m.cod} onClick={() => abrirFicha(m)}
-                    style={{ display: "flex", gap: 10, justifyContent: "space-between", padding: "7px 0", border: "none", borderBottom: "1px solid var(--border)", background: "none", cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit", fontSize: 13 }}>
-                    <span>{m.cod} - {m.razao}</span>
-                    <span style={{ color: tipo === "Entrada" ? "#15803d" : "#a16207", whiteSpace: "nowrap" }}>{tipo} · {dt(d)}</span>
-                  </button>
-                ))}
+              {movimento.slice(0, 12).map(({ cod, razao, m, tipo, d }) => (
+                <button key={tipo + cod + razao} onClick={() => { if (m) abrirFicha(m); }} disabled={!m}
+                  style={{ display: "flex", gap: 10, justifyContent: "space-between", padding: "7px 0", border: "none", borderBottom: "1px solid var(--border)", background: "none", cursor: m ? "pointer" : "default", textAlign: "left", font: "inherit", color: "inherit", fontSize: 13 }}>
+                  <span>{cod ? `${cod} - ` : ""}{razao}</span>
+                  <span style={{ color: tipo === "Entrada" ? "#15803d" : "#a16207", whiteSpace: "nowrap" }}>{tipo} · {dt(d)}</span>
+                </button>
+              ))}
+              {movimento.length > 12 && <span style={{ ...st.mut, paddingTop: 6 }}>+{movimento.length - 12} no mês</span>}
             </div>
           )}
         </div>
