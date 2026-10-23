@@ -88,7 +88,7 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
     const r = await fetch("/api/mei/os/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nos: o.nos, publico, pdfBase64: pdfParaBase64(doc), nomeArquivo: nome }) });
     if (r.headers.get("content-type")?.includes("message/rfc822")) {
       const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = `OS ${o.nos} - ${publico}.eml`; a.click();
-      const texto = "Rascunho de e-mail baixado (abra no Outlook e clique em Enviar)." + (r.headers.get("x-motivo") ? ` ${decodeURIComponent(r.headers.get("x-motivo")!)}` : "");
+      const texto = `E-mail ${publico === "financeiro" ? "Financeiro" : "Geral"} pronto, com a O.S. anexada: abra o arquivo baixado (abre no Outlook), confira e clique em Enviar.` + (r.headers.get("x-motivo") ? ` ${decodeURIComponent(r.headers.get("x-motivo")!)}` : "");
       setMsg({ ok: true, texto });
       return texto;
     }

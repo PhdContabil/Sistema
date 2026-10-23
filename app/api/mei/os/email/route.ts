@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
-import { enviarEmail, construirEml } from "@/lib/paralegal/graph";
-import { chamar, gravacaoLiberada } from "@/lib/mei/api";
+import { construirEml } from "@/lib/paralegal/graph";
+import { chamar } from "@/lib/mei/api";
 
 // E-mail da O.S. do MEI (menuos do Access): Financeiro -> graciele@ e debora@; Geral -> Geral@.
-// Com a trava de O.S. ligada (ou se o envio pelo Graph falhar), devolve um .eml para abrir no Outlook.
+// Igual ao Paralegal: sempre devolve um RASCUNHO (.eml) com o PDF da O.S. anexado, que abre no
+// Outlook para a pessoa conferir/editar e enviar por conta própria. Não envia mais direto.
 export const dynamic = "force-dynamic";
 
 const lista = (v: string) => v.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -34,12 +35,5 @@ export async function POST(req: Request) {
     headers: { "Content-Type": "message/rfc822", "x-motivo": encodeURIComponent(motivo) },
   });
 
-  if (!gravacaoLiberada("os")) return rascunho("Trava de O.S. ligada: e-mail não enviado automaticamente.");
-  if (!user?.email) return rascunho("Sem e-mail de login para usar como remetente.");
-  try {
-    await enviarEmail({ remetente: user.email, para, assunto, corpoHtml, anexos });
-    return NextResponse.json({ ok: true, para });
-  } catch {
-    return rascunho("O envio automático falhou.");
-  }
+  return rascunho("");
 }
