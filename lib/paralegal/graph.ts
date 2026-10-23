@@ -192,6 +192,42 @@ export async function enviarEmail(opts: {
  * por falta de permissão/configuração no Azure: em vez de deixar o usuário sem nada,
  * devolvemos esse arquivo pronto pra baixar e abrir -- o usuário só clica em "Enviar".
  */
+/**
+ * Cria um RASCUNHO na caixa de `remetente` (pasta Rascunhos), já com destinatários e anexos,
+ * e devolve o link para abrir no Outlook na web. Precisa de Mail.ReadWrite (aplicação).
+ */
+export async function criarRascunho(opts: {
+  remetente: string;
+  para: string[];
+  assunto: string;
+  corpoHtml: string;
+  anexos?: { nome: string; conteudoBase64: string; tipoMime?: string }[];
+}): Promise<{ id: string; webLink: string }> {
+  const token = await obterToken();
+  const r = await fetch(`${GRAPH}/users/${encodeURIComponent(opts.remetente)}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subject: opts.assunto,
+      body: { contentType: "HTML", content: opts.corpoHtml },
+      toRecipients: opts.para.map((e) => ({ emailAddress: { address: e } })),
+      attachments: (opts.anexos ?? []).map((a) => ({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: a.nome,
+        contentType: a.tipoMime ?? "application/pdf",
+        contentBytes: a.conteudoBase64,
+      })),
+    }),
+    cache: "no-store",
+  });
+  if (!r.ok) {
+    const corpo = await r.text().catch(() => "");
+    throw new GraphErro(amigavel(r.status, corpo), r.status);
+  }
+  const j = (await r.json()) as { id: string; webLink: string };
+  return { id: j.id, webLink: j.webLink };
+}
+
 export function construirEml(opts: {
   para: string[];
   assunto: string;

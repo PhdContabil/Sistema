@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
-import { construirEml } from "@/lib/paralegal/graph";
+import { construirEml, criarRascunho } from "@/lib/paralegal/graph";
 import { chamar } from "@/lib/mei/api";
 
 // E-mail da O.S. do MEI (menuos do Access): Financeiro -> graciele@ e debora@; Geral -> Geral@.
-// Igual ao Paralegal: sempre devolve um RASCUNHO (.eml) com o PDF da O.S. anexado, que abre no
-// Outlook para a pessoa conferir/editar e enviar por conta própria. Não envia mais direto.
+// Cria um RASCUNHO na caixa de quem clicou (pasta Rascunhos), com o PDF anexado, e devolve o link
+// para abrir no Outlook. A pessoa confere/edita e envia. Se não der, devolve um .eml (plano B).
 export const dynamic = "force-dynamic";
 
 const lista = (v: string) => v.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -35,5 +35,11 @@ export async function POST(req: Request) {
     headers: { "Content-Type": "message/rfc822", "x-motivo": encodeURIComponent(motivo) },
   });
 
+  if (user?.email) {
+    try {
+      const d = await criarRascunho({ remetente: user.email, para, assunto, corpoHtml, anexos });
+      return NextResponse.json({ ok: true, rascunho: true, webLink: d.webLink, para });
+    } catch { /* plano B: .eml */ }
+  }
   return rascunho("");
 }

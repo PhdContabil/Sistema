@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
-import { construirEml } from "@/lib/paralegal/graph";
+import { construirEml, criarRascunho } from "@/lib/paralegal/graph";
 
 // Comunicado de Saída do MEI (encerramento) para Débora e Graciele.
 // Sempre devolve um RASCUNHO (.eml) que abre no Outlook para editar e anexar comprovantes
@@ -29,5 +29,11 @@ export async function POST(req: Request) {
     headers: { "Content-Type": "message/rfc822", "x-motivo": encodeURIComponent(motivo) },
   });
 
+  if (user?.email) {
+    try {
+      const d = await criarRascunho({ remetente: user.email, para: PARA, assunto, corpoHtml, anexos: [] });
+      return NextResponse.json({ ok: true, rascunho: true, webLink: d.webLink, para: PARA });
+    } catch { /* plano B: .eml */ }
+  }
   return rascunho("Rascunho do comunicado pronto.");
 }

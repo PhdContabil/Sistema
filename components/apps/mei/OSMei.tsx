@@ -84,15 +84,24 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
   }
   async function email(o: OS, publico: "financeiro" | "geral"): Promise<string> {
     setMsg({ ok: true, texto: "Gerando PDF e e-mail…" });
+    const janela = window.open("about:blank", "_blank");
     const { doc, nome } = await pdfDaOS(o, publico, servicos, porCod.get(Number(o.questor)));
     const r = await fetch("/api/mei/os/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nos: o.nos, publico, pdfBase64: pdfParaBase64(doc), nomeArquivo: nome }) });
     if (r.headers.get("content-type")?.includes("message/rfc822")) {
+      janela?.close();
       const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = `OS ${o.nos} - ${publico}.eml`; a.click();
       const texto = `E-mail ${publico === "financeiro" ? "Financeiro" : "Geral"} pronto, com a O.S. anexada: abra o arquivo baixado (abre no Outlook), confira e clique em Enviar.` + (r.headers.get("x-motivo") ? ` ${decodeURIComponent(r.headers.get("x-motivo")!)}` : "");
       setMsg({ ok: true, texto });
       return texto;
     }
     const j = await r.json().catch(() => ({}));
+    if (r.ok && j.webLink) {
+      if (janela) janela.location.href = j.webLink; else window.open(j.webLink, "_blank");
+      const texto = `Rascunho ${publico === "financeiro" ? "Financeiro" : "Geral"} criado no seu Outlook (pasta Rascunhos), com a O.S. anexada: confira e clique em Enviar.`;
+      setMsg({ ok: true, texto });
+      return texto;
+    }
+    janela?.close();
     const res = r.ok ? { ok: true, texto: `E-mail ${publico === "financeiro" ? "Financeiro" : "Geral"} enviado para ${(j.para ?? []).join(", ")}.` } : { ok: false, texto: j.error ?? "Falha ao enviar." };
     setMsg(res);
     return res.texto;
