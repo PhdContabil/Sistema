@@ -281,7 +281,7 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
       a.href = URL.createObjectURL(await r.blob());
       a.download = `Comunicado de Saida - ${m.cod}.eml`;
       a.click();
-      setMsg({ ok: true, texto: `${decodeURIComponent(r.headers.get("x-motivo") ?? "")} Abra o arquivo baixado no Outlook e envie.` });
+      setMsg({ ok: true, texto: `${decodeURIComponent(r.headers.get("x-motivo") ?? "")} Abra o arquivo baixado (abre no Outlook), anexe o que precisar e clique em Enviar.` });
       return;
     }
     const j = await r.json().catch(() => ({}));

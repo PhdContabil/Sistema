@@ -201,8 +201,11 @@ export function construirEml(opts: {
   const boundary = "nucleo-os-" + Date.now().toString(36);
   const quebrarLinhas = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
   const linhas: string[] = [];
+  // X-Unsent: o Outlook abre como RASCUNHO editável (dá para anexar e mudar o texto antes de enviar).
+  linhas.push("X-Unsent: 1");
   linhas.push(`To: ${opts.para.join(", ")}`);
-  linhas.push(`Subject: ${opts.assunto}`);
+  // Assunto com acento precisa ir codificado (RFC 2047), senão chega "SaÃ­da".
+  linhas.push(`Subject: =?UTF-8?B?${Buffer.from(opts.assunto, "utf8").toString("base64")}?=`);
   linhas.push("MIME-Version: 1.0");
   linhas.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
   linhas.push("");

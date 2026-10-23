@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
-import { enviarEmail, construirEml } from "@/lib/paralegal/graph";
-import { gravacaoLiberada } from "@/lib/mei/api";
+import { construirEml } from "@/lib/paralegal/graph";
 
-// Comunicado de Saída do MEI (encerramento): enviado direto pelo Microsoft 365 de quem está logado,
-// para Débora e Graciele. Com a trava de cadastro ligada (ou se o envio falhar), devolve um .eml.
+// Comunicado de Saída do MEI (encerramento) para Débora e Graciele.
+// Sempre devolve um RASCUNHO (.eml) que abre no Outlook para editar e anexar comprovantes
+// antes de enviar (pedido do setor MEI, 23/10/2026). Não envia mais direto.
 export const dynamic = "force-dynamic";
 
 const PARA = (process.env.MEI_EMAIL_COMUNICADO || "debora@phdcontabil.com.br,graciele@phdcontabil.com.br")
@@ -29,12 +29,5 @@ export async function POST(req: Request) {
     headers: { "Content-Type": "message/rfc822", "x-motivo": encodeURIComponent(motivo) },
   });
 
-  if (!gravacaoLiberada("cadastro")) return rascunho("Trava de cadastro ligada: e-mail não enviado automaticamente.");
-  if (!user?.email) return rascunho("Sem e-mail de login para usar como remetente.");
-  try {
-    await enviarEmail({ remetente: user.email, para: PARA, assunto, corpoHtml, anexos: [] });
-    return NextResponse.json({ ok: true, para: PARA });
-  } catch {
-    return rascunho("O envio automático falhou.");
-  }
+  return rascunho("Rascunho do comunicado pronto.");
 }
