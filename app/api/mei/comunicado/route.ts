@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
   if (!podeAcessarApp(nivel, "mei", "Sistema MEI")) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
-  let b: { cod?: number; razao?: string; cnpj?: string; salao?: string; data?: string };
+  let b: { cod?: number; razao?: string; cnpj?: string; salao?: string; data?: string; modo?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "JSON inválido." }, { status: 400 }); }
   if (!b.cod || !b.razao || !/^\d{4}-\d{2}-\d{2}$/.test(b.data ?? "")) return NextResponse.json({ error: "Informe a empresa e a data de saída." }, { status: 400 });
 
@@ -25,6 +25,10 @@ export async function POST(req: Request) {
   const corpoHtml = `<p>Prezados(as),</p><p>Venho comunicar a todos o desligamento da profissional:</p>`
     + `<p><b>${esc(b.salao)}<br>${esc(b.cod)} - ${esc(b.razao)}</b><br>CNPJ: ${esc(b.cnpj)}</p>`
     + `<p>Questor: Baixada<br>Data de Saída: <span style="color:red">${dataBr}</span></p>`;
+  if (b.modo === "mailto") {
+    const corpoTexto = `Prezados(as),\n\nVenho comunicar a todos o desligamento da profissional:\n\n${b.salao ?? ""}\n${b.cod} - ${b.razao}\nCNPJ: ${b.cnpj ?? ""}\n\nQuestor: Baixada\nData de Saída: ${dataBr}\n`;
+    return NextResponse.json({ ok: true, modo: "mailto", destino: PARA.join(";"), assunto, corpoTexto });
+  }
   const rascunho = (motivo: string) => new NextResponse(construirEml({ para: PARA, assunto, corpoHtml, anexos: [] }), {
     headers: { "Content-Type": "message/rfc822", "x-motivo": encodeURIComponent(motivo) },
   });

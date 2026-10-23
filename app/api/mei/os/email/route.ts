@@ -19,10 +19,10 @@ export async function POST(req: Request) {
   const user = await getCurrentUser().catch(() => null);
   const nivel = await obterNivelAcesso(user?.email);
   if (!podeAcessarApp(nivel, "mei", "Sistema MEI")) return NextResponse.json({ error: "Sem acesso ao Sistema MEI (setor MEI, Diretoria ou T.I.)." }, { status: 403 });
-  let b: { nos?: number; publico?: string; pdfBase64?: string; nomeArquivo?: string };
+  let b: { nos?: number; publico?: string; pdfBase64?: string; nomeArquivo?: string; modo?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "JSON inválido." }, { status: 400 }); }
   const para = PARA[b.publico ?? ""];
-  if (!b.nos || !para || !b.pdfBase64) return NextResponse.json({ error: "Informe a O.S., o público e o PDF." }, { status: 400 });
+  if (!b.nos || !para || (!b.pdfBase64 && b.modo !== "mailto")) return NextResponse.json({ error: "Informe a O.S., o público e o PDF." }, { status: 400 });
 
   const r = await chamar("GET", `/mei/os/${b.nos}`, { usuario: user?.email ?? null });
   const os = (r.json as { dados?: { tipo?: string; razao?: string }[] })?.dados?.[0];
@@ -30,7 +30,13 @@ export async function POST(req: Request) {
 
   const assunto = `${(os.tipo || "O.S.").trim()} - ${os.razao ?? ""} - O.S. nº: ${b.nos}`;
   const corpoHtml = "<p>Prezados(as),</p><p>Segue em anexo a O.S. com todas as informações.</p>";
-  const anexos = [{ nome: b.nomeArquivo || `OS ${b.nos}.pdf`, conteudoBase64: b.pdfBase64, tipoMime: "application/pdf" }];
+  // Igual ao Paralegal: devolve os dados para o navegador abrir o Outlook do computador (mailto);
+  // o PDF é baixado à parte para anexar.
+  if (b.modo === "mailto") {
+    const corpoTexto = "Prezados(as),\n\nSegue em anexo a O.S. com todas as informações.\n";
+    return NextResponse.json({ ok: true, modo: "mailto", destino: para.join(";"), assunto, corpoTexto });
+  }
+  const anexos = [{ nome: b.nomeArquivo || `OS ${b.nos}.pdf`, conteudoBase64: b.pdfBase64 ?? "", tipoMime: "application/pdf" }];
   const rascunho = (motivo: string) => new NextResponse(construirEml({ para, assunto, corpoHtml, anexos }), {
     headers: { "Content-Type": "message/rfc822", "x-motivo": encodeURIComponent(motivo) },
   });
