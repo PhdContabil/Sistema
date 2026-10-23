@@ -2,7 +2,7 @@
 //
 // Os campos "Serviço1".."Serviço4" têm o nome interno escapado pelo SharePoint
 // por causa do "ç" (Servi_x00e7_oN) — mesma pegadinha do sistema antigo.
-import { listarItens, obterItem, criarItem, atualizarItem, excluirItem, type ItemLista } from "./graph";
+import { listarItens, listarItensDesde, obterItem, criarItem, atualizarItem, excluirItem, type ItemLista } from "./graph";
 
 const LISTA = "osfinanceiro";
 
@@ -156,6 +156,12 @@ function paraCampos(d: Partial<Omit<OS, "id">>): CamposSP {
 export async function listarOS(): Promise<OS[]> {
   const itens = await listarItens<CamposSP>(LISTA);
   return itens.map(converter).sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""));
+}
+
+/** OS com Nº maior que `desde` — usado pela fila de pastas (chamada a cada minuto). */
+export async function listarOSDesde(desde: number): Promise<OS[]> {
+  const itens = await listarItensDesde<CamposSP>(LISTA, desde);
+  return itens.map(converter);
 }
 
 export async function obterOS(id: string): Promise<OS> {

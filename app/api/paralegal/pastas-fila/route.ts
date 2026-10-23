@@ -1,6 +1,6 @@
 import { bearerConfere } from "@/lib/seguranca";
 import { NextResponse } from "next/server";
-import { listarOS } from "@/lib/paralegal/os";
+import { listarOS, listarOSDesde } from "@/lib/paralegal/os";
 
 // Fila de "Nome das pastas" — substitui a automação do Access (Salvar da OS
 // em formostroca) que gravava em T:\Nome pastas\nome_pastas.xlsx. O Núcleo roda
@@ -25,12 +25,16 @@ export async function GET(req: Request) {
   }
 
   const desdeParam = new URL(req.url).searchParams.get("desde");
-  const lista = await listarOS();
-  const maxNos = lista.reduce((m, o) => Math.max(m, Number(o.id) || 0), 0);
   if (desdeParam === null || desdeParam === "") {
-    return NextResponse.json({ maxNos, itens: [] });
+    // 1ª execução do script: só o maior Nº atual (lê a lista inteira, uma vez).
+    const todas = await listarOS();
+    return NextResponse.json({ maxNos: todas.reduce((m, o) => Math.max(m, Number(o.id) || 0), 0), itens: [] });
   }
   const desde = Number(desdeParam) || 0;
+  // Chamada a cada minuto: busca só as OS novas (antes lia a lista inteira toda vez, ~12 s).
+  let lista;
+  try { lista = await listarOSDesde(desde); } catch { lista = await listarOS(); }
+  const maxNos = lista.reduce((m, o) => Math.max(m, Number(o.id) || 0), desde);
 
   const itens = lista
     .filter((o) => Number(o.id) > desde)

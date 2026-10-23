@@ -106,6 +106,23 @@ export async function listarItens<F = Record<string, unknown>>(nomeLista: string
   return itens;
 }
 
+/** Só os itens com ID maior que `desdeId` (a lista inteira tem milhares de linhas e leva ~10 s).
+ *  ID é indexado no SharePoint, então o filtro é feito lá. */
+export async function listarItensDesde<F = Record<string, unknown>>(nomeLista: string, desdeId: number): Promise<ItemLista<F>[]> {
+  const listaId = await obterListaId(nomeLista);
+  const itens: ItemLista<F>[] = [];
+  let url: string | null =
+    `${GRAPH}/sites/${SITE_ID}/lists/${listaId}/items?$expand=fields&$top=500&$filter=fields/ID gt ${Math.floor(desdeId)}`;
+  while (url) {
+    const p: { value?: ItemLista<F>[]; "@odata.nextLink"?: string } = await chamar(url, {
+      headers: { Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly" },
+    });
+    itens.push(...(p.value ?? []));
+    url = p["@odata.nextLink"] ?? null;
+  }
+  return itens;
+}
+
 export async function obterItem<F = Record<string, unknown>>(nomeLista: string, itemId: string): Promise<ItemLista<F>> {
   const listaId = await obterListaId(nomeLista);
   return chamar<ItemLista<F>>(`/sites/${SITE_ID}/lists/${listaId}/items/${itemId}?$expand=fields`);
