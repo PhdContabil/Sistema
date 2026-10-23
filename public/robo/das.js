@@ -9,7 +9,7 @@ const path = require('path');
 
 const URL_SN = 'https://www8.receita.fazenda.gov.br/SimplesNacional/controleAcesso/Autentica.aspx?id=48';
 const PROFILE_DIR = path.join(__dirname, '.chrome-profile');
-const { capturarErro } = require('./emissor');
+const { capturarErro, salvarDownloads } = require('./emissor');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dig = (s) => String(s || '').replace(/\D/g, '');
 
@@ -30,6 +30,7 @@ async function guiaDAS(job, creds, ctl) {
   const ctx = await chromium.launchPersistentContext(path.join(PROFILE_DIR, 'das-' + job.cod), {
     channel: 'chrome', headless: false, viewport: null, args: ['--start-maximized'], acceptDownloads: true,
   });
+  salvarDownloads(ctx, ctl.log);
   ctl.onPage(ctx);
   const page = ctx.pages()[0] || (await ctx.newPage());
   page.setDefaultTimeout(15000);

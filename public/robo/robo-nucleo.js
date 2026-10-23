@@ -40,7 +40,7 @@ http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   try {
     if (req.method === 'GET' && u.pathname === '/status') {
-      return send(res, 200, { ok: true, versao: 4, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
+      return send(res, 200, { ok: true, versao: 5, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
     }
     let m;
     if (req.method === 'GET' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)$/))) {

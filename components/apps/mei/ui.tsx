@@ -174,7 +174,7 @@ export function SelectSalao({ mei, valor, onChange, todos = true }: { mei: Mei[]
 
 // ---------------- Robô local (NFS-e e guia DAS) ----------------
 export const ROBO_URL = "http://localhost:3199";
-export const ROBO_VERSAO_MINIMA = 3;
+export const ROBO_VERSAO_MINIMA = 5; // v5: salva o PDF da nota com nome e extensão
 export const ROBO_INSTALADOR = "/robo/instalar-robo-nucleo.bat";
 export type RoboEstado = "ok" | "ausente" | "desatualizado";
 

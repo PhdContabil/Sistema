@@ -89,12 +89,35 @@ async function select2(page, abrir, busca, escolherTexto) {
  * @param creds { emissor?:{usr,senha}, govbr?:{cpf,senha} } | null
  * @param ctl  { log(msg), setStatus(s), cancelado():bool, onPage(ctx) }
  */
+/**
+ * Chrome aberto pelo robô (Playwright) salva downloads com nome aleatório e SEM extensão
+ * (ex.: "f641f219-eb0a-…"), em pasta temporária. Aqui cada download é salvo na pasta
+ * Downloads do Windows com o nome que o site sugere (ex.: "NFSe_….pdf").
+ */
+function salvarDownloads(ctx, log) {
+  const pasta = path.join(require('os').homedir(), 'Downloads');
+  const ligar = (pg) => pg.on('download', async (d) => {
+    try {
+      let nome = d.suggestedFilename() || `arquivo-${Date.now()}`;
+      if (!/\.[a-z0-9]{2,5}$/i.test(nome)) nome += '.pdf';
+      let destino = path.join(pasta, nome);
+      for (let i = 1; fs.existsSync(destino); i++) destino = path.join(pasta, nome.replace(/(\.[^.]+)$/, ` (${i})$1`));
+      await d.saveAs(destino);
+      if (log) log(`Arquivo salvo em Downloads: ${path.basename(destino)}`);
+    } catch (e) { if (log) log(`Falha ao salvar o download: ${e.message}`); }
+  });
+  ctx.pages().forEach(ligar);
+  ctx.on('page', ligar);
+}
+
 async function preparar(job, creds, ctl) {
   const { chromium } = require('playwright-core');
   fs.mkdirSync(PROFILE_DIR, { recursive: true }); fs.mkdirSync(SHOT_DIR, { recursive: true });
   const ctx = await chromium.launchPersistentContext(path.join(PROFILE_DIR, String(job.cod)), {
     channel: 'chrome', headless: process.env.NFSE_HEADLESS === '1', viewport: process.env.NFSE_HEADLESS === '1' ? { width: 1280, height: 900 } : null, args: ['--start-maximized'],
+    acceptDownloads: true,
   });
+  salvarDownloads(ctx, ctl.log);
   ctl.onPage(ctx);
   const page = ctx.pages()[0] || (await ctx.newPage());
   page.setDefaultTimeout(15000);
@@ -186,4 +209,4 @@ async function preparar(job, creds, ctl) {
   }
 }
 
-module.exports = { preparar, codigoServico, hoje, capturarErro };
+module.exports = { salvarDownloads, preparar, codigoServico, hoje, capturarErro };
