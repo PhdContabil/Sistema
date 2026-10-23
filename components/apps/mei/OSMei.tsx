@@ -88,6 +88,18 @@ export default function OSMei({ mei }: { mei: Mei[] }) {
     const r = await fetch("/api/mei/os/email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nos: o.nos, publico, modo: "mailto" }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.modo !== "mailto") { const t = j.error ?? "Falha ao preparar o e-mail."; setMsg({ ok: false, texto: t }); return t; }
+    // 1º: robô do Núcleo abre o Outlook do PC já com o PDF anexado.
+    try {
+      const st = await fetch("http://localhost:3199/status", { cache: "no-store" }).then((x) => x.json());
+      if (Number(st.versao ?? 0) >= 6) {
+        const { doc, nome } = await pdfDaOS(o, publico, servicos, porCod.get(Number(o.questor)));
+        const corpoHtml = String(j.corpoTexto).split("\n").map((l: string) => `<p style="margin:0">${l || "&nbsp;"}</p>`).join("");
+        const rr = await fetch("http://localhost:3199/email", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ para: String(j.destino).split(";"), assunto: j.assunto, corpoHtml, anexos: [{ nome, conteudoBase64: pdfParaBase64(doc) }] }) });
+        if (rr.ok) { const t = "Abri o Outlook com a mensagem e a O.S. anexada: confira e clique em Enviar."; setMsg({ ok: true, texto: t }); return t; }
+      }
+    } catch { /* sem robô (ou versão antiga): segue como no Paralegal */ }
+    // 2º (sem robô): igual ao Paralegal — abre o Outlook com o texto e baixa o PDF para anexar.
     await baixarPdf(o, publico);
     const a = document.createElement("a");
     a.href = `mailto:${j.destino}?subject=${encodeURIComponent(j.assunto)}&body=${encodeURIComponent(j.corpoTexto)}`;

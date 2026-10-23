@@ -11,6 +11,7 @@
 const http = require('http');
 const { preparar, codigoServico, hoje } = require('./emissor');
 const { guiaDAS } = require('./das');
+const { abrirEmailOutlook } = require('./outlook');
 
 const PORTA = +(process.env.ROBO_PORTA || 3199);
 // Só o site do Núcleo manda comandos. localhost só com ROBO_DEV=1 (testes de desenvolvimento).
@@ -40,7 +41,7 @@ http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   try {
     if (req.method === 'GET' && u.pathname === '/status') {
-      return send(res, 200, { ok: true, versao: 5, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
+      return send(res, 200, { ok: true, versao: 6, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
     }
     let m;
     if (req.method === 'GET' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)$/))) {
@@ -106,6 +107,14 @@ http.createServer(async (req, res) => {
       };
       guiaDAS(job, c, ctl).catch((e) => { job.status = 'erro'; job.erro = e.message; });
       return send(res, 201, publico(job));
+    }
+    if (req.method === 'POST' && u.pathname === '/email') {
+      // Abre o Outlook do PC com a mensagem e os anexos (ex.: PDF da O.S.). Não envia.
+      const chunks = []; for await (const c of req) chunks.push(c);
+      const b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      if (!Array.isArray(b.para) || !b.para.length) return send(res, 422, { erro: 'sem destinatário' });
+      await abrirEmailOutlook(b);
+      return send(res, 200, { ok: true });
     }
     return send(res, 404, { erro: 'rota desconhecida' });
   } catch (e) {

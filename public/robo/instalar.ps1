@@ -33,7 +33,7 @@ if (-not (Test-Path $node)) {
 Get-CimInstance Win32_Process -Filter "name='node.exe'" | Where-Object { $_.CommandLine -match 'robo-nucleo\.js' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Seconds 1
 Write-Host '  [3/5] Baixando o robo...'
-foreach ($f in 'robo-nucleo.js','emissor.js','das.js','package.json','versao.txt') {
+foreach ($f in 'robo-nucleo.js','emissor.js','das.js','outlook.js','package.json','versao.txt') {
   Invoke-WebRequest "$Site/$f" -OutFile (Join-Path $Dir $f) -UseBasicParsing
 }
 
