@@ -19,6 +19,16 @@ function properCase(s: string): string {
   return s.toLowerCase().replace(/(^|[\s])(\S)/g, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
 }
 
+function horaDeConsultar(agora = new Date()): boolean {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short", hour: "numeric", minute: "numeric", hourCycle: "h23" })
+      .formatToParts(agora).map((x) => [x.type, x.value]),
+  );
+  const util = !["Sat", "Sun"].includes(String(p.weekday));
+  const hora = Number(p.hour), minuto = Number(p.minute);
+  return util && hora >= 7 && hora < 20 && minuto % 5 === 0;
+}
+
 export async function GET(req: Request) {
   if (!bearerConfere(req, process.env.PARALEGAL_PASTAS_TOKEN)) {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
@@ -31,6 +41,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ maxNos: todas.reduce((m, o) => Math.max(m, Number(o.id) || 0), 0), itens: [] });
   }
   const desde = Number(desdeParam) || 0;
+  // Economia de CPU: o script do phddc01 chama a cada minuto, 24h. Só consulta o SharePoint
+  // em dia útil, das 7h às 20h (horário de Brasília), e no máximo a cada 5 minutos. Nos outros
+  // casos responde "nada novo" sem custo; nada se perde, pois o script guarda o último Nº
+  // e as OS novas entram na próxima consulta.
+  if (!horaDeConsultar()) return NextResponse.json({ maxNos: desde, itens: [] });
   // Chamada a cada minuto: busca só as OS novas (antes lia a lista inteira toda vez, ~12 s).
   let lista;
   try { lista = await listarOSDesde(desde); } catch { lista = await listarOS(); }
