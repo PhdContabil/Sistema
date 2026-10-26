@@ -42,7 +42,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
 
   // Filtros de várias opções: valores separados por "|" na URL.
   const lista = (v: string) => v.split("|").map((x) => x.trim()).filter(Boolean);
-  const tipos = lista(tipo);
+  const tiposSel = lista(tipo);
   const statuses = lista(status).map((x) => x.toUpperCase());
   const responsaveis = lista(responsavel).map((x) => x.toUpperCase());
   const filtered = snap.processos.filter((p) => {
@@ -53,7 +53,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
         .includes(q)
     )
       return false;
-    if (tipos.length && !tipos.includes(p.process)) return false;
+    if (tiposSel.length && !tiposSel.includes(p.process)) return false;
     if (statuses.length && !statuses.includes((p.status || "").toUpperCase()))
       return false;
     if (responsaveis.length) {
@@ -70,7 +70,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
 
   const activeFilters: { label: string; key: string }[] = [];
   if (q) activeFilters.push({ label: `Busca: "${q}"`, key: "q" });
-  if (tipo) activeFilters.push({ label: `Tipo: ${tipos.join(", ")}`, key: "tipo" });
+  if (tipo) activeFilters.push({ label: `Tipo: ${tiposSel.join(", ")}`, key: "tipo" });
   if (status) activeFilters.push({ label: `Status: ${lista(status).join(", ")}`, key: "status" });
   if (responsavel)
     activeFilters.push({
