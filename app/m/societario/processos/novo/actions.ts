@@ -66,6 +66,14 @@ export async function createProcessoAction(form: FormData): Promise<void> {
     nextActivity: activities[0]?.name || "",
   });
 
+  try {
+    const { criarServicosNoTareffa } = await import("@/lib/societario/tareffaServicos");
+    await criarServicosNoTareffa({
+      id: savedId, name, inscription: s(form, "inscription"), bearer: s(form, "bearer") || null,
+      process: s(form, "process") || "Outro", activities,
+    } as unknown as import("@/lib/societario/dataSource").UnifiedProcesso);
+  } catch { /* o processo fica salvo; dá para tentar de novo na tela do processo */ }
+
   revalidatePath("/m/societario");
   revalidatePath("/m/societario/processos");
   redirect(`/m/societario/processos/${savedId}`);

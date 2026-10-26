@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { listTipos } from "@/lib/societario/tiposProcesso";
 import { listarModelos, sugerirDoTareffa } from "@/lib/societario/tipoAtividades";
 import { RESPONSAVEIS } from "@/lib/societario/options";
+import { listarServicosTareffa } from "@/lib/societario/tareffaServicos";
 import { AtividadesTipoEditor } from "./AtividadesTipoEditor";
 import { salvarAtividadesTipoAction } from "./actions";
 
@@ -15,6 +16,7 @@ export default async function TipoProcessoPage({ params }: { params: { id: strin
   const modelos = await listarModelos();
   const atual = modelos[String(tipo.id)] ?? [];
   const sugestao = atual.length ? [] : await sugerirDoTareffa(tipo.name).catch(() => []);
+  const servicos = await listarServicosTareffa().catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -35,6 +37,7 @@ export default async function TipoProcessoPage({ params }: { params: { id: strin
         inicial={atual}
         sugestao={sugestao}
         responsaveis={[...RESPONSAVEIS]}
+        servicos={servicos}
         salvar={salvarAtividadesTipoAction}
       />
     </div>

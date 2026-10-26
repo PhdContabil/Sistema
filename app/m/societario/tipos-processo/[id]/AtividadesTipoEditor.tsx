@@ -8,12 +8,13 @@ interface Props {
   inicial: ModeloAtividade[];
   sugestao: ModeloAtividade[];
   responsaveis: string[];
+  servicos: { id: number; nome: string }[];
   salvar: (tipoId: string, itens: ModeloAtividade[]) => Promise<void>;
 }
 
 const VAZIA: ModeloAtividade = { nome: "", responsavel: "", dias: 0, obs: "" };
 
-export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, salvar }: Props) {
+export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, servicos, salvar }: Props) {
   const [itens, setItens] = useState<ModeloAtividade[]>(inicial.length ? inicial : []);
   const [msg, setMsg] = useState<string | null>(null);
   const [salvando, startTransition] = useTransition();
@@ -63,6 +64,7 @@ export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, 
               <th className="px-3 py-2 w-44">Corresponsável</th>
               <th className="px-3 py-2 w-28">Prazo (dias úteis)</th>
               <th className="px-3 py-2">Observação (opcional)</th>
+              <th className="px-3 py-2 w-56">Serviço do Tareffa</th>
               <th className="px-3 py-2 w-24 text-right"></th>
             </tr>
           </thead>
@@ -97,13 +99,31 @@ export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, 
                 <td className="px-3 py-2">
                   <textarea rows={1} value={a.obs ?? ""} onChange={(e) => set(i, { obs: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1" placeholder="Orientação para quem for executar" />
                 </td>
+                <td className="px-3 py-2">
+                  <select
+                    value={a.servicoTareffa?.id ?? ""}
+                    onChange={(e) => {
+                      const id = Number(e.target.value);
+                      const s = servicos.find((x) => x.id === id);
+                      set(i, { servicoTareffa: s ? { id: s.id, nome: s.nome } : undefined });
+                    }}
+                    className="w-full border border-gray-300 rounded px-2 py-1"
+                    title="Ao abrir um processo deste tipo, cria este serviço no Tareffa para a empresa"
+                  >
+                    <option value="">(nenhum)</option>
+                    {a.servicoTareffa && !servicos.some((x) => x.id === a.servicoTareffa!.id) && (
+                      <option value={a.servicoTareffa.id}>{a.servicoTareffa.nome}</option>
+                    )}
+                    {servicos.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                  </select>
+                </td>
                 <td className="px-3 py-2 text-right">
                   <button type="button" onClick={() => setItens((c) => c.filter((_, k) => k !== i))} className="text-red-600 hover:text-red-800">Remover</button>
                 </td>
               </tr>
             ))}
             {itens.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-4 text-gray-500">Nenhuma atividade vinculada ainda.</td></tr>
+              <tr><td colSpan={8} className="px-3 py-4 text-gray-500">Nenhuma atividade vinculada ainda.</td></tr>
             )}
           </tbody>
         </table>

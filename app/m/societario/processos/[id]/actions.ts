@@ -13,6 +13,14 @@ export async function updateActivityObsAction(processoId: number, activityId: nu
   revalidatePath(`/m/societario/processos/${processoId}`);
 }
 
+export async function criarServicosTareffaAction(processoId: number): Promise<void> {
+  const { loadAll } = await import("@/lib/societario/dataSource");
+  const { criarServicosNoTareffa } = await import("@/lib/societario/tareffaServicos");
+  const p = (await loadAll()).processos.find((x) => x.id === processoId);
+  if (p) await criarServicosNoTareffa(p);
+  revalidatePath(`/m/societario/processos/${processoId}`);
+}
+
 export async function deleteAction(id: number): Promise<void> {
   await deleteLocalProcesso(id);
   revalidatePath("/m/societario/processos");

@@ -4,7 +4,11 @@ import { loadAll } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { AtividadesTable } from "./AtividadesTable";
-import { deleteAction, updateActivityAction, updateActivityObsAction } from "./actions";
+import { deleteAction, updateActivityAction, updateActivityObsAction, criarServicosTareffaAction } from "./actions";
+import { ServicosTareffa } from "@/components/societario/ServicosTareffa";
+import { servicosDoProcesso } from "@/lib/societario/tareffaServicos";
+import { listTipos } from "@/lib/societario/tiposProcesso";
+import { listarModelos } from "@/lib/societario/tipoAtividades";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { isAdmin } from "@/lib/societario/options";
 
@@ -23,6 +27,13 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
 
   const isLocal = processo.source === "local";
   const admin = isAdmin(user?.email);
+  const [servTareffa, tiposProc, modelosProc] = await Promise.all([
+    servicosDoProcesso(processo.id).catch(() => []),
+    listTipos().catch(() => []),
+    listarModelos().catch(() => ({} as Record<string, { servicoTareffa?: { id: number } }[]>)),
+  ]);
+  const tipoProc = tiposProc.find((t) => t.name === processo.process);
+  const previstosTareffa = tipoProc ? (modelosProc[String(tipoProc.id)] ?? []).filter((m) => m.servicoTareffa?.id).length : 0;
 
   return (
     <div className="space-y-6">
@@ -101,6 +112,8 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
           <Field label="Próxima atividade" value={processo.nextActivity} />
         )}
       </section>
+
+      <ServicosTareffa itens={servTareffa} previstos={previstosTareffa} acao={criarServicosTareffaAction.bind(null, processo.id)} />
 
       <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b">

@@ -11,6 +11,8 @@ export interface ModeloAtividade {
   coresponsavel?: string;
   dias: number; // prazo em dias úteis, contado a partir da atividade anterior (a 1ª conta da data de início)
   obs?: string; // observação opcional (só orientação)
+  /** Serviço do Tareffa criado para a empresa quando o processo é aberto (como no Tareffa Societário). */
+  servicoTareffa?: { id: number; nome: string };
 }
 
 const BUCKET = "cache-nucleo";
@@ -42,6 +44,7 @@ export async function salvarModelo(tipoId: string, itens: ModeloAtividade[]): Pr
       coresponsavel: String(a.coresponsavel || "").trim() || undefined,
       dias: Math.max(0, Math.min(999, Math.round(Number(a.dias) || 0))),
       obs: String(a.obs || "").trim().slice(0, 500) || undefined,
+      servicoTareffa: a.servicoTareffa && Number(a.servicoTareffa.id) ? { id: Number(a.servicoTareffa.id), nome: String(a.servicoTareffa.nome || "") } : undefined,
     }))
     .filter((a) => a.nome);
   const { error } = await supabaseAdmin()
