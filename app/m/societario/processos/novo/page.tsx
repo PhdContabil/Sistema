@@ -2,11 +2,14 @@ import Link from "next/link";
 import { ProcessoForm } from "@/components/societario/ProcessoForm";
 import { createProcessoAction } from "./actions";
 import { listTiposAtivos } from "@/lib/societario/tiposProcesso";
+import { listarModelos } from "@/lib/societario/tipoAtividades";
 
 export const dynamic = "force-dynamic";
 
 export default async function NovoProcessoPage() {
   const tipos = await listTiposAtivos();
+  const porId = await listarModelos().catch(() => ({} as Awaited<ReturnType<typeof listarModelos>>));
+  const modelos = Object.fromEntries(tipos.map((t) => [t.name, porId[String(t.id)] ?? []]));
 
   return (
     <div className="space-y-6">
@@ -35,6 +38,7 @@ export default async function NovoProcessoPage() {
       <ProcessoForm
         action={createProcessoAction}
         tipos={tipos.map((t) => t.name)}
+        modelos={modelos}
       />
     </div>
   );

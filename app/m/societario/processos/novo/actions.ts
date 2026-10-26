@@ -19,7 +19,7 @@ export async function createProcessoAction(form: FormData): Promise<void> {
 
   // Atividades vêm como pares atividade_nome_N / atividade_responsavel_N / atividade_prazo_N
   const activities: SocietalActivity[] = [];
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 100; i++) {
     const aName = s(form, `atividade_nome_${i}`);
     if (!aName) continue;
     activities.push({

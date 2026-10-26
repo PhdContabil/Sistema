@@ -104,7 +104,7 @@ export function TiposProcessoTable({
               <th className="px-4 py-2.5 w-12">Ativo</th>
               <th className="px-4 py-2.5">Nome</th>
               <th className="px-4 py-2.5">Segmento</th>
-              <th className="px-4 py-2.5 text-right w-32">Ações</th>
+              <th className="px-4 py-2.5 text-right w-48">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -164,6 +164,12 @@ export function TiposProcessoTable({
                       </div>
                     ) : (
                       <div className="flex justify-end gap-3">
+                        <a
+                          href={`/m/societario/tipos-processo/${t.id}`}
+                          className="text-brand-700 hover:text-brand-900 text-sm"
+                        >
+                          Atividades
+                        </a>
                         <button
                           onClick={() => startEdit(t)}
                           className="text-brand-700 hover:text-brand-900 text-sm"

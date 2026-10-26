@@ -1,8 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RESPONSAVEIS, STATUS_PROCESSO } from "@/lib/societario/options";
 import type { UnifiedProcesso } from "@/lib/societario/dataSource";
+import type { ModeloAtividade } from "@/lib/societario/tipoAtividades";
+
+interface EmpresaQ { codigo: number; nome: string; doc: string; ativa: boolean }
+
+/** CPF (11) ou CNPJ (14) formatado; nunca passa de 14 dígitos. */
+export function formatarDoc(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 11) {
+    return d.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+  return d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+
+/** Soma dias úteis (pula sábado e domingo). */
+function somarDiasUteis(iso: string, dias: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  let n = Math.max(0, dias);
+  while (n > 0) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const w = d.getUTCDay();
+    if (w !== 0 && w !== 6) n--;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+function atividadesDoModelo(modelo: ModeloAtividade[], inicio: string): Atividade[] {
+  let base = inicio || new Date().toISOString().slice(0, 10);
+  return modelo.map((m) => {
+    base = somarDiasUteis(base, m.dias || 0) || base;
+    return { nome: m.nome, responsavel: m.responsavel || "", prazo: m.dias ? base : "", situacao: "", obs: m.obs || "" };
+  });
+}
 
 interface Atividade {
   id?: number;
@@ -10,6 +43,7 @@ interface Atividade {
   responsavel: string;
   prazo: string;
   situacao: string;
+  obs?: string;
 }
 
 const ATIVIDADE_VAZIA: Atividade = {
@@ -24,6 +58,8 @@ interface Props {
   tipos: string[];
   initial?: UnifiedProcesso;
   submitLabel?: string;
+  /** Atividades-modelo por NOME do tipo de processo (Cadastros > Tipos de processo). */
+  modelos?: Record<string, ModeloAtividade[]>;
 }
 
 export function ProcessoForm({
@@ -31,7 +67,42 @@ export function ProcessoForm({
   tipos,
   initial,
   submitLabel = "Salvar processo",
+  modelos = {},
 }: Props) {
+  const [tipo, setTipo] = useState(initial?.process || tipos[0] || "");
+  const [inicio, setInicio] = useState(initial?.started_in || new Date().toISOString().slice(0, 10));
+  const [razao, setRazao] = useState(initial?.name || "");
+  const [externo, setExterno] = useState("");
+  const [doc, setDoc] = useState(formatarDoc(initial?.inscription || ""));
+  const [empresas, setEmpresas] = useState<EmpresaQ[] | null>(null);
+  const [buscaAberta, setBuscaAberta] = useState(false);
+
+  async function carregarEmpresas() {
+    if (empresas) return;
+    try {
+      const r = await fetch("/api/societario/empresas");
+      const j = await r.json();
+      setEmpresas(r.ok ? j.itens ?? [] : []);
+    } catch { setEmpresas([]); }
+  }
+  const achadas = useMemo(() => {
+    const q = razao.trim().toLowerCase();
+    const qd = razao.replace(/\D/g, "");
+    if (!empresas || q.length < 2) return [];
+    return empresas
+      .filter((e) => e.nome.toLowerCase().includes(q) || String(e.codigo) === q || (qd.length >= 3 && e.doc.includes(qd)))
+      .slice(0, 15);
+  }, [empresas, razao]);
+
+  // Processo novo: ao trocar o tipo (ou a data de início), carrega as atividades vinculadas ao tipo.
+  const [mexeuAtividades, setMexeuAtividades] = useState(false);
+  useEffect(() => {
+    if (initial || mexeuAtividades) return;
+    const m = modelos[tipo];
+    if (m && m.length) setAtividades(atividadesDoModelo(m, inicio));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, inicio]);
+
   const [atividades, setAtividades] = useState<Atividade[]>(() => {
     if (initial && initial.activities.length > 0) {
       return initial.activities.map((a) => ({
@@ -42,20 +113,34 @@ export function ProcessoForm({
         situacao: a.situation || "",
       }));
     }
+    const m = modelos[initial?.process || tipos[0] || ""];
+    if (m && m.length) return atividadesDoModelo(m, new Date().toISOString().slice(0, 10));
     return [{ ...ATIVIDADE_VAZIA }];
   });
 
+  function trocarTipo(novo: string) {
+    if (!initial && mexeuAtividades && modelos[novo]?.length &&
+      confirm("Trocar as atividades pelas do tipo escolhido? As que você alterou serão substituídas.")) {
+      setMexeuAtividades(false);
+      setAtividades(atividadesDoModelo(modelos[novo], inicio));
+    }
+    setTipo(novo);
+  }
+
   function updateAtividade(i: number, patch: Partial<Atividade>) {
+    setMexeuAtividades(true);
     setAtividades((cur) =>
       cur.map((a, idx) => (idx === i ? { ...a, ...patch } : a))
     );
   }
 
   function addAtividade() {
+    setMexeuAtividades(true);
     setAtividades((cur) => [...cur, { ...ATIVIDADE_VAZIA }]);
   }
 
   function removeAtividade(i: number) {
+    setMexeuAtividades(true);
     setAtividades((cur) => cur.filter((_, idx) => idx !== i));
   }
 
@@ -64,19 +149,54 @@ export function ProcessoForm({
       <section className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">
         <h2 className="font-semibold">Dados da empresa</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Razão social / Nome do cliente *" required>
+          <input type="hidden" name="name" value={(externo.trim() || razao.trim())} />
+          <Field label="Razão social (empresa do Questor)">
+            <div className="relative">
+              <input
+                value={razao}
+                required={!externo.trim()}
+                onFocus={() => { carregarEmpresas(); setBuscaAberta(true); }}
+                onBlur={() => setTimeout(() => setBuscaAberta(false), 150)}
+                onChange={(e) => { setRazao(e.target.value); setBuscaAberta(true); }}
+                className="form-input"
+                placeholder="Digite nome, código ou CNPJ para buscar"
+                disabled={!!externo.trim()}
+              />
+              {buscaAberta && achadas.length > 0 && (
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow max-h-64 overflow-auto">
+                  {achadas.map((e) => (
+                    <button
+                      type="button"
+                      key={e.codigo}
+                      onMouseDown={() => { setRazao(e.nome); setDoc(formatarDoc(e.doc)); setBuscaAberta(false); }}
+                      className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                    >
+                      <b>{e.codigo}</b> - {e.nome}
+                      <span className="text-gray-500"> · {formatarDoc(e.doc)}{e.ativa ? "" : " · inativa"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {buscaAberta && empresas === null && razao.trim().length >= 2 && (
+                <p className="text-xs text-gray-500 mt-1">Carregando empresas do Questor…</p>
+              )}
+            </div>
+          </Field>
+          <Field label="Cliente externo (quem não é empresa do Questor)">
             <input
-              name="name"
-              required
-              defaultValue={initial?.name || ""}
+              value={externo}
+              onChange={(e) => setExterno(e.target.value)}
               className="form-input"
-              placeholder="Ex.: ACME LTDA"
+              placeholder="Preencha só se não for empresa cadastrada"
             />
           </Field>
           <Field label="CNPJ / CPF">
             <input
               name="inscription"
-              defaultValue={initial?.inscription || ""}
+              value={doc}
+              onChange={(e) => setDoc(formatarDoc(e.target.value))}
+              inputMode="numeric"
+              maxLength={18}
               className="form-input"
               placeholder="00.000.000/0000-00"
             />
@@ -91,7 +211,8 @@ export function ProcessoForm({
             <select
               name="process"
               required
-              defaultValue={initial?.process || tipos[0] || ""}
+              value={tipo}
+              onChange={(e) => trocarTipo(e.target.value)}
               className="form-input"
             >
               {tipos.map((t) => (
@@ -133,9 +254,8 @@ export function ProcessoForm({
               type="date"
               name="started_in"
               className="form-input"
-              defaultValue={
-                initial?.started_in || new Date().toISOString().slice(0, 10)
-              }
+              value={inicio}
+              onChange={(e) => setInicio(e.target.value)}
             />
           </Field>
           <Field label="Valor (R$)">
@@ -221,6 +341,7 @@ export function ProcessoForm({
                   className="form-input"
                   placeholder="Ex.: Coletar documentos"
                 />
+                {a.obs && <p className="text-xs text-gray-500 mt-1">{a.obs}</p>}
               </div>
               <div className="sm:col-span-3">
                 <label className="block text-xs text-gray-500 mb-1">
