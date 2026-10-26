@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import type { SocietalActivity } from "@/lib/societario/tareffa";
 import { SITUACOES_ATIVIDADE } from "@/lib/societario/options";
 import { formatDate } from "@/lib/societario/tareffa";
-import { StatusPill } from "@/components/societario/StatusPill";
 
 interface Props {
   processoId: number;
@@ -76,11 +75,6 @@ export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
                       </option>
                     ))}
                   </select>
-                  {(sit[a.id] ?? a.situation) && (
-                    <span className="hidden lg:inline">
-                      <StatusPill status={(sit[a.id] ?? a.situation) as string} />
-                    </span>
-                  )}
                   {savingId === a.id && (
                     <span className="text-[10px] text-gray-500">
                       salvando…
