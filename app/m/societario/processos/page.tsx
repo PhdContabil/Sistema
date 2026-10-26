@@ -88,7 +88,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
             {filtered.length} filtrados
           </p>
         </div>
-        {admin && (
+        {(admin || true) && (
           <Link
             href="/m/societario/processos/novo"
             className="bg-brand-700 hover:bg-brand-900 text-white text-sm font-medium rounded px-4 py-2"

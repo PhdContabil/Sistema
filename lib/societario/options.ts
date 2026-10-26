@@ -7,8 +7,8 @@ export const APP_VERSION = "1.5.0";
 // 3 níveis de permissão:
 //   - dev:   acesso total, gerencia tudo (somente o time de tecnologia)
 //   - admin: cria/edita/exclui processos, cadastra usuários
-//   - user:  colaborador — visualiza dados mas não consegue criar/editar
-//            processos, não vê aba Administração nem Tipos de Processo
+//   - user:  colaborador — cria e edita processos; não exclui, não vê
+//            Administração nem Tipos de Processo
 export type UserRole = "dev" | "admin" | "user";
 
 // Listas hardcoded — usadas APENAS como salvaguarda contra "lock out".

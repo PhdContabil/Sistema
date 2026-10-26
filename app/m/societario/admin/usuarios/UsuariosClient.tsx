@@ -157,7 +157,7 @@ export function UsuariosClient({ usuariosIniciais, adminEmails }: Props) {
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600 space-y-1">
         <div><span className="font-semibold text-purple-700">Desenvolvedor:</span> acesso total ao sistema.</div>
         <div><span className="font-semibold text-brand-700">Administrador:</span> cria/edita/exclui processos e cadastra usuários.</div>
-        <div><span className="font-semibold">Colaborador:</span> apenas visualiza dados (não vê Administração nem Tipos de processo).</div>
+        <div><span className="font-semibold">Colaborador:</span> cria e edita processos e atividades; não vê Administração nem Tipos de processo e não exclui processos.</div>
       </div>
 
       <div className="flex justify-end">

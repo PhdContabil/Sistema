@@ -34,7 +34,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
           ← Voltar para processos
         </Link>
         <div className="flex gap-3">
-          {isLocal && admin && (
+          {isLocal && (
             <Link
               href={`/m/societario/processos/${id}/editar`}
               className="text-sm text-brand-700 hover:text-brand-900"

@@ -165,11 +165,9 @@ export default function SocietarioShell({
           <NavLink href="/m/societario/processos" pathname={pathname} icon={<IconePasta />}>
             Processos
           </NavLink>
-          {admin && (
-            <NavLink href="/m/societario/processos/novo" pathname={pathname} icon={<IconeMais />}>
-              Novo processo
-            </NavLink>
-          )}
+          <NavLink href="/m/societario/processos/novo" pathname={pathname} icon={<IconeMais />}>
+            Novo processo
+          </NavLink>
           <NavLink href="/m/societario/empresas" pathname={pathname} icon={<IconePredio />}>
             Empresas
           </NavLink>

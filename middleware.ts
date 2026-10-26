@@ -145,9 +145,8 @@ function isAdminOnlyPath(path: string): boolean {
   if (path.startsWith("/m/societario/admin")) return true;
   if (path.startsWith("/api/societario/admin")) return true;
   if (path.startsWith("/m/societario/tipos-processo")) return true;
-  // Mexer em processos: criar / editar / excluir.
-  if (path.startsWith("/m/societario/processos/novo")) return true;
-  if (/^\/m\/societario\/processos\/[^/]+\/editar/.test(path)) return true;
+  // Criar e editar processos: liberado também para colaboradores (pedido de 26/10/2026).
+  // Continuam só para admin: Tipos de processo, Administração (usuários) e excluir processo.
   return false;
 }
 
