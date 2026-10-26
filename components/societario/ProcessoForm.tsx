@@ -71,7 +71,7 @@ export function ProcessoForm({
   submitLabel = "Salvar processo",
   modelos = {},
 }: Props) {
-  const [tipo, setTipo] = useState(initial?.process || tipos[0] || "");
+  const [tipo, setTipo] = useState(initial?.process || "");
   const [inicio, setInicio] = useState(initial?.started_in || new Date().toISOString().slice(0, 10));
   const [razao, setRazao] = useState(initial?.name || "");
   const [externo, setExterno] = useState("");
@@ -117,7 +117,7 @@ export function ProcessoForm({
         situacao: a.situation || "",
       }));
     }
-    const m = modelos[initial?.process || tipos[0] || ""];
+    const m = modelos[initial?.process || ""];
     if (m && m.length) return atividadesDoModelo(m, new Date().toISOString().slice(0, 10));
     return [{ ...ATIVIDADE_VAZIA }];
   });
@@ -219,6 +219,7 @@ export function ProcessoForm({
               onChange={(e) => trocarTipo(e.target.value)}
               className="form-input"
             >
+              <option value="" disabled>Selecione o tipo de processo</option>
               {tipos.map((t) => (
                 <option key={t} value={t}>
                   {t}
