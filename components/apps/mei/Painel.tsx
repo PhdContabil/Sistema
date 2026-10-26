@@ -65,7 +65,8 @@ export default function Painel({ mei, ir, abrirFicha }: { mei: Mei[]; ir: (tela:
     const porLanc = new Map(saidasNucleo.map((s) => [s.cod, s]));
     const out: { m: Mei; d: string | null; enc: string | null }[] = [];
     for (const m of mei) {
-      if (m.ativo) continue;
+      // Com baixa marcada (data diferente de 31/12/2100); o MEI segue "ativo" até a data.
+      if (!m.fim || m.fim.slice(0, 10) >= "2100-12-31") continue;
       const s = porLanc.get(m.cod);
       if (s) {
         const lanc = s.lancada_em.slice(0, 10);
