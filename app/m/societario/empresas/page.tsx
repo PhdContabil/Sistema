@@ -98,7 +98,7 @@ export default async function EmpresasPage({ searchParams }: PageProps) {
               <thead className="bg-gray-50 text-left text-gray-600 text-xs uppercase">
                 <tr>
                   <th className="px-4 py-2.5">Empresa</th>
-                  <th className="px-4 py-2.5">CNPJ</th>
+                  <th className="px-4 py-2.5">CNPJ / CPF</th>
                   <th className="px-4 py-2.5 text-right">Total</th>
                   <th className="px-4 py-2.5 text-right">Abertos</th>
                   <th className="px-4 py-2.5 text-right">Concluídos</th>

@@ -59,7 +59,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
         <h1 className="text-2xl font-bold break-words">{processo.name}</h1>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 mt-1">
           <span className="whitespace-nowrap">
-            CNPJ {processo.inscription || "—"}
+            {(processo.inscription || "").replace(/\D/g, "").length === 11 ? "CPF" : "CNPJ"} {processo.inscription || "—"}
           </span>
           <span className="text-gray-300">·</span>
           <span className="whitespace-nowrap">ID #{processo.id}</span>
