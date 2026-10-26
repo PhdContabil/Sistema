@@ -100,7 +100,10 @@ export function canonicalResponsavel(
   s: string | null | undefined
 ): Responsavel | null {
   if (!s) return null;
-  const n = normName(s);
+  let n = normName(s);
+  // Grafias que chegam do Tareffa: "Rafael Santos" (sem h) é o RHAFAEL SANTOS;
+  // o outro Rafael é o RAFAEL NUNES.
+  if (n === "RAFAEL SANTOS" || n === "RHAFAEL") n = "RHAFAEL SANTOS";
   for (const r of RESPONSAVEIS) {
     if (normName(r) === n) return r;
   }

@@ -10,6 +10,7 @@ import { AtividadeRecente } from "@/components/societario/AtividadeRecente";
 import { AtividadesPorPessoa, type AtividadeAberta } from "@/components/societario/AtividadesPorPessoa";
 import { SyncButton } from "@/components/societario/SyncButton";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
+import { canonicalResponsavel } from "@/lib/societario/options";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,8 @@ export default async function DashboardPage() {
           empresa: p.name,
           processo: p.process,
           atividade: a.name,
-          responsavel: a.responsible || "",
-          corresponsavel: a.co_responsible || "",
+          responsavel: canonicalResponsavel(a.responsible) || a.responsible || "",
+          corresponsavel: canonicalResponsavel(a.co_responsible) || a.co_responsible || "",
           prazo: a.deadline_in,
           situacao: a.situation,
         }))
