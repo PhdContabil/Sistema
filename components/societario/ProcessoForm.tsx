@@ -103,7 +103,7 @@ export function ProcessoForm({
     const m = modelos[tipo];
     if (m && m.length) setAtividades(atividadesDoModelo(m, inicio));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, inicio]);
+  }, [inicio]); // troca de tipo é tratada em trocarTipo
 
   const [atividades, setAtividades] = useState<Atividade[]>(() => {
     if (initial && initial.activities.length > 0) {
@@ -123,12 +123,13 @@ export function ProcessoForm({
   });
 
   function trocarTipo(novo: string) {
-    if (!initial && mexeuAtividades && modelos[novo]?.length &&
-      confirm("Trocar as atividades pelas do tipo escolhido? As que você alterou serão substituídas.")) {
-      setMexeuAtividades(false);
-      setAtividades(atividadesDoModelo(modelos[novo], inicio));
-    }
     setTipo(novo);
+    if (initial) return; // edição: não mexe nas atividades do processo existente
+    // Processo novo: troca sempre pelas atividades do tipo escolhido (ou deixa uma em branco se o tipo não tiver).
+    if (mexeuAtividades && !confirm("Trocar as atividades pelas do tipo escolhido? O que você preencheu nas atividades será substituído.")) return;
+    const m = modelos[novo];
+    setMexeuAtividades(false);
+    setAtividades(m && m.length ? atividadesDoModelo(m, inicio) : [{ ...ATIVIDADE_VAZIA }]);
   }
 
   function updateAtividade(i: number, patch: Partial<Atividade>) {
