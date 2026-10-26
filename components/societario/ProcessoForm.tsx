@@ -72,6 +72,7 @@ export function ProcessoForm({
   modelos = {},
 }: Props) {
   const [tipo, setTipo] = useState(initial?.process || "");
+  const [bearer, setBearer] = useState(initial?.bearer || "");
   const [inicio, setInicio] = useState(initial?.started_in || new Date().toISOString().slice(0, 10));
   const [razao, setRazao] = useState(initial?.name || "");
   const [externo, setExterno] = useState("");
@@ -101,7 +102,7 @@ export function ProcessoForm({
   useEffect(() => {
     if (initial || mexeuAtividades) return;
     const m = modelos[tipo];
-    if (m && m.length) setAtividades(atividadesDoModelo(m, inicio));
+    if (m && m.length) setAtividades(comResponsavel(atividadesDoModelo(m, inicio)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inicio]); // troca de tipo é tratada em trocarTipo
 
@@ -122,6 +123,14 @@ export function ProcessoForm({
     return [{ ...ATIVIDADE_VAZIA }];
   });
 
+  /** Responsável do processo vira o responsável padrão das atividades (só as vazias ou que estavam com o anterior). */
+  function trocarResponsavel(novo: string) {
+    const anterior = bearer;
+    setBearer(novo);
+    setAtividades((cur) => cur.map((a) => (!a.responsavel || a.responsavel === anterior ? { ...a, responsavel: novo } : a)));
+  }
+  const comResponsavel = (lista: Atividade[]) => lista.map((a) => (a.responsavel ? a : { ...a, responsavel: bearer }));
+
   function trocarTipo(novo: string) {
     setTipo(novo);
     if (initial) return; // edição: não mexe nas atividades do processo existente
@@ -129,7 +138,7 @@ export function ProcessoForm({
     if (mexeuAtividades && !confirm("Trocar as atividades pelas do tipo escolhido? O que você preencheu nas atividades será substituído.")) return;
     const m = modelos[novo];
     setMexeuAtividades(false);
-    setAtividades(m && m.length ? atividadesDoModelo(m, inicio) : [{ ...ATIVIDADE_VAZIA }]);
+    setAtividades(comResponsavel(m && m.length ? atividadesDoModelo(m, inicio) : [{ ...ATIVIDADE_VAZIA }]));
   }
 
   function updateAtividade(i: number, patch: Partial<Atividade>) {
@@ -141,7 +150,7 @@ export function ProcessoForm({
 
   function addAtividade() {
     setMexeuAtividades(true);
-    setAtividades((cur) => [...cur, { ...ATIVIDADE_VAZIA }]);
+    setAtividades((cur) => [...cur, { ...ATIVIDADE_VAZIA, responsavel: bearer }]);
   }
 
   function removeAtividade(i: number) {
@@ -244,7 +253,8 @@ export function ProcessoForm({
           <Field label="Responsável / Parceiro">
             <select
               name="bearer"
-              defaultValue={initial?.bearer || ""}
+              value={bearer}
+              onChange={(e) => trocarResponsavel(e.target.value)}
               className="form-input"
             >
               <option value="">(nenhum)</option>
