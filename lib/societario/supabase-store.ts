@@ -235,19 +235,23 @@ export async function sbUpdateActivitySituation(
   situation: string | null
 ): Promise<void> {
   const sb = supabaseAdmin();
-  const closed_in =
-    situation && situation.toUpperCase().includes("CONCL")
-      ? new Date().toISOString().slice(0, 10)
-      : null;
-  const { error } = await sb
+  const closed_in = /CONCLU|N[AÃ]O SE APLICA|CANCEL/i.test(situation || "")
+    ? new Date().toISOString().slice(0, 10)
+    : null;
+  const agora = new Date().toISOString();
+  const { data, error } = await sb
     .from("atividades")
-    .update({
-      situation,
-      closed_in,
-      updated_in: new Date().toISOString(),
-    })
-    .eq("id", activityId);
+    .update({ situation, closed_in, updated_in: agora })
+    .eq("id", activityId)
+    .select("external_id")
+    .maybeSingle();
   if (error) throw new Error(`Update atividade: ${error.message}`);
+  // Atividade que veio do Tareffa: guarda o ajuste para a próxima sincronização não desfazer.
+  const ext = (data as { external_id?: number | null } | null)?.external_id;
+  if (ext) {
+    const { salvarAjusteAtividade } = await import("./ajustesAtividade");
+    await salvarAjusteAtividade(ext, { situation, closed_in, em: agora });
+  }
 }
 
 // ----- Tipos de processo -----

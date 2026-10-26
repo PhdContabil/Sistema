@@ -189,10 +189,14 @@ export async function syncTareffaToSupabase(
     closed_in: string | null;
     updated_in: string;
   }> = [];
+  const { lerAjustesAtividade } = await import("./ajustesAtividade");
+  const ajustes = await lerAjustesAtividade();
   for (const ind of indicators) {
     const procId = procIdByExternal.get(ind.id);
     if (!procId) continue;
-    for (const a of ind.activities || []) {
+    for (const a0 of ind.activities || []) {
+      const aj = ajustes[String(a0.id)];
+      const a = aj && aj.em > String(a0.updated_in || "") ? { ...a0, situation: aj.situation, closed_in: aj.closed_in } : a0;
       atividadesToInsert.push({
         external_id: a.id,
         processo_id: procId,

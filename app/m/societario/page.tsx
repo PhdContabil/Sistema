@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     .filter((p) => !FECHADO.test(p.status || "") && !p.closed_in)
     .flatMap((p) =>
       (p.activities || [])
-        .filter((a) => !a.closed_in && !FECHADO.test(a.situation || ""))
+        .filter((a) => !a.closed_in && /AN[AÁ]LISE/i.test(a.situation || ""))
         .map((a) => ({
           processoId: p.id,
           empresa: p.name,

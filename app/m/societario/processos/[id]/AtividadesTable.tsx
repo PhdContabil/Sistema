@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { SocietalActivity } from "@/lib/societario/tareffa";
-import { STATUS_PROCESSO } from "@/lib/societario/options";
+import { SITUACOES_ATIVIDADE } from "@/lib/societario/options";
 import { formatDate } from "@/lib/societario/tareffa";
 import { StatusPill } from "@/components/societario/StatusPill";
 
@@ -18,6 +18,7 @@ interface Props {
 
 export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [sit, setSit] = useState<Record<number, string>>({});
   const [, startTransition] = useTransition();
 
   if (atividades.length === 0) {
@@ -30,6 +31,7 @@ export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
 
   function handleChange(activityId: number, value: string) {
     setSavingId(activityId);
+    setSit((m) => ({ ...m, [activityId]: value }));
     startTransition(async () => {
       await onUpdate(processoId, activityId, value);
       setSavingId(null);
@@ -62,21 +64,21 @@ export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-2">
                   <select
-                    defaultValue={a.situation || ""}
+                    value={(sit[a.id] ?? a.situation) || ""}
                     onChange={(e) => handleChange(a.id, e.target.value)}
                     disabled={savingId === a.id}
                     className="border border-gray-300 rounded px-2 py-1 text-xs flex-1 bg-white"
                   >
                     <option value="">— escolher —</option>
-                    {STATUS_PROCESSO.map((s) => (
+                    {[...new Set([...SITUACOES_ATIVIDADE, ...(a.situation ? [a.situation] : [])])].map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
                     ))}
                   </select>
-                  {a.situation && (
+                  {(sit[a.id] ?? a.situation) && (
                     <span className="hidden lg:inline">
-                      <StatusPill status={a.situation} />
+                      <StatusPill status={(sit[a.id] ?? a.situation) as string} />
                     </span>
                   )}
                   {savingId === a.id && (

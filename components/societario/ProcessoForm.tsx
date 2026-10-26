@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { RESPONSAVEIS, STATUS_PROCESSO } from "@/lib/societario/options";
+import { RESPONSAVEIS, STATUS_PROCESSO, SITUACOES_ATIVIDADE } from "@/lib/societario/options";
 import type { UnifiedProcesso } from "@/lib/societario/dataSource";
 import type { ModeloAtividade } from "@/lib/societario/tipoAtividades";
 
@@ -406,7 +406,7 @@ export function ProcessoForm({
                   className="form-input"
                 >
                   <option value="">—</option>
-                  {STATUS_PROCESSO.map((s) => (
+                  {SITUACOES_ATIVIDADE.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>

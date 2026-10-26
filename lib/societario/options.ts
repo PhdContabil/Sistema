@@ -122,6 +122,20 @@ export const STATUS_PROCESSO = [
   "CANCELADO",
 ] as const;
 
+/** Situações de ATIVIDADE (iguais às do Tareffa). */
+export const SITUACOES_ATIVIDADE = [
+  "ANÁLISE",
+  "AGUARDANDO CLIENTE",
+  "CONCLUÍDO",
+  "NÃO SE APLICA",
+  "CANCELADO",
+] as const;
+
+/** Atividade encerrada (some da lista de pendências). */
+export function atividadeEncerrada(situacao: string | null | undefined): boolean {
+  return /CONCLU|N[AÃ]O SE APLICA|CANCEL/i.test(situacao || "");
+}
+
 export function statusClass(status: string | null | undefined): string {
   if (!status) return "status-default";
   const s = status.toUpperCase();
