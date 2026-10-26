@@ -180,7 +180,19 @@ export default function OSTab() {
   // Serviços do Paralegal vindos do Questor (plano 2709), com valor; a lista fixa fica de reserva se a API falhar.
   const [servicosQuestor, setServicosQuestor] = useState<{ descricao: string; valor: number }[]>([]);
   useEffect(() => { fetch("/api/paralegal/cadastro-empresa/lookups?tipo=servicos-paralegal").then((r) => r.json()).then((j) => { const m = new Map<string, { descricao: string; valor: number }>(); for (const s of (j.dados ?? []) as { descricao: string; valor: number }[]) { const x = m.get(s.descricao); if (!x || (!x.valor && s.valor)) m.set(s.descricao, s); } setServicosQuestor([...m.values()]); }).catch(() => null); }, []);
-  const opcoesServico = servicosQuestor.length ? servicosQuestor.map((s) => s.descricao) : SERVICOS_OPCOES;
+  // Serviços digitados em "Outro (especificar)" ficam salvos e entram na lista (sem repetir maiúsc./minúsc./acento).
+  const [servicosExtras, setServicosExtras] = useState<string[]>([]);
+  useEffect(() => { fetch("/api/paralegal/servicos-extras").then((r) => r.json()).then((j) => setServicosExtras(j.itens ?? [])).catch(() => null); }, []);
+  const chaveServ = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+  const opcoesBase = servicosQuestor.length ? servicosQuestor.map((s) => s.descricao) : SERVICOS_OPCOES;
+  const opcoesServico = [...opcoesBase, ...servicosExtras.filter((x) => !opcoesBase.some((b) => chaveServ(b) === chaveServ(x)))];
+  /** Guarda os serviços digitados à mão que ainda não estão na lista. */
+  function guardarServicosNovos(lista: string[]) {
+    const novos = lista.map((x) => (x || "").trim()).filter((x) => x && !opcoesServico.some((o) => chaveServ(o) === chaveServ(x)));
+    if (!novos.length) return;
+    fetch("/api/paralegal/servicos-extras", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nomes: novos }) })
+      .then((r) => r.json()).then((j) => { if (j.itens) setServicosExtras(j.itens); }).catch(() => null);
+  }
   // Quantas linhas de serviço aparecem no formulário (começa com 1, "+ Adicionar" libera até 4).
   const [qtdServicos, setQtdServicos] = useState(1);
 
@@ -570,6 +582,7 @@ export default function OSTab() {
   }
 
   async function salvar() {
+    if (modal) guardarServicosNovos([...modal.dados.servicos]);
     if (!modal) return;
     if (!modal.dados.titulo.trim()) { setErro("Título é obrigatório."); return; }
     setSalvando(true);
