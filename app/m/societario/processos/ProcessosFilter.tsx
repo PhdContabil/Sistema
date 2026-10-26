@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RESPONSAVEIS, STATUS_PROCESSO } from "@/lib/societario/options";
 
@@ -74,48 +74,15 @@ export function ProcessosFilter({ tipos, initial }: Props) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Processo</label>
-          <select
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          >
-            <option value="">Todos</option>
-            {tipos.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <MultiSelect valor={tipo} mudar={setTipo} opcoes={tipos} rotulo="Todos" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Status</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          >
-            <option value="">Todos</option>
-            {STATUS_PROCESSO.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <MultiSelect valor={status} mudar={setStatus} opcoes={[...STATUS_PROCESSO]} rotulo="Todos" />
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Responsável</label>
-          <select
-            value={responsavel}
-            onChange={(e) => setResponsavel(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          >
-            <option value="">Todos</option>
-            {RESPONSAVEIS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+          <MultiSelect valor={responsavel} mudar={setResponsavel} opcoes={[...RESPONSAVEIS]} rotulo="Todos" />
         </div>
       </div>
 
@@ -186,5 +153,48 @@ function PresetBtn({
     >
       {children}
     </button>
+  );
+}
+
+/** Lista com caixas de seleção: permite escolher mais de uma opção (valor = itens separados por "|"). */
+function MultiSelect({ valor, mudar, opcoes, rotulo }: { valor: string; mudar: (v: string) => void; opcoes: string[]; rotulo: string }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const sel = valor.split("|").map((x) => x.trim()).filter(Boolean);
+  useEffect(() => {
+    const fora = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false); };
+    document.addEventListener("mousedown", fora);
+    return () => document.removeEventListener("mousedown", fora);
+  }, []);
+  const alternar = (o: string) => {
+    const n = sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o];
+    mudar(n.join("|"));
+  };
+  const texto = sel.length === 0 ? rotulo : sel.length === 1 ? sel[0] : `${sel.length} selecionados`;
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setAberto((a) => !a)}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-left bg-white flex justify-between items-center gap-2"
+        title={sel.join(", ")}
+      >
+        <span className="truncate">{texto}</span>
+        <span className="text-gray-400">▾</span>
+      </button>
+      {aberto && (
+        <div className="absolute z-20 mt-1 w-full min-w-[220px] bg-white border border-gray-200 rounded shadow max-h-72 overflow-auto">
+          <button type="button" onClick={() => mudar("")} className="block w-full text-left px-3 py-1.5 text-xs text-brand-700 hover:bg-gray-50 border-b">
+            Limpar seleção
+          </button>
+          {opcoes.map((o) => (
+            <label key={o} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" checked={sel.includes(o)} onChange={() => alternar(o)} className="accent-brand-700" />
+              <span>{o}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

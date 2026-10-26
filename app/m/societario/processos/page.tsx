@@ -40,6 +40,11 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
   const de = searchParams.de || "";
   const ate = searchParams.ate || "";
 
+  // Filtros de várias opções: valores separados por "|" na URL.
+  const lista = (v: string) => v.split("|").map((x) => x.trim()).filter(Boolean);
+  const tipos = lista(tipo);
+  const statuses = lista(status).map((x) => x.toUpperCase());
+  const responsaveis = lista(responsavel).map((x) => x.toUpperCase());
   const filtered = snap.processos.filter((p) => {
     if (
       q &&
@@ -48,12 +53,12 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
         .includes(q)
     )
       return false;
-    if (tipo && p.process !== tipo) return false;
-    if (status && p.status.toUpperCase() !== status.toUpperCase())
+    if (tipos.length && !tipos.includes(p.process)) return false;
+    if (statuses.length && !statuses.includes((p.status || "").toUpperCase()))
       return false;
-    if (responsavel) {
+    if (responsaveis.length) {
       const respUpper = (p.bearer || "").toUpperCase();
-      if (!respUpper.includes(responsavel.toUpperCase())) return false;
+      if (!responsaveis.some((r) => respUpper.includes(r))) return false;
     }
     if (ano && !(p.started_in || "").startsWith(ano)) return false;
     if (mes && !(p.started_in || "").startsWith(mes)) return false;
@@ -65,11 +70,11 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
 
   const activeFilters: { label: string; key: string }[] = [];
   if (q) activeFilters.push({ label: `Busca: "${q}"`, key: "q" });
-  if (tipo) activeFilters.push({ label: `Tipo: ${tipo}`, key: "tipo" });
-  if (status) activeFilters.push({ label: `Status: ${status}`, key: "status" });
+  if (tipo) activeFilters.push({ label: `Tipo: ${tipos.join(", ")}`, key: "tipo" });
+  if (status) activeFilters.push({ label: `Status: ${lista(status).join(", ")}`, key: "status" });
   if (responsavel)
     activeFilters.push({
-      label: `Responsável: ${responsavel}`,
+      label: `Responsável: ${lista(responsavel).join(", ")}`,
       key: "responsavel",
     });
   if (ano) activeFilters.push({ label: `Ano: ${ano}`, key: "ano" });
