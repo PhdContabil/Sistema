@@ -13,9 +13,10 @@ interface Props {
     activityId: number,
     situation: string
   ) => Promise<void>;
+  onObs?: (processoId: number, activityId: number, obs: string) => Promise<void>;
 }
 
-export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
+export function AtividadesTable({ processoId, atividades, onUpdate, onObs }: Props) {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [sit, setSit] = useState<Record<number, string>>({});
   const [, startTransition] = useTransition();
@@ -47,6 +48,7 @@ export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
           <th className="px-4 py-2.5 w-56">Situação</th>
           <th className="px-4 py-2.5">Prazo</th>
           <th className="px-4 py-2.5">Encerrada</th>
+          <th className="px-4 py-2.5 w-72">Observação</th>
         </tr>
       </thead>
       <tbody>
@@ -87,6 +89,21 @@ export function AtividadesTable({ processoId, atividades, onUpdate }: Props) {
               </td>
               <td className="px-4 py-2.5 text-gray-600">
                 {formatDate(a.closed_in)}
+              </td>
+              <td className="px-4 py-2.5">
+                <textarea
+                  rows={1}
+                  defaultValue={a.obs || ""}
+                  placeholder="Observação (opcional)"
+                  disabled={!onObs}
+                  onBlur={(e) => {
+                    const v = e.target.value;
+                    if (!onObs || v === (a.obs || "")) return;
+                    setSavingId(a.id);
+                    startTransition(async () => { await onObs(processoId, a.id, v); setSavingId(null); });
+                  }}
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white resize-y"
+                />
               </td>
             </tr>
           ))}

@@ -7,6 +7,8 @@ export interface SocietalActivity {
   responsible: string | null;
   /** Corresponsável (só nos processos do Núcleo). */
   co_responsible?: string | null;
+  /** Observação livre da atividade (só no Núcleo). */
+  obs?: string | null;
   situation: string | null;
   situation_in: string | null;
   order: string;

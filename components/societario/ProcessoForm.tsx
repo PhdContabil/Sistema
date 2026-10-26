@@ -112,6 +112,7 @@ export function ProcessoForm({
         nome: a.name,
         responsavel: a.responsible || "",
         coresponsavel: a.co_responsible || "",
+        obs: a.obs || "",
         prazo: a.deadline_in || "",
         situacao: a.situation || "",
       }));
@@ -318,6 +319,7 @@ export function ProcessoForm({
                 value={a.responsavel}
               />
               <input type="hidden" name={`atividade_coresponsavel_${i}`} value={a.coresponsavel || ""} />
+              <input type="hidden" name={`atividade_obs_${i}`} value={a.obs || ""} />
               <input
                 type="hidden"
                 name={`atividade_prazo_${i}`}
@@ -345,7 +347,12 @@ export function ProcessoForm({
                   className="form-input"
                   placeholder="Ex.: Coletar documentos"
                 />
-                {a.obs && <p className="text-xs text-gray-500 mt-1">{a.obs}</p>}
+                <input
+                  value={a.obs || ""}
+                  onChange={(e) => updateAtividade(i, { obs: e.target.value })}
+                  className="form-input mt-1 text-xs"
+                  placeholder="Observação (opcional)"
+                />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">

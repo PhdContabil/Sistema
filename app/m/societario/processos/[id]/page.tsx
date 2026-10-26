@@ -4,7 +4,7 @@ import { loadAll } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { AtividadesTable } from "./AtividadesTable";
-import { deleteAction, updateActivityAction } from "./actions";
+import { deleteAction, updateActivityAction, updateActivityObsAction } from "./actions";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { isAdmin } from "@/lib/societario/options";
 
@@ -114,6 +114,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
           processoId={processo.id}
           atividades={processo.activities}
           onUpdate={updateActivityAction}
+            onObs={updateActivityObsAction}
         />
       </section>
     </div>

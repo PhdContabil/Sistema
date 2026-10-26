@@ -27,6 +27,7 @@ export async function updateProcessoAction(
       name: aName,
       responsible: s(form, `atividade_responsavel_${i}`) || null,
       co_responsible: s(form, `atividade_coresponsavel_${i}`) || null,
+      obs: s(form, `atividade_obs_${i}`) || null,
       situation: s(form, `atividade_situacao_${i}`) || null,
       situation_in: null,
       order: String(i + 1).padStart(3, "0"),

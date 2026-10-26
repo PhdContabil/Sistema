@@ -34,6 +34,7 @@ interface AtividadeRow {
   name: string;
   responsible: string | null;
   co_responsible?: string | null;
+  obs?: string | null;
   situation: string | null;
   ordering: string | null;
   deadline_in: string | null;
@@ -62,6 +63,7 @@ function rowToProcesso(
       name: a.name,
       responsible: a.responsible,
       co_responsible: a.co_responsible ?? null,
+      obs: a.obs ?? null,
       situation: a.situation,
       situation_in: null,
       order: a.ordering || "",
@@ -215,10 +217,10 @@ async function inserirAtividades(
   acts: Record<string, unknown>[],
   origem: SocietalActivity[]
 ): Promise<string | null> {
-  const comCo = acts.map((a, i) => ({ ...a, co_responsible: origem[i]?.co_responsible || null }));
+  const comCo = acts.map((a, i) => ({ ...a, co_responsible: origem[i]?.co_responsible || null, obs: origem[i]?.obs || null }));
   const r1 = await sb.from("atividades").insert(comCo);
   if (!r1.error) return null;
-  if (!/co_responsible/i.test(r1.error.message)) return r1.error.message;
+  if (!/co_responsible|obs/i.test(r1.error.message)) return r1.error.message;
   const r2 = await sb.from("atividades").insert(acts);
   return r2.error ? r2.error.message : null;
 }
@@ -250,7 +252,33 @@ export async function sbUpdateActivitySituation(
   const ext = (data as { external_id?: number | null } | null)?.external_id;
   if (ext) {
     const { salvarAjusteAtividade } = await import("./ajustesAtividade");
-    await salvarAjusteAtividade(ext, { situation, closed_in, em: agora });
+    const { lerAjustesAtividade } = await import("./ajustesAtividade");
+    const atual = (await lerAjustesAtividade())[String(ext)];
+    await salvarAjusteAtividade(ext, { situation, closed_in, em: agora, obs: atual?.obs ?? null });
+  }
+}
+
+/** Observação de uma atividade (também guardada para as atividades do Tareffa não perderem na sincronização). */
+export async function sbUpdateActivityObs(activityId: number, obs: string | null): Promise<void> {
+  const sb = supabaseAdmin();
+  const agora = new Date().toISOString();
+  const { data, error } = await sb
+    .from("atividades")
+    .update({ obs, updated_in: agora })
+    .eq("id", activityId)
+    .select("external_id, situation, closed_in")
+    .maybeSingle();
+  if (error) throw new Error(`Observação da atividade: ${error.message}`);
+  const row = data as { external_id?: number | null; situation?: string | null; closed_in?: string | null } | null;
+  if (row?.external_id) {
+    const { lerAjustesAtividade, salvarAjusteAtividade } = await import("./ajustesAtividade");
+    const atual = (await lerAjustesAtividade())[String(row.external_id)];
+    await salvarAjusteAtividade(row.external_id, {
+      situation: atual ? atual.situation : row.situation ?? null,
+      closed_in: atual ? atual.closed_in : row.closed_in ?? null,
+      em: atual ? atual.em : "",
+      obs,
+    });
   }
 }
 

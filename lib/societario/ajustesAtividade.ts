@@ -7,7 +7,7 @@ import { supabaseAdmin } from "./supabase";
 const BUCKET = "cache-nucleo";
 const ARQ = "societario-ajustes-atividade.json";
 
-export interface AjusteAtividade { situation: string | null; closed_in: string | null; em: string }
+export interface AjusteAtividade { situation: string | null; closed_in: string | null; em: string; obs?: string | null }
 
 export async function lerAjustesAtividade(): Promise<Record<string, AjusteAtividade>> {
   const { data, error } = await supabaseAdmin().storage.from(BUCKET).download(ARQ);

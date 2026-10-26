@@ -188,6 +188,7 @@ export async function syncTareffaToSupabase(
     deadline_in: string | null;
     closed_in: string | null;
     updated_in: string;
+    obs?: string;
   }> = [];
   const { lerAjustesAtividade } = await import("./ajustesAtividade");
   const ajustes = await lerAjustesAtividade();
@@ -196,7 +197,8 @@ export async function syncTareffaToSupabase(
     if (!procId) continue;
     for (const a0 of ind.activities || []) {
       const aj = ajustes[String(a0.id)];
-      const a = aj && aj.em > String(a0.updated_in || "") ? { ...a0, situation: aj.situation, closed_in: aj.closed_in } : a0;
+      const a = aj && aj.em && aj.em > String(a0.updated_in || "") ? { ...a0, situation: aj.situation, closed_in: aj.closed_in } : a0;
+      const obsNucleo = aj?.obs || null;
       atividadesToInsert.push({
         external_id: a.id,
         processo_id: procId,
@@ -207,6 +209,7 @@ export async function syncTareffaToSupabase(
         deadline_in: a.deadline_in,
         closed_in: a.closed_in,
         updated_in: a.updated_in,
+        ...(obsNucleo ? { obs: obsNucleo } : {}),
       });
     }
   }

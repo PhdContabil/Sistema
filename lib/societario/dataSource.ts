@@ -266,6 +266,14 @@ async function saveOverrides(
   await fs.writeFile(OVERRIDES_DB, JSON.stringify(obj, null, 2), "utf-8");
 }
 
+export async function updateActivityObs(activityId: number, obs: string | null): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { sbUpdateActivityObs } = await import("./supabase-store");
+    await sbUpdateActivityObs(activityId, obs);
+    invalidateSupabaseCache();
+  }
+}
+
 export async function updateActivitySituation(
   processoId: number,
   activityId: number,
