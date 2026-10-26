@@ -68,7 +68,7 @@ const TTL = 10 * 60 * 1000;
 // cadastro de MEI novo e alterações na ficha forçam a atualização.
 const TTL_PERSISTIDO = 6 * 60 * 60 * 1000;
 const BUCKET_CACHE = "cache-nucleo";
-const ARQ_CACHE = "mei-lista.json";
+const ARQ_CACHE = "mei-lista-v2.json";
 async function lerPersistido(): Promise<{ t: number; v: MeiItem[] } | null> {
   try {
     const { supabaseAdmin } = await import("@/lib/societario/supabase");
@@ -94,6 +94,7 @@ export async function invalidarListaMEI() {
 }
 export const AVULSO_SALAO = 53278;
 const ATIVO_ATE = "2100-12-31";
+const hojeBR = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
 
 /**
  * Carteira MEI com as MESMAS regras do Access (validadas em 08/10/2026 contra o MeiSistema.accdb):
@@ -142,7 +143,9 @@ export async function listaMEI(forcar = false): Promise<MeiItem[]> {
       salaoCnpj: e.salao_cnpj || "", salaoCod,
       bloqueado: !!m.bloqueado, segmento: m.codigosegmento ?? null,
       inicio: m.datainicioativ ?? null, fim: m.dataencerativ ?? null,
-      ativo: String(m.dataencerativ ?? "").slice(0, 10) === ATIVO_ATE,
+      // Ativo até o dia do encerramento (inclusive): quem tem baixa marcada para o futuro
+      // continua no setor MEI (guias DAS etc.) até a data, mesmo já baixado no financeiro.
+      ativo: (String(m.dataencerativ ?? "").slice(0, 10) || ATIVO_ATE) >= hojeBR(),
       mensal: Math.round((mm?.valor ?? 0) * 100) / 100, clienteDesde: mm?.desde ?? null, mensalNF: !!mm?.nf,
       cidade: m.municipio || e.nomemunic || "", uf: m.uf || e.siglaestado || "", email: e.email || s.email || "",
       cel: e.telefone || "", cpf: mascararDoc(s.inscrfederal), ie: e.inscrestad || "", im: e.inscrmunic || "",

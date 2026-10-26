@@ -29,7 +29,7 @@ const MENU: { grupo: string; itens: string[] }[] = [
 
 // Cópia da carteira guardada no navegador: abrir/atualizar a página não chama a Vercel.
 // A busca no servidor só acontece no botão "Atualizar dados", após uma alteração ou se não houver cópia.
-const CHAVE_LOCAL = "nucleo-mei-carteira-v1";
+const CHAVE_LOCAL = "nucleo-mei-carteira-v2";
 function lerLocal(): { em: string; dados: Mei[] } | null {
   try { const t = localStorage.getItem(CHAVE_LOCAL); if (!t) return null; const j = JSON.parse(t); return Array.isArray(j?.dados) ? j : null; } catch { return null; }
 }
