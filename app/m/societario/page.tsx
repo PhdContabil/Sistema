@@ -7,6 +7,7 @@ import { ResponsaveisRanking } from "@/components/societario/charts/Responsaveis
 import { TimelineChart } from "@/components/societario/charts/TimelineChart";
 import { TipoBarsChart } from "@/components/societario/charts/TipoBarsChart";
 import { AtividadeRecente } from "@/components/societario/AtividadeRecente";
+import { AtividadesPorPessoa, type AtividadeAberta } from "@/components/societario/AtividadesPorPessoa";
 import { SyncButton } from "@/components/societario/SyncButton";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 
@@ -15,6 +16,24 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const [snap, user] = await Promise.all([loadAll(), getCurrentUser()]);
   const stats = computeStats(snap.processos);
+  const FECHADO = /CONCLU|CANCEL/i;
+  const atividadesAbertas: AtividadeAberta[] = snap.processos
+    .filter((p) => !FECHADO.test(p.status || "") && !p.closed_in)
+    .flatMap((p) =>
+      (p.activities || [])
+        .filter((a) => !a.closed_in && !FECHADO.test(a.situation || ""))
+        .map((a) => ({
+          processoId: p.id,
+          empresa: p.name,
+          processo: p.process,
+          atividade: a.name,
+          responsavel: a.responsible || "",
+          corresponsavel: a.co_responsible || "",
+          prazo: a.deadline_in,
+          situacao: a.situation,
+        }))
+    )
+    .filter((a) => a.responsavel || a.corresponsavel);
   const firstName = (user?.user_metadata?.full_name as string | undefined)
     ?.split(" ")[0];
 
@@ -91,6 +110,10 @@ export default async function DashboardPage() {
             status: p.status,
           }))}
         />
+      </section>
+
+      <section>
+        <AtividadesPorPessoa atividades={atividadesAbertas} />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">

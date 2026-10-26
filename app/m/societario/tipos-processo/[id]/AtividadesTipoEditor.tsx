@@ -59,7 +59,8 @@ export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, 
             <tr>
               <th className="px-3 py-2 w-16">Ordem</th>
               <th className="px-3 py-2">Atividade *</th>
-              <th className="px-3 py-2 w-48">Responsável</th>
+              <th className="px-3 py-2 w-44">Responsável</th>
+              <th className="px-3 py-2 w-44">Corresponsável</th>
               <th className="px-3 py-2 w-28">Prazo (dias úteis)</th>
               <th className="px-3 py-2">Observação (opcional)</th>
               <th className="px-3 py-2 w-24 text-right"></th>
@@ -85,6 +86,12 @@ export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, 
                   </select>
                 </td>
                 <td className="px-3 py-2">
+                  <select value={a.coresponsavel ?? ""} onChange={(e) => set(i, { coresponsavel: e.target.value })} className="w-full border border-gray-300 rounded px-2 py-1">
+                    <option value="">(nenhum)</option>
+                    {responsaveis.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td className="px-3 py-2">
                   <input type="number" min={0} value={a.dias} onChange={(e) => set(i, { dias: Number(e.target.value) })} className="w-full border border-gray-300 rounded px-2 py-1" />
                 </td>
                 <td className="px-3 py-2">
@@ -96,7 +103,7 @@ export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, 
               </tr>
             ))}
             {itens.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-4 text-gray-500">Nenhuma atividade vinculada ainda.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-4 text-gray-500">Nenhuma atividade vinculada ainda.</td></tr>
             )}
           </tbody>
         </table>

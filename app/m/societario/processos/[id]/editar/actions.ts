@@ -18,7 +18,7 @@ export async function updateProcessoAction(
   if (!name) throw new Error("Nome da empresa é obrigatório");
 
   const activities: SocietalActivity[] = [];
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 100; i++) {
     const aName = s(form, `atividade_nome_${i}`);
     if (!aName) continue;
     const aid = s(form, `atividade_id_${i}`);
@@ -26,6 +26,7 @@ export async function updateProcessoAction(
       id: aid ? Number(aid) : id * 100 + i,
       name: aName,
       responsible: s(form, `atividade_responsavel_${i}`) || null,
+      co_responsible: s(form, `atividade_coresponsavel_${i}`) || null,
       situation: s(form, `atividade_situacao_${i}`) || null,
       situation_in: null,
       order: String(i + 1).padStart(3, "0"),

@@ -15,6 +15,13 @@ export async function createProcessoAction(form: FormData): Promise<void> {
   if (!name) throw new Error("Nome da empresa é obrigatório");
 
   const snap = await loadAll();
+  // Proteção contra duplo envio: mesmo cliente + tipo criado há menos de 2 minutos -> abre o que já existe.
+  const tipoForm = s(form, "process") || "Outro";
+  const agora = Date.now();
+  const repetido = snap.processos.find((p) =>
+    p.source === "local" && p.name === name && p.process === tipoForm &&
+    agora - new Date(p.updated_in || 0).getTime() < 120_000);
+  if (repetido) redirect(`/m/societario/processos/${repetido.id}`);
   const tempId = nextLocalId(snap.processos);
 
   // Atividades vêm como pares atividade_nome_N / atividade_responsavel_N / atividade_prazo_N
@@ -26,6 +33,7 @@ export async function createProcessoAction(form: FormData): Promise<void> {
       id: tempId * 100 + i,
       name: aName,
       responsible: s(form, `atividade_responsavel_${i}`) || null,
+      co_responsible: s(form, `atividade_coresponsavel_${i}`) || null,
       situation: s(form, `atividade_situacao_${i}`) || null,
       situation_in: null,
       order: String(i + 1).padStart(3, "0"),

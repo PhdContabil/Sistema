@@ -8,6 +8,7 @@ import { loadAll } from "./dataSource";
 export interface ModeloAtividade {
   nome: string;
   responsavel: string; // "" = definir no processo
+  coresponsavel?: string;
   dias: number; // prazo em dias úteis, contado a partir da atividade anterior (a 1ª conta da data de início)
   obs?: string; // observação opcional (só orientação)
 }
@@ -38,6 +39,7 @@ export async function salvarModelo(tipoId: string, itens: ModeloAtividade[]): Pr
     .map((a) => ({
       nome: String(a.nome || "").trim().slice(0, 200),
       responsavel: String(a.responsavel || "").trim(),
+      coresponsavel: String(a.coresponsavel || "").trim() || undefined,
       dias: Math.max(0, Math.min(999, Math.round(Number(a.dias) || 0))),
       obs: String(a.obs || "").trim().slice(0, 500) || undefined,
     }))

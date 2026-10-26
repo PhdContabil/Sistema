@@ -33,6 +33,7 @@ interface AtividadeRow {
   processo_id: number;
   name: string;
   responsible: string | null;
+  co_responsible?: string | null;
   situation: string | null;
   ordering: string | null;
   deadline_in: string | null;
@@ -60,6 +61,7 @@ function rowToProcesso(
       id: a.id,
       name: a.name,
       responsible: a.responsible,
+      co_responsible: a.co_responsible ?? null,
       situation: a.situation,
       situation_in: null,
       order: a.ordering || "",
@@ -157,8 +159,8 @@ export async function sbCreateProcesso(
       closed_in: a.closed_in,
       updated_in: a.updated_in,
     }));
-    const { error: e2 } = await sb.from("atividades").insert(acts);
-    if (e2) throw new Error(`Insert atividades: ${e2.message}`);
+    const e2 = await inserirAtividades(sb, acts, p.activities);
+    if (e2) throw new Error(`Insert atividades: ${e2}`);
   }
 
   return processoId;
@@ -201,10 +203,24 @@ export async function sbUpdateProcesso(
         closed_in: a.closed_in,
         updated_in: a.updated_in,
       }));
-      const { error: e2 } = await sb.from("atividades").insert(acts);
-      if (e2) throw new Error(`Insert atividades: ${e2.message}`);
+      const e2 = await inserirAtividades(sb, acts, patch.activities);
+      if (e2) throw new Error(`Insert atividades: ${e2}`);
     }
   }
+}
+
+/** Insere as atividades com o corresponsável; se a coluna co_responsible ainda não existir, grava sem ela. */
+async function inserirAtividades(
+  sb: ReturnType<typeof supabaseAdmin>,
+  acts: Record<string, unknown>[],
+  origem: SocietalActivity[]
+): Promise<string | null> {
+  const comCo = acts.map((a, i) => ({ ...a, co_responsible: origem[i]?.co_responsible || null }));
+  const r1 = await sb.from("atividades").insert(comCo);
+  if (!r1.error) return null;
+  if (!/co_responsible/i.test(r1.error.message)) return r1.error.message;
+  const r2 = await sb.from("atividades").insert(acts);
+  return r2.error ? r2.error.message : null;
 }
 
 export async function sbDeleteProcesso(id: number): Promise<boolean> {

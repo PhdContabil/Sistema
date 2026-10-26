@@ -5,6 +5,8 @@ export interface SocietalActivity {
   id: number;
   name: string;
   responsible: string | null;
+  /** Corresponsável (só nos processos do Núcleo). */
+  co_responsible?: string | null;
   situation: string | null;
   situation_in: string | null;
   order: string;

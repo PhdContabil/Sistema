@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { RESPONSAVEIS, STATUS_PROCESSO } from "@/lib/societario/options";
 import type { UnifiedProcesso } from "@/lib/societario/dataSource";
 import type { ModeloAtividade } from "@/lib/societario/tipoAtividades";
@@ -33,7 +34,7 @@ function atividadesDoModelo(modelo: ModeloAtividade[], inicio: string): Atividad
   let base = inicio || new Date().toISOString().slice(0, 10);
   return modelo.map((m) => {
     base = somarDiasUteis(base, m.dias || 0) || base;
-    return { nome: m.nome, responsavel: m.responsavel || "", prazo: m.dias ? base : "", situacao: "", obs: m.obs || "" };
+    return { nome: m.nome, responsavel: m.responsavel || "", coresponsavel: m.coresponsavel || "", prazo: m.dias ? base : "", situacao: "", obs: m.obs || "" };
   });
 }
 
@@ -44,6 +45,7 @@ interface Atividade {
   prazo: string;
   situacao: string;
   obs?: string;
+  coresponsavel?: string;
 }
 
 const ATIVIDADE_VAZIA: Atividade = {
@@ -109,6 +111,7 @@ export function ProcessoForm({
         id: a.id,
         nome: a.name,
         responsavel: a.responsible || "",
+        coresponsavel: a.co_responsible || "",
         prazo: a.deadline_in || "",
         situacao: a.situation || "",
       }));
@@ -314,6 +317,7 @@ export function ProcessoForm({
                 name={`atividade_responsavel_${i}`}
                 value={a.responsavel}
               />
+              <input type="hidden" name={`atividade_coresponsavel_${i}`} value={a.coresponsavel || ""} />
               <input
                 type="hidden"
                 name={`atividade_prazo_${i}`}
@@ -331,7 +335,7 @@ export function ProcessoForm({
                   value={a.id}
                 />
               )}
-              <div className="sm:col-span-4">
+              <div className="sm:col-span-3">
                 <label className="block text-xs text-gray-500 mb-1">
                   Atividade #{i + 1}
                 </label>
@@ -343,7 +347,7 @@ export function ProcessoForm({
                 />
                 {a.obs && <p className="text-xs text-gray-500 mt-1">{a.obs}</p>}
               </div>
-              <div className="sm:col-span-3">
+              <div className="sm:col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">
                   Responsável
                 </label>
@@ -352,6 +356,23 @@ export function ProcessoForm({
                   onChange={(e) =>
                     updateAtividade(i, { responsavel: e.target.value })
                   }
+                  className="form-input"
+                >
+                  <option value="">(nenhum)</option>
+                  {RESPONSAVEIS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Corresponsável
+                </label>
+                <select
+                  value={a.coresponsavel || ""}
+                  onChange={(e) => updateAtividade(i, { coresponsavel: e.target.value })}
                   className="form-input"
                 >
                   <option value="">(nenhum)</option>
@@ -414,12 +435,7 @@ export function ProcessoForm({
         >
           Cancelar
         </a>
-        <button
-          type="submit"
-          className="bg-brand-700 hover:bg-brand-900 text-white text-sm font-semibold rounded px-5 py-2"
-        >
-          {submitLabel}
-        </button>
+        <BotaoSalvar label={submitLabel} />
       </div>
 
       <style jsx global>{`
@@ -439,6 +455,20 @@ export function ProcessoForm({
         }
       `}</style>
     </form>
+  );
+}
+
+/** Fica desabilitado enquanto salva: evita criar o processo duas vezes com clique duplo. */
+function BotaoSalvar({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="bg-brand-700 hover:bg-brand-900 text-white text-sm font-semibold rounded px-5 py-2 disabled:opacity-50"
+    >
+      {pending ? "Salvando…" : label}
+    </button>
   );
 }
 
