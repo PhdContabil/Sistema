@@ -8,6 +8,7 @@ import {
 Doc, } from "./ui";
 import { SenhasEmpresa } from "./Senhas";
 import { ParceriaFicha } from "./Parceria";
+import { CorrigirNota, type Nota } from "./Notas";
 
 export function Clientes({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }) {
   const [q, setQ] = useState("");
@@ -35,7 +36,7 @@ export function Clientes({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }
 
 interface Tarefa { id: number; servico_id: number; servico_descricao: string; competencia: string | null; data_servico: string | null; data_entrega: string | null; status: string; responsavel_nome: string }
 interface OSResumo { nos?: number; data: string | null; tipo: string | null; valortt: number | null; servico1: string | null }
-interface NotaResumo { codigoempresa: number; numeronf: number; serienf: string | null; datalctofis: string; valorcontabil: number }
+interface NotaResumo { codigoempresa: number; chave: number; codigopessoa?: number | null; nome?: string; cnpj?: string; especienf?: string; numeronf: number; serienf: string | null; datalctofis: string; valorcontabil: number }
 
 const compTxt = (c: string | null) => (c ? `${c.slice(5, 7)}/${c.slice(0, 4)}` : "");
 const diasAtras = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
@@ -64,6 +65,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
   const [tarefas, setTarefas] = useState<Tarefa[] | null>(null);
   const [oss, setOss] = useState<OSResumo[] | null>(null);
   const [notas, setNotas] = useState<NotaResumo[] | null>(null);
+  const [corrigir, setCorrigir] = useState<NotaResumo | null>(null);
   // Período das notas (padrão: últimos 12 meses). A API aceita ~92 dias por consulta: busca em partes.
   const [notasDe, setNotasDe] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().slice(0, 10); });
   const [notasAte, setNotasAte] = useState(() => new Date().toISOString().slice(0, 10));
@@ -219,7 +221,11 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
             ))}
           </div>
           {notas === null ? <p style={st.mut}>Carregando…</p> : notas.length === 0 ? <p style={st.mut}>Nenhuma nota lançada no período.</p> : (
-            <Tabela cab={["Nº", "Série", "Data", "Valor"]} linhas={notas.map((n) => [n.numeronf, n.serienf ?? "", dt(n.datalctofis), brl(n.valorcontabil)])} />
+            <Tabela cab={["Nº", "Série", "Data", "Valor", ""]} linhas={notas.map((n) => [n.numeronf, n.serienf ?? "", dt(n.datalctofis), brl(n.valorcontabil), <button key="c" style={{ ...st.btn, padding: "3px 8px" }} onClick={() => setCorrigir(n)}>Corrigir / excluir</button>])} />
+          )}
+          {corrigir && (
+            <CorrigirNota n={{ nome: m.razao, cnpj: m.cnpj, especienf: "", codigopessoa: null, ...corrigir } as Nota} m={m} fechar={() => setCorrigir(null)}
+              alterada={(nova) => setNotas((L) => (L ?? []).flatMap((x) => x.chave === corrigir.chave ? (nova ? [{ ...x, valorcontabil: nova.valorcontabil, codigopessoa: nova.codigopessoa }] : []) : [x]))} />
           )}
           {notas && notas.length > 0 && <p style={{ ...st.mut, textAlign: "right" }}>Total: <b>{brl(totalNotas)}</b></p>}
         </div>

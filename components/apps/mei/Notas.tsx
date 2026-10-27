@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, ErroRobo, fmtDoc, type RoboEstado, type Mei } from "./ui";
 
-interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
+export interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
 // Nota "sem tomador": o participante no Questor é um cadastro genérico, sem CPF/CNPJ
 // (3 = CLIENTES DIVERSOS, 3108 = AVULSOS — os únicos usados pelos MEIs desde 2024).
@@ -262,7 +262,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
 
 /** Corrigir (valor/tomador) ou excluir uma nota lançada pelo Núcleo (rotas PATCH/DELETE da API).
  *  Sempre simula antes (dry_run) e só grava depois da confirmação. Nota lançada pelo Access: a API recusa (409) — tratar no FIS. */
-function CorrigirNota({ n, m, fechar, alterada }: { n: Nota; m?: Mei; fechar: () => void; alterada: (nova: Nota | null) => void }) {
+export function CorrigirNota({ n, m, fechar, alterada }: { n: Nota; m?: Mei; fechar: () => void; alterada: (nova: Nota | null) => void }) {
   const [valor, setValor] = useState(String(n.valorcontabil.toFixed(2)).replace(".", ","));
   const [modo, setModo] = useState<"" | "salao" | "sem" | "outro">("");
   const [doc, setDoc] = useState("");
