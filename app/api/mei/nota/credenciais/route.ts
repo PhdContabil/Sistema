@@ -21,9 +21,15 @@ export async function GET(req: Request) {
   const lista = ((r.json as { dados?: Cred[] }).dados ?? []).filter((c) => c.ativo);
   // Guia DAS (PGMEI): CNPJ + CPF + código de acesso do Simples Nacional (não são senha; não precisa revelar).
   if (new URL(req.url).searchParams.get("tipo") === "das") {
-    const sn = lista.find((c) => c.tipo === "SIMPLES_NACIONAL" && c.usuario);
+    const dig = (v: string | null | undefined) => String(v ?? "").replace(/\D/g, "");
+    const sn = lista.find((c) => c.tipo === "SIMPLES_NACIONAL" && (c.usuario || c.documento));
     if (!sn) return NextResponse.json({ error: "Esta empresa não tem a senha do Simples Nacional (PGMEI) cadastrada." }, { status: 404 });
-    return NextResponse.json({ creds: { cnpj: sn.usuario, cpf: sn.documento, cod: sn.cod_acesso }, origem: "Simples Nacional" });
+    // CNPJ e CPF identificados pelo tamanho (a migração do Access gravou alguns com os campos trocados).
+    const campos = [dig(sn.usuario), dig(sn.documento)];
+    const cnpj = campos.find((x) => x.length === 14) ?? dig(sn.usuario);
+    const cpf = campos.find((x) => x.length === 11) ?? "";
+    if (!sn.cod_acesso) return NextResponse.json({ error: "Falta o código de acesso do Simples Nacional na senha da empresa." }, { status: 404 });
+    return NextResponse.json({ creds: { cnpj, cpf, cod: sn.cod_acesso }, origem: "Simples Nacional" });
   }
   const segredo = async (c: Cred) => {
     const s = await chamar("GET", `/mei/credenciais/${c.id}/segredo`, { usuario: user?.email ?? null });
