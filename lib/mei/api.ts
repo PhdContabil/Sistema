@@ -29,7 +29,7 @@ export function gravacaoLiberada(recurso?: string): boolean {
 export function recursoDaRota(caminho: string): string {
   if (/^\/cadastro\/(empresa|pessoa-financeiro)$/.test(caminho)) return "cadastro";
   if (/^\/mei\/os/.test(caminho) || /^\/cadastro\/servico-(fixo|variavel)$/.test(caminho)) return "os";
-  if (/^\/fiscal\/nota-servico$/.test(caminho)) return "nota";
+  if (/^\/fiscal\/nota-servico(\/\d+\/\d+)?$/.test(caminho)) return "nota";
   if (/^\/mei\/credenciais/.test(caminho)) return "senhas";
   if (/^\/cadastro\/(estabelecimento|socio)\//.test(caminho) || /^\/empresas\/\d+\//.test(caminho)) return "ficha";
   if (/^\/mei\/responsaveis/.test(caminho)) return "usuarios"; // só T.I./Diretoria grava (ver proxy)
@@ -64,6 +64,8 @@ const GRAVACAO: [string, RegExp][] = [
   ["POST", /^\/cadastro\/(servico-fixo|servico-variavel|empresa|pessoa-financeiro)$/],
   ["PATCH", /^\/cadastro\/(estabelecimento|socio)\/\d+\/\d+$/],
   ["POST", /^\/fiscal\/nota-servico$/],
+  ["PATCH", /^\/fiscal\/nota-servico\/\d+\/\d+$/],
+  ["DELETE", /^\/fiscal\/nota-servico\/\d+\/\d+$/],
   ["POST", /^\/mei\/os$/],
   ["PATCH", /^\/mei\/os\/\d+$/],
   ["DELETE", /^\/mei\/os\/\d+$/],

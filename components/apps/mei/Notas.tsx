@@ -20,6 +20,7 @@ export default function Notas({ mei }: { mei: Mei[] }) {
   const [notas, setNotas] = useState<Nota[] | null>(null);
   const [info, setInfo] = useState("");
   const [emitir, setEmitir] = useState<Mei | null>(null);
+  const [corrigir, setCorrigir] = useState<Nota | null>(null);
 
   // Profissionais do salão ainda ativos no início do período (consultaMenu_MEI: DATAENCERATIV > datainicio).
   const prof = useMemo(() => mei.filter((m) => String(m.salaoCod) === sal && (m.fim ?? "9999") > de).sort((a, b) => a.razao.localeCompare(b.razao)), [mei, sal, de]);
@@ -95,11 +96,13 @@ export default function Notas({ mei }: { mei: Mei[] }) {
           <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Notas do período</h3>
           <p style={st.mut}>{info}</p>
           {notas && <p style={st.mut}>Com tomador: <b>{comT.length}</b> · {brl(soma(comT))} — Sem tomador: <b>{semT.length}</b> · {brl(soma(semT))}</p>}
-          {notas && <Tabela cab={["Cód.", "Profissional", "Nº NF", "Série", "Data", "Tomador", "Valor"]} linhas={visiveis.map((n) => [n.codigoempresa, limpo(n.nome), n.numeronf, n.serienf ?? "", dt(n.datalctofis), semTomador(n) ? "Sem tomador" : "Com tomador", brl(n.valorcontabil)])} />}
+          {notas && <Tabela cab={["Cód.", "Profissional", "Nº NF", "Série", "Data", "Tomador", "Valor", ""]} linhas={visiveis.map((n) => [n.codigoempresa, limpo(n.nome), n.numeronf, n.serienf ?? "", dt(n.datalctofis), semTomador(n) ? "Sem tomador" : "Com tomador", brl(n.valorcontabil), <button key="c" style={{ ...st.btn, padding: "3px 8px" }} onClick={() => setCorrigir(n)}>Corrigir / excluir</button>])} />}
           {notas && <p style={{ textAlign: "right", fontWeight: 600 }}>Total{filtroTom ? (filtroTom === "sem" ? " (sem tomador)" : " (com tomador)") : ""}: {brl(total)}</p>}
         </div>
       </div>
       {emitir && <EmitirNota m={emitir} data={ate} fechar={() => setEmitir(null)} />}
+      {corrigir && <CorrigirNota n={corrigir} m={porCod.get(corrigir.codigoempresa)} fechar={() => setCorrigir(null)}
+        alterada={(nova) => setNotas((L) => (L ?? []).flatMap((x) => x.codigoempresa === corrigir.codigoempresa && x.chave === corrigir.chave ? (nova ? [nova] : []) : [x]))} />}
     </div>
   );
 }
@@ -112,6 +115,7 @@ interface ResultadoNota {
   saida?: { codigoempresa: number; chave: number; numeronf: number; serie: string; cfop: number; tabela: number };
   entrada?: { codigoempresa: number; codigoestab: number; chave: number; cfop: number; tabela: number; atividade_mei?: string } | null;
   iss?: { codigocampo: number; valor: string } | null; salao?: { codigopessoafin: number; nome: string } | null; avisos?: string[];
+  participante?: { codigopessoa: number; nome: string; documento?: string | null } | null;
 }
 
 /** emitirnota: lança no Questor a NFS-e já emitida no Portal Nacional (saída no MEI + entrada no salão + ISS). */
@@ -248,9 +252,89 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
             ["Entrada (salão)", res.r.entrada?.codigoempresa ?? "—", res.r.entrada?.chave ?? "", res.r.entrada?.cfop ?? "", res.r.entrada?.tabela ?? "", res.r.salao?.nome ?? ""],
             ["ISS (campo 231)", "", "", "", "", res.r.iss ? res.r.iss.valor : "não lançado"],
           ]} />
+          {res.r.participante && <p style={st.mut}>Tomador gravado: {res.r.participante.codigopessoa} - {res.r.participante.nome}{res.r.participante.documento ? ` (${fmtDoc(res.r.participante.documento)})` : ""}</p>}
           {(res.r.avisos ?? []).filter((a) => !/dry_run/i.test(a)).map((a, i) => <p key={i} style={st.mut}>• {a}</p>)}
         </div>
       )}
+    </Modal>
+  );
+}
+
+/** Corrigir (valor/tomador) ou excluir uma nota lançada pelo Núcleo (rotas PATCH/DELETE da API).
+ *  Sempre simula antes (dry_run) e só grava depois da confirmação. Nota lançada pelo Access: a API recusa (409) — tratar no FIS. */
+function CorrigirNota({ n, m, fechar, alterada }: { n: Nota; m?: Mei; fechar: () => void; alterada: (nova: Nota | null) => void }) {
+  const [valor, setValor] = useState(String(n.valorcontabil.toFixed(2)).replace(".", ","));
+  const [modo, setModo] = useState<"" | "salao" | "sem" | "outro">("");
+  const [doc, setDoc] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string; detalhes?: string[] } | null>(null);
+  const [simulado, setSimulado] = useState<"" | "patch" | "delete">("");
+  const [ocupado, setOcupado] = useState(false);
+  const caminho = `/fiscal/nota-servico/${n.codigoempresa}/${n.chave}`;
+
+  function corpo() {
+    const c: Record<string, unknown> = {};
+    const v = Number(valor.replace(/\./g, "").replace(",", "."));
+    if (v && Math.abs(v - n.valorcontabil) > 0.004) c.valor = v.toFixed(2);
+    if (modo) {
+      c.tomador_modo = modo;
+      c.tomador_doc = modo === "salao" ? ((m?.salaoCnpj ?? "").replace(/\D/g, "") || null) : modo === "outro" ? doc.replace(/\D/g, "") : null;
+    }
+    return c;
+  }
+
+  async function rodar(acao: "patch" | "delete", real: boolean) {
+    setMsg(null); setOcupado(true);
+    try {
+      const c = acao === "patch" ? corpo() : undefined;
+      if (acao === "patch" && !Object.keys(c!).length) { setMsg({ ok: false, texto: "Nada para corrigir: mude o valor ou o tomador." }); return; }
+      if (acao === "patch" && modo === "outro" && ![11, 14].includes(String(c!.tomador_doc ?? "").length)) { setMsg({ ok: false, texto: "Tomador: digite um CPF (11 números) ou CNPJ (14 números)." }); return; }
+      if (real && !confirm(acao === "delete" ? `EXCLUIR do Questor a NF ${n.numeronf} de ${dt(n.datalctofis)} (${brl(n.valorcontabil)})?` : `Gravar a correção da NF ${n.numeronf}?`)) return;
+      const r = await api<{ avisos?: string[]; detail?: unknown }>(acao === "patch" ? "PATCH" : "DELETE", caminho, {
+        query: { dry_run: real ? "false" : "true" }, corpo: c,
+        idempotencia: `nota-${acao}-${n.codigoempresa}-${n.chave}-${real ? "real" : "sim"}-${JSON.stringify(c ?? {})}-${Date.now()}`,
+      });
+      if (r.status >= 300) { setMsg({ ok: false, texto: r.status === 409 ? `${mensagemErro(r)} — se a nota foi lançada pelo Access, corrija/exclua no FIS.` : mensagemErro(r) }); setSimulado(""); return; }
+      const avisos = (r.dados?.avisos ?? []).filter((a) => !/dry_run/i.test(a));
+      if (!real) { setSimulado(acao); setMsg({ ok: true, texto: "Simulação OK (nada foi gravado). Confira e confirme abaixo.", detalhes: avisos }); return; }
+      if (r.dryRunForcado) { setMsg({ ok: false, texto: "A gravação está travada no Núcleo (modo simulação). Nada foi gravado.", detalhes: avisos }); return; }
+      setMsg({ ok: true, texto: acao === "delete" ? "Nota excluída do Questor." : "Nota corrigida.", detalhes: avisos });
+      setSimulado("");
+      if (acao === "delete") alterada(null);
+      else {
+        const c2 = c as { valor?: string; tomador_modo?: string };
+        alterada({ ...n, valorcontabil: c2.valor ? Number(c2.valor) : n.valorcontabil, codigopessoa: c2.tomador_modo === "sem" ? 3108 : c2.tomador_modo ? -1 : n.codigopessoa });
+      }
+    } catch (e) { setMsg({ ok: false, texto: e instanceof Error ? e.message : "Falha." }); }
+    finally { setOcupado(false); }
+  }
+
+  return (
+    <Modal titulo={`Corrigir nota — ${n.codigoempresa} - ${limpo(n.nome)}`} fechar={fechar} largura={620}>
+      <p style={st.mut}>NF {n.numeronf} série {n.serienf ?? "—"} · {dt(n.datalctofis)} · {brl(n.valorcontabil)} · {semTomador(n) ? "sem tomador" : "com tomador"} · chave {n.chave}</p>
+      <p style={st.mut}>Só funciona para notas lançadas pelo Núcleo. As do Access continuam sendo corrigidas no FIS.</p>
+      <div style={st.grid}>
+        <Campo label="Valor"><input style={st.input} value={valor} onChange={(e) => { setValor(e.target.value); setSimulado(""); }} /></Campo>
+        <Campo label="Tomador">
+          <select style={st.input} value={modo} onChange={(e) => { setModo(e.target.value as "" | "salao" | "sem" | "outro"); setSimulado(""); }}>
+            <option value="">Manter como está</option>
+            <option value="salao">{`Salão${m?.salao ? `: ${m.salao}` : ""}`}</option>
+            <option value="sem">Sem tomador (AVULSOS)</option>
+            <option value="outro">Outro (digitar CPF/CNPJ)</option>
+          </select>
+          {modo === "outro" && <input style={{ ...st.input, marginTop: 6 }} placeholder="CPF ou CNPJ do tomador" value={doc} onChange={(e) => { setDoc(e.target.value); setSimulado(""); }} />}
+        </Campo>
+      </div>
+      <div style={{ ...st.bar, marginTop: 10 }}>
+        <button style={st.btn} disabled={ocupado} onClick={() => rodar("patch", false)}>Simular correção</button>
+        {simulado === "patch" && <button style={st.btnP} disabled={ocupado} onClick={() => rodar("patch", true)}>Gravar correção</button>}
+        <span style={{ flex: 1 }} />
+        <button style={st.btnD} disabled={ocupado} onClick={() => rodar("delete", false)}>Simular exclusão</button>
+        {simulado === "delete" && <button style={{ ...st.btnD, background: "var(--div)", color: "#fff" }} disabled={ocupado} onClick={() => rodar("delete", true)}>Excluir de verdade</button>}
+      </div>
+      {msg && <div style={{ ...st.card, marginTop: 10 }}>
+        <p style={{ margin: 0, fontWeight: 600, color: msg.ok ? "var(--ok)" : "var(--div)" }}>{msg.texto}</p>
+        {(msg.detalhes ?? []).map((a, i) => <p key={i} style={{ ...st.mut, margin: "4px 0 0" }}>• {a}</p>)}
+      </div>}
     </Modal>
   );
 }
