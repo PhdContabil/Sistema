@@ -25,6 +25,7 @@ interface ProcessoRow {
   category: string | null;
   next_activity: string | null;
   source: string;
+  tag?: string | null;
 }
 
 interface AtividadeRow {
@@ -74,6 +75,7 @@ function rowToProcesso(
     source: (r.source as "api" | "csv" | "local") || "local",
     category: r.category || undefined,
     nextActivity: r.next_activity || undefined,
+    tag: r.tag ?? null,
   };
 }
 
@@ -141,6 +143,7 @@ export async function sbCreateProcesso(
       value: p.value,
       proposal: p.proposal,
       category: p.category || null,
+      ...(p.tag ? { tag: p.tag } : {}),
       next_activity: p.nextActivity || null,
       source: "local",
     })
@@ -184,6 +187,7 @@ export async function sbUpdateProcesso(
   if (patch.value !== undefined) update.value = patch.value;
   if (patch.proposal !== undefined) update.proposal = patch.proposal;
   if (patch.category !== undefined) update.category = patch.category;
+  if (patch.tag !== undefined) update.tag = patch.tag || null;
   if (patch.nextActivity !== undefined)
     update.next_activity = patch.nextActivity;
   update.updated_in = new Date().toISOString();

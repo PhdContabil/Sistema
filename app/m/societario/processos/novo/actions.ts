@@ -63,8 +63,22 @@ export async function createProcessoAction(form: FormData): Promise<void> {
     activities,
     source: "local",
     category: s(form, "category"),
+    tag: s(form, "tag") || null,
     nextActivity: activities[0]?.name || "",
   });
+
+  // Avisos por e-mail (Flávia, Kelly da Integração e corresponsáveis).
+  try {
+    const { getCurrentUser } = await import("@/lib/societario/supabase-server");
+    const { avisarProcessoNovo } = await import("@/lib/societario/notificacoes");
+    const user = await getCurrentUser().catch(() => null);
+    if (user?.email) {
+      await avisarProcessoNovo({
+        id: savedId, name, inscription: s(form, "inscription"), process: s(form, "process") || "Outro",
+        bearer: s(form, "bearer") || null, started_in: s(form, "started_in"), category: s(form, "category"), activities,
+      }, user.email);
+    }
+  } catch { /* aviso não trava o processo */ }
 
   try {
     const { criarServicosNoTareffa } = await import("@/lib/societario/tareffaServicos");

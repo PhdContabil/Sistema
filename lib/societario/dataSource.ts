@@ -37,6 +37,8 @@ export interface UnifiedProcesso extends SocietalIndicator {
   inscriptionType?: string;
   category?: string;
   nextActivity?: string;
+  /** Tag (ex.: IBGE, Emissão de CLI) — usada nos Serviços Avulsos. */
+  tag?: string | null;
 }
 
 export interface DataSnapshot {
@@ -345,7 +347,8 @@ function invalidateSupabaseCache() {
 async function loadFromSupabase(): Promise<UnifiedProcesso[]> {
   const now = Date.now();
   if (sbCache && now < sbCacheUntil) return sbCache;
-  sbCache = await sbListProcessos();
+  const { normalizarTipo } = await import("./aliasTipos");
+  sbCache = (await sbListProcessos()).map((p) => normalizarTipo(p));
   sbCacheUntil = now + SB_TTL;
   return sbCache;
 }

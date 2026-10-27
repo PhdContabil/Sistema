@@ -189,7 +189,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     setEnviando(true);
     try {
       const r = await api<ResultadoNota & { detail?: unknown }>("POST", "/fiscal/nota-servico", {
-        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: false }, // pedido do contábil (Du, 19/10/2026): salva só no profissional; o salão pega a nota pelo portal
+        corpo: { codigoempresa_mei: m.cod, data: d.data, valor, numeronf: Number(d.numero), serie: d.serie || null, lancar_entrada: false, tomador_modo: tomadorModo, tomador_doc: tomadorModo === "sem" ? null : (tomador || null) }, // pedido do contábil (Du, 19/10/2026): salva só no profissional; o salão pega a nota pelo portal
         idempotencia: `nota-mei-${m.cod}-${d.numero}-${d.serie}-${d.data}`,
       });
       if (r.status >= 300) {

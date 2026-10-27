@@ -171,6 +171,9 @@ export default function SocietarioShell({
           <NavLink href="/m/societario/empresas" pathname={pathname} icon={<IconePredio />}>
             Empresas
           </NavLink>
+          <NavLink href="/m/societario/relatorios" pathname={pathname} icon={<IconeGrade />}>
+            Relatórios
+          </NavLink>
           {admin && (
             <>
               <div className="px-3 pt-4 pb-1 text-[10px] soc-muted uppercase tracking-wider">

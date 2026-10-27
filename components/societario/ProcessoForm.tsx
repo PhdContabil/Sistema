@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { RESPONSAVEIS, STATUS_PROCESSO, SITUACOES_ATIVIDADE } from "@/lib/societario/options";
 import type { UnifiedProcesso } from "@/lib/societario/dataSource";
 import type { ModeloAtividade } from "@/lib/societario/tipoAtividades";
+import { TAGS_AVULSOS } from "@/lib/societario/aliasTipos";
 
 interface EmpresaQ { codigo: number; nome: string; doc: string; ativa: boolean }
 
@@ -73,6 +74,8 @@ export function ProcessoForm({
 }: Props) {
   const [tipo, setTipo] = useState(initial?.process || "");
   const [bearer, setBearer] = useState(initial?.bearer || "");
+  const [tag, setTag] = useState(initial?.tag || "");
+  const avulso = /SERVI[ÇC]OS AVULSOS/i.test(tipo);
   const [inicio, setInicio] = useState(initial?.started_in || new Date().toISOString().slice(0, 10));
   const [razao, setRazao] = useState(initial?.name || "");
   const [externo, setExterno] = useState("");
@@ -237,6 +240,14 @@ export function ProcessoForm({
               ))}
             </select>
           </Field>
+          {avulso && (
+            <Field label="Tag do serviço avulso">
+              <select name="tag" value={tag} onChange={(e) => setTag(e.target.value)} className="form-input">
+                <option value="">(sem tag)</option>
+                {[...new Set([...TAGS_AVULSOS, ...(tag ? [tag] : [])])].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label="Status">
             <select
               name="status"

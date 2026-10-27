@@ -21,6 +21,15 @@ export async function criarServicosTareffaAction(processoId: number): Promise<vo
   revalidatePath(`/m/societario/processos/${processoId}`);
 }
 
+export async function comunicarCancelamentoAction(processoId: number): Promise<void> {
+  const { loadAll } = await import("@/lib/societario/dataSource");
+  const { getCurrentUser } = await import("@/lib/societario/supabase-server");
+  const { comunicarCancelamento } = await import("@/lib/societario/notificacoes");
+  const p = (await loadAll()).processos.find((x) => x.id === processoId);
+  const user = await getCurrentUser().catch(() => null);
+  if (p && user?.email) await comunicarCancelamento(p, user.email);
+}
+
 export async function deleteAction(id: number): Promise<void> {
   await deleteLocalProcesso(id);
   revalidatePath("/m/societario/processos");

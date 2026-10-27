@@ -1,3 +1,4 @@
+import { tipoDescontinuado } from "@/lib/societario/aliasTipos";
 import Link from "next/link";
 import { ProcessoForm } from "@/components/societario/ProcessoForm";
 import { createProcessoAction } from "./actions";
@@ -37,7 +38,7 @@ export default async function NovoProcessoPage() {
 
       <ProcessoForm
         action={createProcessoAction}
-        tipos={tipos.map((t) => t.name)}
+        tipos={tipos.filter((t) => !tipoDescontinuado(t.name)).map((t) => t.name)}
         modelos={modelos}
       />
     </div>

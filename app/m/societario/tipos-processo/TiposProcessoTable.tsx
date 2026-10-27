@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { TipoProcesso } from "@/lib/societario/tiposProcesso";
+import { ehIntegracao, tipoDescontinuado, tipoAtual } from "@/lib/societario/aliasTipos";
 
 interface Props {
   tipos: TipoProcesso[];
@@ -23,6 +24,8 @@ export function TiposProcessoTable({
   const [editSegment, setEditSegment] = useState("");
   const [, startTransition] = useTransition();
   const [novoOpen, setNovoOpen] = useState(false);
+  const [aba, setAba] = useState<"paralegal" | "integracao">("paralegal");
+  const visiveis = tipos.filter((t) => (aba === "integracao") === ehIntegracao(t.segment, t.name));
 
   function startEdit(t: TipoProcesso) {
     setEditingId(t.id);
@@ -48,7 +51,19 @@ export function TiposProcessoTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center gap-3">
+        <div className="flex gap-1 border-b border-gray-200">
+          {([["paralegal", "Paralegal"], ["integracao", "Integração"]] as const).map(([k, rot]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setAba(k)}
+              className={`px-4 py-2 text-sm -mb-px border-b-2 ${aba === k ? "border-brand-700 text-brand-700 font-semibold" : "border-transparent text-gray-500 hover:text-gray-800"}`}
+            >
+              {rot} ({tipos.filter((t) => (k === "integracao") === ehIntegracao(t.segment, t.name)).length})
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setNovoOpen((o) => !o)}
           className="bg-brand-700 hover:bg-brand-900 text-white text-sm font-medium rounded px-4 py-2"
@@ -82,7 +97,7 @@ export function TiposProcessoTable({
             </label>
             <input
               name="segment"
-              defaultValue="Societário"
+              defaultValue={aba === "integracao" ? "Integração" : "Societário"}
               className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
             />
           </div>
@@ -108,7 +123,7 @@ export function TiposProcessoTable({
             </tr>
           </thead>
           <tbody>
-            {tipos.map((t) => {
+            {visiveis.map((t) => {
               const isEditing = editingId === t.id;
               return (
                 <tr key={t.id} className="border-t hover:bg-gray-50">
@@ -133,6 +148,11 @@ export function TiposProcessoTable({
                       />
                     ) : (
                       <span className="font-medium">{t.name}</span>
+                    )}
+                    {!isEditing && tipoDescontinuado(t.name) && (
+                      <span className="ml-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                        descontinuado → {tipoAtual(t.name).tipo}{tipoAtual(t.name).tag ? ` (tag ${tipoAtual(t.name).tag})` : ""}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-gray-600">

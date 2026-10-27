@@ -179,7 +179,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
                         {p.inscription || "—"}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5">{p.process}</td>
+                    <td className="px-4 py-2.5">{p.process}{p.tag && <span className="ml-1 text-[11px] bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5">{p.tag}</span>}</td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {p.bearer || "—"}
                     </td>

@@ -41,6 +41,10 @@ export async function updateProcessoAction(
   const value =
     valueRaw && !Number.isNaN(Number(valueRaw)) ? Number(valueRaw) : null;
 
+  // Para avisar só quem PASSOU a ser corresponsável.
+  const { loadAll } = await import("@/lib/societario/dataSource");
+  const antes = (await loadAll().catch(() => null))?.processos.find((p) => p.id === id)?.activities ?? [];
+
   await updateLocalProcesso(id, {
     name,
     inscription: s(form, "inscription"),
@@ -53,7 +57,18 @@ export async function updateProcessoAction(
     updated_in: new Date().toISOString(),
     activities,
     category: s(form, "category"),
+    tag: s(form, "tag") || null,
   });
+
+  try {
+    const { getCurrentUser } = await import("@/lib/societario/supabase-server");
+    const { avisarCorresponsaveis } = await import("@/lib/societario/notificacoes");
+    const user = await getCurrentUser().catch(() => null);
+    if (user?.email) {
+      await avisarCorresponsaveis({ id, name, inscription: s(form, "inscription"), process: s(form, "process") || "Outro",
+        bearer: s(form, "bearer") || null, started_in: s(form, "started_in"), category: s(form, "category"), activities }, antes, user.email);
+    }
+  } catch { /* aviso não trava a edição */ }
 
   revalidatePath("/m/societario");
   revalidatePath("/m/societario/processos");

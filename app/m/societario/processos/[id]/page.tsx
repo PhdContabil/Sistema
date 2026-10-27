@@ -4,7 +4,7 @@ import { loadAll } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { AtividadesTable } from "./AtividadesTable";
-import { deleteAction, updateActivityAction, updateActivityObsAction, criarServicosTareffaAction } from "./actions";
+import { deleteAction, updateActivityAction, updateActivityObsAction, criarServicosTareffaAction, comunicarCancelamentoAction } from "./actions";
 import { ServicosTareffa } from "@/components/societario/ServicosTareffa";
 import { servicosDoProcesso } from "@/lib/societario/tareffaServicos";
 import { listTipos } from "@/lib/societario/tiposProcesso";
@@ -78,7 +78,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
       </header>
 
       <section className="bg-white border border-gray-200 rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-        <Field label="Processo" value={processo.process} />
+        <Field label="Processo" value={processo.tag ? `${processo.process} · ${processo.tag}` : processo.process} />
         <Field
           label="Status"
           value={<StatusPill status={processo.status} />}
@@ -112,6 +112,18 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
           <Field label="Próxima atividade" value={processo.nextActivity} />
         )}
       </section>
+
+      {/CANCELA/i.test(processo.process) && (
+        <section className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Comunicar os setores</h2>
+            <p className="text-xs text-gray-500">Enviado automaticamente para geral@ ao registrar o cancelamento. Use o botão para enviar de novo.</p>
+          </div>
+          <form action={comunicarCancelamentoAction.bind(null, processo.id)}>
+            <button type="submit" className="bg-brand-700 hover:bg-brand-900 text-white text-sm rounded px-3 py-1.5">Enviar comunicado</button>
+          </form>
+        </section>
+      )}
 
       <ServicosTareffa itens={servTareffa} previstos={previstosTareffa} acao={criarServicosTareffaAction.bind(null, processo.id)} />
 

@@ -1,3 +1,4 @@
+import { tipoDescontinuado } from "@/lib/societario/aliasTipos";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { loadAll } from "@/lib/societario/dataSource";
@@ -38,7 +39,7 @@ export default async function EditarProcessoPage({ params }: PageProps) {
 
       <ProcessoForm
         action={updateProcessoAction.bind(null, id)}
-        tipos={tipos.map((t) => t.name)}
+        tipos={tipos.filter((t) => !tipoDescontinuado(t.name)).map((t) => t.name)}
         initial={processo}
         submitLabel="Salvar alterações"
       />
