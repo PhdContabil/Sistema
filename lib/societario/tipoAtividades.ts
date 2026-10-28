@@ -13,6 +13,8 @@ export interface ModeloAtividade {
   obs?: string; // observação opcional (só orientação)
   /** Serviço do Tareffa criado para a empresa quando o processo é aberto (como no Tareffa Societário). */
   servicoTareffa?: { id: number; nome: string };
+  /** Quem recebe o serviço no Tareffa (nome do usuário do Tareffa). Vazio = responsável da atividade. */
+  responsavelTareffa?: string;
 }
 
 const BUCKET = "cache-nucleo";
@@ -45,6 +47,7 @@ export async function salvarModelo(tipoId: string, itens: ModeloAtividade[]): Pr
       dias: Math.max(0, Math.min(999, Math.round(Number(a.dias) || 0))),
       obs: String(a.obs || "").trim().slice(0, 500) || undefined,
       servicoTareffa: a.servicoTareffa && Number(a.servicoTareffa.id) ? { id: Number(a.servicoTareffa.id), nome: String(a.servicoTareffa.nome || "") } : undefined,
+      responsavelTareffa: (a.servicoTareffa && String(a.responsavelTareffa || "").trim().slice(0, 120)) || undefined,
     }))
     .filter((a) => a.nome);
   const { error } = await supabaseAdmin()

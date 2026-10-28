@@ -116,6 +116,11 @@ export function AtividadesTipoEditor({ tipoId, inicial, sugestao, responsaveis, 
                     )}
                     {servicos.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
                   </select>
+                  {a.servicoTareffa && (
+                    <input value={a.responsavelTareffa ?? ""} onChange={(e) => set(i, { responsavelTareffa: e.target.value })}
+                      className="w-full border border-gray-300 rounded px-2 py-1 mt-1" placeholder="Para quem no Tareffa (vazio = responsável)"
+                      title="Nome do usuário do Tareffa que recebe o serviço (ex.: MARCIO). Vazio = responsável da atividade." />
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <button type="button" onClick={() => setItens((c) => c.filter((_, k) => k !== i))} className="text-red-600 hover:text-red-800">Remover</button>

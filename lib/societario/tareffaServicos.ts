@@ -110,7 +110,7 @@ export async function criarServicosNoTareffa(p: UnifiedProcesso): Promise<Result
       resultados.push({ ...base, ok: false, msg: "Empresa não encontrada no Tareffa (pelo CNPJ/CPF nem pelo nome)." });
       continue;
     }
-    const respNome = ativ?.responsible || p.bearer || "";
+    const respNome = m.responsavelTareffa || ativ?.responsible || p.bearer || "";
     const usuario = await acharUsuario(respNome).catch(() => null);
     if (!usuario) {
       resultados.push({ ...base, ok: false, msg: `Responsável "${respNome || "(vazio)"}" não encontrado entre os usuários do Tareffa.` });
