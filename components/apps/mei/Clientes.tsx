@@ -28,7 +28,7 @@ export function Clientes({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }
       <Tabela total={L.length} onLinha={(i) => abrir(L[i])}
         cab={["Cód.", "Razão social", "CNPJ", "Salão", "Cidade", "Início ativ.", "Mensalidade", "Situação", "Bloqueio", ""]}
         linhas={L.slice(0, 300).map((m) => [m.cod, m.razao, m.cnpj, m.salao || "—", m.cidade, dt(m.inicio), m.mensal ? brl(m.mensal) + (m.mensalNF ? " NF" : "") : "—",
-          m.ativo ? "Ativo" : `Inativo (${dt(m.fim)})`, m.bloqueado ? "BLOQUEADO" : "",
+          m.ativo ? situacao(m) : `Inativo (${dt(m.fim)})`, m.bloqueado ? "BLOQUEADO" : "",
           <button key="a" style={st.btn} onClick={() => abrir(m)}>Abrir ficha</button>])} />
     </div>
   );
@@ -137,7 +137,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
           {m.ativo ? <button style={st.btnD} onClick={() => setEncerrar(true)}>Encerrar</button> : <button style={st.btn} onClick={reativar}>Reativar</button>}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {m.ativo ? <Selo cor="ok">Ativo</Selo> : <Selo cor="div">Inativo desde {dt(m.fim)}</Selo>}
+          {m.ativo ? <Selo cor="ok">{situacao(m)}</Selo> : <Selo cor="div">Inativo desde {dt(m.fim)}</Selo>}
           {m.bloqueado && <Selo cor="div">Bloqueado</Selo>}
           {vencidas.length > 0 && <Selo cor="aviso">{vencidas.length} tarefa(s) vencida(s)</Selo>}
           <Selo cor="neutro">CNPJ <Doc valor={m.cnpj} /></Selo>

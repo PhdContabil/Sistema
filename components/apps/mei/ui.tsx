@@ -16,7 +16,9 @@ export const AVULSO = 53278;
 export const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const dt = (s?: string | null) => (s ? String(s).slice(0, 10).split("-").reverse().join("/") : "");
 export const hojeISO = () => new Date().toISOString().slice(0, 10);
-export const situacao = (m: Mei) => (m.ativo ? "Ativo" : "Inativo");
+/** Saída já marcada, mas ainda no futuro (o profissional segue ativo até essa data). */
+export const saidaFutura = (m: Mei): string | null => (m.ativo && m.fim && m.fim.slice(0, 10) < "2100-01-01" ? m.fim : null);
+export const situacao = (m: Mei) => (m.ativo ? (saidaFutura(m) ? `Ativo · saída em ${dt(saidaFutura(m))}` : "Ativo") : "Inativo");
 export const primeiroDiaMes = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; };
 export const ultimoDiaMes = () => { const d = new Date(); const u = new Date(d.getFullYear(), d.getMonth() + 1, 0); return `${u.getFullYear()}-${String(u.getMonth() + 1).padStart(2, "0")}-${String(u.getDate()).padStart(2, "0")}`; };
 /** Texto sem HTML (as observações do Access são rich text). */

@@ -4,7 +4,7 @@
 // Gravações: todas passam pela trava MEI_GRAVACAO_LIBERADA (sem ela, a API só simula com dry_run).
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { st, Tabela, Campo, type Mei } from "./ui";
+import { st, Tabela, Campo, situacao, type Mei } from "./ui";
 import Tarefas from "./Tarefas";
 import { Clientes, Ficha } from "./Clientes";
 import { Responsaveis, Servicos, TabelaPreco } from "./Cadastros";
@@ -163,7 +163,7 @@ function Busca({ mei, abrir }: { mei: Mei[]; abrir: (m: Mei) => void }) {
               style={{ display: "flex", width: "100%", gap: 10, alignItems: "center", padding: "9px 12px", border: "none", background: i === sel ? "var(--accent-soft)" : "transparent", cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit", fontSize: 13 }}>
               <span style={{ fontVariantNumeric: "tabular-nums", minWidth: 42, color: "var(--muted)" }}>{m.cod}</span>
               <span style={{ flex: 1 }}><b>{m.razao}</b><br /><span style={st.mut}>{m.cnpj}{m.salao ? ` · ${m.salao}` : ""}</span></span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: m.ativo ? "#15803d" : "#b91c1c" }}>{m.ativo ? (m.bloqueado ? "Bloqueado" : "Ativo") : "Inativo"}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: m.ativo ? "#15803d" : "#b91c1c" }}>{m.ativo ? (m.bloqueado ? "Bloqueado" : situacao(m)) : "Inativo"}</span>
             </button>
           ))}
         </div>
