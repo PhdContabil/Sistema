@@ -54,6 +54,9 @@ export function ValoresMensal({ mei }: { mei: Mei[] }) {
   );
 }
 
+/** Data de saída: aparece sempre que houver (inclusive futura); 31/12/2100 = sem saída. */
+const saida = (m: Mei) => (m.fim && m.fim.slice(0, 10) < "2100-01-01" ? dt(m.fim) : "");
+
 export function SalaoMei({ mei }: { mei: Mei[] }) {
   const [de, setDe] = useState(primeiroDiaMes());
   const [ate, setAte] = useState(hojeISO());
@@ -64,7 +67,7 @@ export function SalaoMei({ mei }: { mei: Mei[] }) {
   const grupos = new Map<string, Mei[]>();
   for (const m of L) grupos.set(m.salao, [...(grupos.get(m.salao) ?? []), m]);
   function imp() {
-    const html = [...grupos].map(([s, ms]) => `<h2>${esc(s)} — ${ms.length} MEI(s)</h2><table><tr><th>Cód.</th><th>MEI</th><th>Início</th><th>Encerramento</th></tr>${ms.map((m) => `<tr><td>${m.cod}</td><td>${esc(m.razao)}</td><td>${dt(m.inicio)}</td><td>${m.ativo ? "" : dt(m.fim)}</td></tr>`).join("")}</table>`).join("");
+    const html = [...grupos].map(([s, ms]) => `<h2>${esc(s)} — ${ms.length} MEI(s)</h2><table><tr><th>Cód.</th><th>MEI</th><th>Início</th><th>Encerramento</th></tr>${ms.map((m) => `<tr><td>${m.cod}</td><td>${esc(m.razao)}</td><td>${dt(m.inicio)}</td><td>${saida(m)}</td></tr>`).join("")}</table>`).join("");
     imprimir(`Clientes MEI por salão — ${dt(de)} a ${dt(ate)}`, html + `<p><b>Total: ${L.length}</b></p>`);
   }
   return (
@@ -74,7 +77,7 @@ export function SalaoMei({ mei }: { mei: Mei[] }) {
         <Campo label="Data final"><input type="date" style={st.input} value={ate} onChange={(e) => setAte(e.target.value)} /></Campo>
         <SelectSalao mei={mei} valor={sal} onChange={setSal} />
         <button style={st.btnP} onClick={imp}>Imprimir</button>
-        <button style={st.btn} onClick={() => baixarCsv("salao_x_mei.csv", ["Salão", "Cód.", "MEI", "CNPJ", "Início", "Encerramento"], L.map((m) => [m.salao, m.cod, m.razao, m.cnpj, dt(m.inicio), m.ativo ? "" : dt(m.fim)]))}>Exportar CSV</button>
+        <button style={st.btn} onClick={() => baixarCsv("salao_x_mei.csv", ["Salão", "Cód.", "MEI", "CNPJ", "Início", "Encerramento"], L.map((m) => [m.salao, m.cod, m.razao, m.cnpj, dt(m.inicio), saida(m)]))}>Exportar CSV</button>
         <span style={st.mut}>{L.length} MEI(s) em {grupos.size} salão(ões)</span>
       </div>
       <Tabela cab={["Salão", "Qtd."]} linhas={[...grupos].map(([s, ms]) => [s, ms.length])} />
