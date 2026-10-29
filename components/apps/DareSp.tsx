@@ -493,7 +493,7 @@ function ModalGuia({
       });
       const j = await r.json();
       if (!r.ok) {
-        if (j.faltaEndereco) setPrecisaEndereco(true);
+        if (j.faltaEndereco || /telefone|endere|cidade|munic/i.test(String(j.error ?? ""))) setPrecisaEndereco(true);
         setErro(j.error ?? "Falha ao emitir.");
         return;
       }
@@ -687,11 +687,18 @@ function ModalGuia({
             </>
           )}
 
+          {!precisaEndereco && endereco && (
+            <p className="nota">
+              Endereço: {endereco} — {cidade}{telefone ? ` · Tel. ${telefone}` : ""}{" "}
+              <button type="button" className="link" onClick={() => setPrecisaEndereco(true)}>Editar endereço / telefone</button>
+            </p>
+          )}
+
           {precisaEndereco && (
             <>
               <h3>Endereço do contribuinte</h3>
               <p className="nota">
-                A Sefaz exige endereço e cidade para emitir, e esse dado não vem da Questor.
+                A Sefaz exige endereço e cidade para emitir (telefone com DDD é opcional), e esse dado não vem da Questor.
                 Fica guardado: nas próximas guias desta empresa já vem preenchido.
               </p>
               <div className="form-linha">

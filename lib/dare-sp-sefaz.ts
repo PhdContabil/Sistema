@@ -178,6 +178,14 @@ export interface GuiaEmitida {
  * (armadilha 2) — conferimos contra a nossa conta e avisamos se divergir,
  * porque divergência aqui significa guia com valor diferente do calculado.
  */
+/** Telefone com DDD (10 ou 11 dígitos, sem o 55 do país). Fora disso, não é enviado à Sefaz. */
+function telefoneValido(t?: string | null): string | null {
+  let n = String(t ?? "").replace(/\D/g, "");
+  if (n.length > 11 && n.startsWith("55")) n = n.slice(2);
+  if (n.length > 11 && n.startsWith("0")) n = n.replace(/^0+/, "");
+  return n.length === 10 || n.length === 11 ? n : null;
+}
+
 export async function emitirGuia(d: DadosEmissao): Promise<GuiaEmitida> {
   const corpo = {
     dataVencimento: `${d.dataVencimento}T00:00:00`,
@@ -191,7 +199,7 @@ export async function emitirGuia(d: DadosEmissao): Promise<GuiaEmitida> {
     endereco: d.endereco,
     cidade: d.cidade,
     uf: d.uf ?? "SP",
-    telefone: (d.telefone ?? "").replace(/\D/g, ""),
+    ...(telefoneValido(d.telefone) ? { telefone: telefoneValido(d.telefone) } : {}),
     gerarPDF: true,
   };
 
