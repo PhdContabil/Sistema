@@ -294,10 +294,10 @@ export function CorrigirNota({ n, m, fechar, alterada }: { n: Nota; m?: Mei; fec
         idempotencia: `nota-${acao}-${n.codigoempresa}-${n.chave}-${real ? "real" : "sim"}-${JSON.stringify(c ?? {})}-${Date.now()}`,
       });
       if (r.status >= 300) { setMsg({ ok: false, texto: r.status === 409 ? `${mensagemErro(r)} — se a nota foi lançada pelo Access, corrija/exclua no FIS.` : mensagemErro(r) }); setSimulado(""); return; }
-      const avisos = (r.dados?.avisos ?? []).filter((a) => !/dry_run/i.test(a));
-      if (!real) { setSimulado(acao); setMsg({ ok: true, texto: "Simulação OK (nada foi gravado). Confira e confirme abaixo.", detalhes: avisos }); return; }
+      const avisos = (r.dados?.avisos ?? []).filter((a) => !/dry_run|entrada no sal/i.test(a));
+      if (!real) { setSimulado(acao); setMsg({ ok: true, texto: acao === "delete" ? "Conferido: a nota pode ser excluída. AINDA NÃO EXCLUIU — clique em \"Excluir de verdade\" para concluir." : "Conferido: a correção pode ser feita. AINDA NÃO SALVOU — clique em \"Gravar correção\" para salvar no Questor.", detalhes: avisos }); return; }
       if (r.dryRunForcado) { setMsg({ ok: false, texto: "A gravação está travada no Núcleo (modo simulação). Nada foi gravado.", detalhes: avisos }); return; }
-      setMsg({ ok: true, texto: acao === "delete" ? "Nota excluída do Questor." : "Nota corrigida.", detalhes: avisos });
+      setMsg({ ok: true, texto: acao === "delete" ? "Pronto: nota excluída do Questor." : "Pronto: correção salva no Questor.", detalhes: avisos });
       setSimulado("");
       if (acao === "delete") alterada(null);
       else {
@@ -325,11 +325,11 @@ export function CorrigirNota({ n, m, fechar, alterada }: { n: Nota; m?: Mei; fec
         </Campo>
       </div>
       <div style={{ ...st.bar, marginTop: 10 }}>
-        <button style={st.btn} disabled={ocupado} onClick={() => rodar("patch", false)}>Simular correção</button>
-        {simulado === "patch" && <button style={st.btnP} disabled={ocupado} onClick={() => rodar("patch", true)}>Gravar correção</button>}
+        <button style={st.btn} disabled={ocupado} onClick={() => rodar("patch", false)}>1) Conferir correção</button>
+        {simulado === "patch" && <button style={st.btnP} disabled={ocupado} onClick={() => rodar("patch", true)}>2) Gravar correção</button>}
         <span style={{ flex: 1 }} />
-        <button style={st.btnD} disabled={ocupado} onClick={() => rodar("delete", false)}>Simular exclusão</button>
-        {simulado === "delete" && <button style={{ ...st.btnD, background: "var(--div)", color: "#fff" }} disabled={ocupado} onClick={() => rodar("delete", true)}>Excluir de verdade</button>}
+        <button style={st.btnD} disabled={ocupado} onClick={() => rodar("delete", false)}>1) Conferir exclusão</button>
+        {simulado === "delete" && <button style={{ ...st.btnD, background: "var(--div)", color: "#fff" }} disabled={ocupado} onClick={() => rodar("delete", true)}>2) Excluir de verdade</button>}
       </div>
       {msg && <div style={{ ...st.card, marginTop: 10 }}>
         <p style={{ margin: 0, fontWeight: 600, color: msg.ok ? "var(--ok)" : "var(--div)" }}>{msg.texto}</p>
