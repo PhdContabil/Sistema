@@ -666,6 +666,25 @@ export default function OSTab() {
       }
       const doc = await gerarDocPdfOS(o, destinatario);
       const pdfBase64 = pdfParaBase64(doc);
+      // 1º: com o robô do Núcleo no PC, abre o Outlook com a O.S. anexada e a ASSINATURA de quem envia
+      // (pelo Graph o e-mail sai sem assinatura, porque ela fica no Outlook de cada um).
+      if (!rascunho) {
+        try {
+          const st = await fetch("http://localhost:3199/status", { cache: "no-store" }).then((x) => x.json());
+          if (Number(st.versao ?? 0) >= 6) {
+            const rp = await fetch("/api/paralegal/os/enviar-email", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: o.id, destinatario, pdfBase64: "x", nomeArquivo: nomeArquivoPdfOS(o, destinatario), rascunho: true }) });
+            const jp = await rp.json().catch(() => ({}));
+            if (rp.ok && jp.modo === "mailto") {
+              const corpoHtml = String(jp.corpoTexto).split("\n").map((l: string) => `<p style="margin:0">${l || "&nbsp;"}</p>`).join("");
+              const ro = await fetch("http://localhost:3199/email", { method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ para: String(jp.destino).split(/[;,]/).map((x: string) => x.trim()).filter(Boolean), assunto: jp.assunto, corpoHtml,
+                  anexos: [{ nome: nomeArquivoPdfOS(o, destinatario), conteudoBase64: pdfBase64 }] }) });
+              if (ro.ok) { setSugerirEnvio(false); alert("Abri o Outlook com a mensagem, a O.S. anexada e a sua assinatura: confira e clique em Enviar."); return; }
+            }
+          }
+        } catch { /* sem robô no PC: envia pelo Graph como antes */ }
+      }
       const r = await fetch("/api/paralegal/os/enviar-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
