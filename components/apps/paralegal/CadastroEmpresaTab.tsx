@@ -665,8 +665,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
             </label>
             {ehMei && (
               <>
-                <label>Salão (cód. financeiro — vazio = avulso 53278)
-                  <input type="text" value={meiExtra.salao} onChange={(e) => setMeiExtra({ ...meiExtra, salao: e.target.value.replace(/\D/g, "") })} />
+                <label>Salão (vazio = avulso 53278)
+                  <SalaoMeiSelect valor={meiExtra.salao} onChange={(v) => setMeiExtra({ ...meiExtra, salao: v })} />
                 </label>
                 <label>Atividade municipal (obrigatória)
                   {!dados.codigomunic ? <input type="text" disabled placeholder="Escolha primeiro o município (endereço)" /> : ativOpcoes === null ? <input type="text" disabled placeholder="Carregando…" /> : ativOpcoes.length === 0 ? <input type="text" disabled placeholder="Município sem atividade cadastrada no Questor" /> : (
@@ -928,5 +928,27 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
         </div>
       )}
     </div>
+  );
+}
+
+/** Escolha do salão do MEI pela lista de salões (nome + cód. financeiro), como era no Access. */
+function SalaoMeiSelect({ valor, onChange }: { valor: string; onChange: (v: string) => void }) {
+  const [saloes, setSaloes] = useState<{ cod: string; nome: string }[] | null>(null);
+  useEffect(() => {
+    fetch("/api/mei/empresas", { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      const lista = (Array.isArray(j) ? j : (j.dados ?? j.mei ?? [])) as { salaoCod?: number | string | null; salao?: string }[];
+      const m = new Map<string, string>();
+      for (const x of lista) if (x.salaoCod && x.salao) m.set(String(x.salaoCod), x.salao);
+      setSaloes([...m].map(([cod, nome]) => ({ cod, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
+    }).catch(() => setSaloes([]));
+  }, []);
+  if (saloes === null) return <input type="text" disabled placeholder="Carregando salões…" />;
+  if (!saloes.length) return <input type="text" value={valor} placeholder="Cód. financeiro do salão" onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))} />;
+  return (
+    <select value={valor} onChange={(e) => onChange(e.target.value)}>
+      <option value="">AVULSO (53278)</option>
+      {valor && !saloes.some((s) => s.cod === valor) && <option value={valor}>Cód. {valor}</option>}
+      {saloes.filter((s) => s.cod !== "53278").map((s) => <option key={s.cod} value={s.cod}>{s.nome} ({s.cod})</option>)}
+    </select>
   );
 }
