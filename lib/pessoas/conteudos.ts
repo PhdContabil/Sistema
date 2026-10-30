@@ -111,10 +111,7 @@ export const AREAS: AreaPessoas[] = [
     secoes: [
       { id: "ferias", titulo: "Férias", resumo: "Solicite seus períodos e acompanhe a aprovação.", rota: "/m/pessoas/ferias" },
       { id: "ausencias", titulo: "Ausências", resumo: "Solicitação de banco de horas e demais ausências.", rota: "/m/pessoas/ausencias" },
-      {
-        id: "reunioes", titulo: "Reuniões", resumo: "Agenda de reuniões: data, local e horário.",
-        itens: [{ id: "agenda", titulo: "Agenda", resumo: "Data, local e horário das reuniões.", pendente: true, nota: "Preenchido manualmente." }],
-      },
+      { id: "reunioes", titulo: "Reuniões", resumo: "Agenda de reuniões: data, local e horário.", rota: "/m/pessoas/reunioes" },
       {
         id: "confraternizacao", titulo: "Confraternização", resumo: "Agenda dos encontros e álbum de fotos.",
         itens: [{ id: "agenda", titulo: "Agenda e fotos", resumo: "Datas dos encontros e arquivo de fotos.", pendente: true, nota: "Preenchido manualmente." }],
