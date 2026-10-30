@@ -240,6 +240,14 @@ export function ProcessoForm({
               ))}
             </select>
           </Field>
+          {!initial && /CANCELA/i.test(tipo) && (
+            <Field label="Comunicar os setores (geral@)">
+              <select name="comunicar_setores" defaultValue="sim" className="form-input">
+                <option value="sim">Sim, enviar o comunicado ao salvar</option>
+                <option value="nao">Não (processo só interno / empresa já baixada)</option>
+              </select>
+            </Field>
+          )}
           {avulso && (
             <Field label="Tag do serviço avulso">
               <select name="tag" value={tag} onChange={(e) => setTag(e.target.value)} className="form-input">

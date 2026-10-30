@@ -94,7 +94,7 @@ async function enviar(remetente: string, para: string[], assunto: string, html: 
 }
 
 /** Avisos ao CRIAR um processo. */
-export async function avisarProcessoNovo(p: ProcessoAviso, remetente: string): Promise<string[]> {
+export async function avisarProcessoNovo(p: ProcessoAviso, remetente: string, opts: { comunicarSetores?: boolean } = {}): Promise<string[]> {
   const log: string[] = [];
   const t = norm(p.process);
   const ehAbertura = /ABERTURA|TRANSFORMA/.test(t);
@@ -111,7 +111,7 @@ export async function avisarProcessoNovo(p: ProcessoAviso, remetente: string): P
         `<p>Olá, Flávia!</p><p>Foi registrado um novo processo no Societário. Se ainda não houver, é preciso abrir a O.S.</p>${resumo(p)}`, log);
     }
   }
-  if (/CANCELA/.test(t)) log.push(...(await comunicarCancelamento(p, remetente)));
+  if (/CANCELA/.test(t) && opts.comunicarSetores !== false) log.push(...(await comunicarCancelamento(p, remetente)));
   if (ehAbertura) {
     await enviar(remetente, [INTEGRACAO], `Integração — novo processo: ${titulo}`,
       `<p>Olá, Kelly!</p><p>Novo processo de ${esc(p.process)} registrado, para acompanhamento da Integração.</p>${resumo(p)}`, log);

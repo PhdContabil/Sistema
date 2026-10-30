@@ -117,7 +117,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
         <section className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold">Comunicar os setores</h2>
-            <p className="text-xs text-gray-500">Enviado automaticamente para geral@ ao registrar o cancelamento. Use o botão para enviar de novo.</p>
+            <p className="text-xs text-gray-500">Enviado para geral@ ao registrar o cancelamento (quando marcado). Use o botão para enviar agora ou de novo.</p>
           </div>
           <form action={comunicarCancelamentoAction.bind(null, processo.id)}>
             <button type="submit" className="bg-brand-700 hover:bg-brand-900 text-white text-sm rounded px-3 py-1.5">Enviar comunicado</button>

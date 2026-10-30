@@ -76,7 +76,7 @@ export async function createProcessoAction(form: FormData): Promise<void> {
       await avisarProcessoNovo({
         id: savedId, name, inscription: s(form, "inscription"), process: s(form, "process") || "Outro",
         bearer: s(form, "bearer") || null, started_in: s(form, "started_in"), category: s(form, "category"), activities,
-      }, user.email);
+      }, user.email, { comunicarSetores: form.get("comunicar_setores") !== "nao" });
     }
   } catch { /* aviso não trava o processo */ }
 
