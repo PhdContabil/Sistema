@@ -110,13 +110,7 @@ export const AREAS: AreaPessoas[] = [
     cor: "oklch(0.62 0.13 200)",
     secoes: [
       { id: "ferias", titulo: "Férias", resumo: "Solicite seus períodos e acompanhe a aprovação.", rota: "/m/pessoas/ferias" },
-      {
-        id: "ausencias", titulo: "Ausências", resumo: "Solicitação de banco de horas e demais ausências.",
-        itens: [
-          { id: "solicite", titulo: "Solicite", resumo: "Peça dias de descanso (B.H.) e demais ausências.", texto: "Solicite dias de descanso (banco de horas) e/ou demais ausências. Cite o dia e o horário. Fica a seu critério justificar o motivo.", pendente: true, nota: "Formulário será ativado numa próxima etapa." },
-          { id: "resposta", titulo: "Resposta", resumo: "Confirmação ou negativa do gestor.", pendente: true, nota: "Retorno do gestor sobre a solicitação." },
-        ],
-      },
+      { id: "ausencias", titulo: "Ausências", resumo: "Solicitação de banco de horas e demais ausências.", rota: "/m/pessoas/ausencias" },
       {
         id: "reunioes", titulo: "Reuniões", resumo: "Agenda de reuniões: data, local e horário.",
         itens: [{ id: "agenda", titulo: "Agenda", resumo: "Data, local e horário das reuniões.", pendente: true, nota: "Preenchido manualmente." }],
