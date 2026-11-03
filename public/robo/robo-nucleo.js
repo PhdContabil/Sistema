@@ -21,7 +21,7 @@ const PORTA = +(process.env.ROBO_PORTA || 3199);
 const ORIGENS = ['https://system-contabilidade.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
-const VERSAO = 8;
+const VERSAO = 9;
 const SITE_ROBO = 'https://system-contabilidade.vercel.app/robo';
 const ARQUIVOS = ['robo-nucleo.js', 'emissor.js', 'das.js', 'outlook.js', 'package.json', 'versao.txt'];
 

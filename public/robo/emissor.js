@@ -36,7 +36,54 @@ async function capturarErro(page, ctl, e) {
       .filter((x) => x.offsetParent !== null).map((x) => x.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' | ').slice(0, 500));
     if (msg) { ctl.log('Mensagem do portal: ' + msg); e.message = `${e.message} [PORTAL: ${msg}]`; }
   } catch { /* página fechada */ }
+  try {
+    const campos = await page.evaluate(() => {
+      const vis = (x) => x.offsetParent !== null;
+      const rotulo = (el) => {
+        const id = el.id && document.querySelector(`label[for="${el.id}"]`);
+        const g = el.closest('.form-group, .col, [class*="col-"], fieldset, .row');
+        return ((id && id.innerText) || (g && g.innerText) || el.name || el.id || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+      };
+      const out = new Set();
+      for (const el of document.querySelectorAll('input, select, textarea')) {
+        if (!vis(el) || el.type === 'hidden' || el.type === 'button' || el.type === 'submit') continue;
+        if (el.type === 'radio') { if (!document.querySelector(`input[type=radio][name="${el.name}"]:checked`)) out.add('(sem marcar) ' + rotulo(el)); continue; }
+        if (!el.value) out.add('(vazio) ' + rotulo(el));
+      }
+      return [...out].slice(0, 12).join(' | ');
+    });
+    if (campos) { ctl.log('Campos da tela ainda sem preencher: ' + campos); e.message = `${e.message} [CAMPOS: ${campos}]`; }
+  } catch { /* página fechada */ }
   try { if (ctl.setPrint) ctl.setPrint((await page.screenshot({ type: 'jpeg', quality: 60 })).toString('base64')); } catch { /* sem print */ }
+}
+
+/**
+ * Marca "Não" na pergunta cujo texto bate com `pergunta` (ex.: exportação/imunidade), sem depender
+ * da posição na página — o portal vem incluindo campos novos (Reforma Tributária) que mudam o layout.
+ */
+async function marcarNao(page, pergunta) {
+  return page.evaluate((src) => {
+    const re = new RegExp(src, 'i');
+    const radios = [...document.querySelectorAll('input[type=radio]')];
+    const nomes = [...new Set(radios.map((r) => r.name))];
+    for (const nome of nomes) {
+      const grupo = radios.filter((r) => r.name === nome);
+      let caixa = grupo[0].parentElement;
+      for (let i = 0; i < 6 && caixa && !re.test(caixa.innerText || ''); i++) caixa = caixa.parentElement;
+      if (!caixa || !re.test(caixa.innerText || '')) continue;
+      const nao = grupo.find((r) => {
+        const lab = r.closest('label') || (r.id && document.querySelector(`label[for="${r.id}"]`)) || r.parentElement;
+        return /^\s*n[aã]o\s*$/i.test((lab && lab.innerText) || '') || /^(0|false|n|nao)$/i.test(r.value);
+      });
+      if (!nao) continue;
+      const lab = nao.closest('label') || (nao.id && document.querySelector(`label[for="${nao.id}"]`));
+      if (lab) lab.click(); else nao.click();
+      nao.checked = true;
+      nao.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    return false;
+  }, pergunta.source);
 }
 
 /** Depois de enviar o login: se o portal recusar (senha/usuário), avisa na hora em vez de esperar 5 minutos. */
@@ -201,9 +248,15 @@ async function preparar(job, creds, ctl) {
       await select2(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[1]/div/div/span[1]/span[1]/span', '#pnlServicoPrestado .select2-selection', 'form .select2-selection >> nth=1'],
         busca, busca, 'lista do código do serviço');
       await sleep(1500);
-      await acao(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[3]/div/div[1]/label/span/i'], (l) => l.click(), { nome: 'opção "não" (exportação/imunidade)' });
+      const naoAntigo = await acao(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[3]/div/div[1]/label/span/i'], (l) => l.click(), { nome: 'opção "não"', timeout: 4000 }).then(() => true).catch(() => false);
+      if (!naoAntigo) {
+        await sleep(1000);
+        const ok = await marcarNao(page, /exporta|imunidade|n[aã]o incid/);
+        if (!ok) throw new Error('Não encontrei a pergunta "exportação / imunidade" para marcar "Não" (o portal mudou a tela).');
+        ctl.log('Pergunta exportação/imunidade: marcado "Não".');
+      }
       await acao(page, '#ServicoPrestado_Descricao', (l) => l.fill(job.descricao || ''), { nome: 'descrição do serviço' });
-      await acao(page, ['xpath=//*[@id="main-content"]/form/div[8]/button'], (l) => l.click(), { nome: 'botão Avançar (serviço)' });
+      await acao(page, ['xpath=//*[@id="main-content"]/form/div[8]/button', '#main-content form button:has-text("Avançar")', 'button:has-text("Avançar") >> visible=true'], (l) => l.click(), { nome: 'botão Avançar (serviço)' });
       await sleep(2000);
       await acao(page, '#Valores_ValorServico', async (l) => { await l.fill(''); await l.type(valor, { delay: 30 }); }, { nome: 'valor do serviço' });
     }
