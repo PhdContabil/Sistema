@@ -1048,6 +1048,14 @@ function DetalheTicket({
  * gente separa o texto normal das imagens e mostra cada imagem como preview
  * clicável, em vez do link cru.
  */
+/** Imagens do bucket privado "ticket-anexos" (link público antigo ou referência storage:) abrem pelo Núcleo. */
+function urlAnexo(url: string): string {
+  const marca = "/object/public/ticket-anexos/";
+  const i = url.indexOf(marca);
+  const caminho = url.startsWith("storage:ticket-anexos/") ? url.slice("storage:ticket-anexos/".length) : i >= 0 ? decodeURIComponent(url.slice(i + marca.length)) : null;
+  return caminho ? `/api/tickets/anexo?p=${encodeURIComponent(caminho)}` : url;
+}
+
 function ComentarioTexto({ texto }: { texto: string }) {
   const partes: (string | { alt: string; url: string })[] = [];
   const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -1055,7 +1063,7 @@ function ComentarioTexto({ texto }: { texto: string }) {
   let m: RegExpExecArray | null;
   while ((m = regex.exec(texto)) !== null) {
     if (m.index > ultimoIndice) partes.push(texto.slice(ultimoIndice, m.index));
-    partes.push({ alt: m[1] || "imagem", url: m[2] });
+    partes.push({ alt: m[1] || "imagem", url: urlAnexo(m[2]) });
     ultimoIndice = m.index + m[0].length;
   }
   if (ultimoIndice < texto.length) partes.push(texto.slice(ultimoIndice));

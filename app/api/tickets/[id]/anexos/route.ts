@@ -51,13 +51,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
-  const { data: pub } = db.storage.from(BUCKET).getPublicUrl(path);
-
+  // Bucket privado: guarda a referência ao arquivo; quem vê abre pelo /api/tickets/anexo (link assinado).
   const { data, error } = await db
     .from("ticket_attachments")
     .insert({
       ticket_id: params.id,
-      url: pub.publicUrl,
+      url: `storage:${BUCKET}/${path}`,
       filename: file.name || null,
       uploaded_by_email: email,
     })
@@ -65,5 +64,5 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, anexo: data });
+  return NextResponse.json({ ok: true, anexo: data ? { ...data, url: `/api/tickets/anexo?p=${encodeURIComponent(path)}` } : data });
 }
