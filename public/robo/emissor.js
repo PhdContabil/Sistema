@@ -95,7 +95,7 @@ async function conferirLogin(page) {
 }
 
 /** Tenta cada seletor até um funcionar. */
-async function acao(page, seletores, fn, { timeout = 8000, nome = 'elemento' } = {}) {
+async function acao(page, seletores, fn, { timeout = 15000, nome = 'elemento' } = {}) {
   let ultimo;
   for (const s of [].concat(seletores)) {
     try {
@@ -119,15 +119,45 @@ async function cliqueRobusto(page, seletores, nome, tentativas = 8) {
   throw new Error(`Não encontrei ${nome} no portal. ${ultimo ? ultimo.message.split('\n')[0] : ''}`);
 }
 
+/** Abre a página tentando de novo quando o portal cai (ERR_CONNECTION_RESET) ou demora. */
+async function irPara(page, url) {
+  let ultimo;
+  for (let i = 0; i < 4; i++) {
+    try { await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }); return; }
+    catch (e) { ultimo = e; await sleep(4000 + i * 3000); }
+  }
+  throw new Error('PORTAL_INSTAVEL: o Emissor Nacional não abriu (' + String(ultimo && ultimo.message || '').split('\n')[0] + ')');
+}
+
+/** Item da NBS (campo novo da Reforma Tributária): escolhe a opção que o portal sugere para o código do serviço. */
+async function escolherNBS(page, log) {
+  const abrir = page.locator('xpath=//label[contains(normalize-space(.),"NBS")]/following::span[contains(@class,"select2-selection")][1]').first();
+  if (!(await abrir.isVisible().catch(() => false))) return;
+  const atual = (await abrir.innerText().catch(() => '')).trim();
+  if (atual && !/selecione/i.test(atual)) { log('Item da NBS já preenchido pelo portal: ' + atual); return; }
+  await abrir.click();
+  const op = page.locator('.select2-container--open .select2-results__option:not(.select2-results__message):not(.loading-results)').filter({ hasNotText: /selecione/i }).first();
+  await op.waitFor({ state: 'visible', timeout: 25000 });
+  const txt = (await op.innerText()).trim();
+  await op.click();
+  log('Item da NBS: ' + txt + ' (confira).');
+}
+
 async function select2(page, abrir, busca, escolherTexto, nome = 'lista de seleção') {
   await acao(page, abrir, (l) => l.click(), { nome, timeout: 15000 });
   const campo = page.locator('.select2-container--open .select2-search__field').or(page.locator('xpath=/html/body/span/span/span[1]/input')).first();
   await campo.waitFor({ state: 'visible', timeout: 8000 });
   await campo.fill('');
   await campo.type(busca, { delay: 40 });
-  await sleep(1500);
+  await sleep(2500);
   const item = page.locator(`.select2-results__option:has-text("${escolherTexto.replace(/"/g, '')}")`).first();
-  await item.waitFor({ state: 'visible', timeout: 10000 });
+  try {
+    await item.waitFor({ state: 'visible', timeout: 25000 });
+  } catch {
+    // O portal às vezes não devolve a lista na primeira busca: limpa e digita de novo.
+    await campo.fill(''); await sleep(1000); await campo.type(busca, { delay: 60 });
+    await item.waitFor({ state: 'visible', timeout: 25000 });
+  }
   await item.click();
 }
 
@@ -167,28 +197,32 @@ async function preparar(job, creds, ctl) {
   salvarDownloads(ctx, ctl.log);
   ctl.onPage(ctx);
   const page = ctx.pages()[0] || (await ctx.newPage());
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(30000);
   const print = async (nome) => { try { await page.screenshot({ path: path.join(SHOT_DIR, `${job.id}_${nome}.png`) }); } catch {} };
 
   try {
     // ---------------- login ----------------
     ctl.setStatus('login'); ctl.log('Abrindo o Emissor Nacional…');
     if (creds && creds.emissor && creds.emissor.usr) {
-      await page.goto(`${BASE}/Login?ReturnUrl=%2fEmissorNacional`, { waitUntil: 'domcontentloaded' });
-      await acao(page, '#Inscricao', (l) => l.fill(creds.emissor.usr), { nome: 'campo de inscrição' });
+      await irPara(page, `${BASE}/Login?ReturnUrl=%2fEmissorNacional`);
+      for (let i = 0; i < 3; i++) {
+        if (await page.locator('#Inscricao').first().isVisible().catch(() => false)) break;
+        await sleep(3000); await irPara(page, `${BASE}/Login?ReturnUrl=%2fEmissorNacional`);
+      }
+      await acao(page, '#Inscricao', (l) => l.fill(creds.emissor.usr), { nome: 'campo de inscrição', timeout: 30000 });
       await acao(page, '#Senha', (l) => l.fill(creds.emissor.senha), { nome: 'campo de senha' });
       await acao(page, ['button:has-text("Entrar")', 'xpath=//button[contains(text(),"Entrar")]'], (l) => l.click(), { nome: 'botão Entrar' });
       ctl.log('Login pelo Emissor Nacional enviado.');
       await conferirLogin(page);
     } else if (creds && creds.govbr && creds.govbr.cpf) {
-      await page.goto(`${BASE}/AcessoGovBR/AcessarGovBR`, { waitUntil: 'domcontentloaded' });
+      await irPara(page, `${BASE}/AcessoGovBR/AcessarGovBR`);
       await acao(page, '#accountId', (l) => l.fill(onlyDigits(creds.govbr.cpf)), { nome: 'campo CPF (gov.br)' });
       await acao(page, '#enter-account-id', (l) => l.click(), { nome: 'botão continuar (gov.br)' });
       await acao(page, '#password', (l) => l.fill(creds.govbr.senha), { nome: 'campo senha (gov.br)', timeout: 15000 });
       await acao(page, '#submit-button', (l) => l.click(), { nome: 'botão entrar (gov.br)' });
       ctl.log('Login gov.br enviado (se pedir captcha/2 fatores, conclua na janela).');
     } else {
-      await page.goto(`${BASE}/Login?ReturnUrl=%2fEmissorNacional`, { waitUntil: 'domcontentloaded' });
+      await irPara(page, `${BASE}/Login?ReturnUrl=%2fEmissorNacional`);
       ctl.log('Sem credencial cadastrada: faça o LOGIN MANUALMENTE na janela do Chrome (aguardando até 5 min).');
     }
     // espera estar logado (fora das telas de login / gov.br)
@@ -205,31 +239,39 @@ async function preparar(job, creds, ctl) {
 
     if (job.data === hoje()) {
       ctl.log('Emissão do dia → DPS Simplificada.');
-      await page.goto(`${BASE}/DPS/Simplificada`, { waitUntil: 'domcontentloaded' });
+      await irPara(page, `${BASE}/DPS/Simplificada`);
       if (tomador) {
         await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/input', 'input[id*="Tomador" i]'], (l) => l.fill(tomador), { nome: 'campo do tomador' });
         await sleep(500);
         await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/span/button[1]'], (l) => l.click(), { nome: 'botão pesquisar tomador' });
-        await sleep(1500);
+        await sleep(2500);
       } else ctl.log('Sem tomador: campo do tomador deixado em branco.');
       await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[2]/div/div/div/div/a/span'], (l) => l.click(), { nome: 'lista de serviço' });
       await acao(page, ['xpath=//li[contains(text(), "padrao")]', 'li:has-text("padrao")'], (l) => l.click(), { nome: 'serviço "padrao" (cadastre-o no portal)' });
-      await sleep(1500);
+      await sleep(2500);
       await acao(page, '#ValorServico', async (l) => { await l.fill(''); await l.type(valor, { delay: 30 }); }, { nome: 'campo valor' });
     } else {
       ctl.log('Data diferente de hoje → DPS completa (competência ' + brDate(job.data) + ').');
-      await page.goto(`${BASE}/DPS/Pessoas`, { waitUntil: 'domcontentloaded' });
+      await irPara(page, `${BASE}/DPS/Pessoas`);
       await sleep(1000);
       // Reforma Tributária (IBS/CBS): responder "Não"
       await acao(page, ['xpath=//*[@id="pnlInfoIBSCBS"]/div[1]/div/div[2]/label'], (l) => l.click(), { nome: 'pergunta IBS/CBS', timeout: 6000 }).catch(() => ctl.log('Pergunta IBS/CBS não apareceu (ok).'));
       await acao(page, '#DataCompetencia', async (l) => { await l.fill(''); await l.type(brDate(job.data), { delay: 40 }); await l.press('Tab'); }, { nome: 'data de competência' });
-      await sleep(2500);
+      await sleep(3500);
       if (tomador) {
         await cliqueRobusto(page, ['xpath=//*[@id="pnlTomador"]/div[1]/div/div/div[1]/label/span', 'xpath=//*[@id="pnlTomador"]/div[1]/div/div/div[1]/label', '#pnlTomador label:has-text("Brasil")'], 'tipo de tomador (Brasil)');
         await sleep(1000);
         await acao(page, '#Tomador_Inscricao', (l) => l.fill(tomador), { nome: 'inscrição do tomador' });
-        await acao(page, '#btn_Tomador_Inscricao_pesquisar', (l) => l.click(), { nome: 'pesquisar tomador' });
-        await sleep(2000);
+        for (let i = 0; i < 3; i++) {
+          await acao(page, '#btn_Tomador_Inscricao_pesquisar', (l) => l.click(), { nome: 'pesquisar tomador' });
+          await sleep(4000);
+          const falhou = await page.evaluate(() => /n[aã]o foi poss[ií]vel recuperar/i.test(document.body.innerText)).catch(() => false);
+          if (!falhou) break;
+          ctl.log(`Portal não trouxe os dados do tomador (tentativa ${i + 1}); tentando de novo…`);
+          await page.keyboard.press('Escape').catch(() => null);
+          await page.locator('.modal.show button:has-text("OK"), .modal.show button:has-text("Fechar"), .swal2-confirm').first().click({ timeout: 2000 }).catch(() => null);
+          await sleep(5000);
+        }
       } else ctl.log('Sem tomador: tomador não informado no portal (confira antes de emitir).');
       await acao(page, '#btnAvancar', (l) => l.click(), { nome: 'botão Avançar' });
       // O portal às vezes demora (ou recusa) para sair da tela de Pessoas: espera a tela de Serviço.
@@ -240,14 +282,16 @@ async function preparar(job, creds, ctl) {
         if (/\/DPS\/Pessoas/i.test(page.url())) throw new Error('O portal não saiu da tela de Pessoas (confira data de competência e tomador na janela do Chrome).');
       }
       await page.waitForLoadState('domcontentloaded').catch(() => null);
-      await sleep(1500);
+      await sleep(2500);
       // município + serviço (o portal muda o layout: tenta o caminho antigo e, se não achar, as listas da tela)
       await select2(page, ['xpath=/html/body/div[1]/form/div[1]/div/div/div[2]/div/span[1]/span[1]/span', '#pnlLocalPrestacao .select2-selection', 'form .select2-selection >> nth=0'],
         job.municipio, `${job.municipio}/${job.uf}`, 'lista do município (local da prestação)');
-      await sleep(2000);
+      await sleep(3000);
       await select2(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[1]/div/div/span[1]/span[1]/span', '#pnlServicoPrestado .select2-selection', 'form .select2-selection >> nth=1'],
         busca, busca, 'lista do código do serviço');
-      await sleep(1500);
+      await sleep(3000);
+      await escolherNBS(page, ctl.log).catch((e) => ctl.log('Item da NBS: não consegui escolher (' + String(e.message).split('\n')[0] + ') — escolha na janela.'));
+      await sleep(2500);
       const naoAntigo = await acao(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[3]/div/div[1]/label/span/i'], (l) => l.click(), { nome: 'opção "não"', timeout: 4000 }).then(() => true).catch(() => false);
       if (!naoAntigo) {
         await sleep(1000);
@@ -257,7 +301,7 @@ async function preparar(job, creds, ctl) {
       }
       await acao(page, '#ServicoPrestado_Descricao', (l) => l.fill(job.descricao || ''), { nome: 'descrição do serviço' });
       await acao(page, ['xpath=//*[@id="main-content"]/form/div[8]/button', '#main-content form button:has-text("Avançar")', 'button:has-text("Avançar") >> visible=true'], (l) => l.click(), { nome: 'botão Avançar (serviço)' });
-      await sleep(2000);
+      await sleep(3000);
       await acao(page, '#Valores_ValorServico', async (l) => { await l.fill(''); await l.type(valor, { delay: 30 }); }, { nome: 'valor do serviço' });
     }
     await sleep(800); await print('preenchido');

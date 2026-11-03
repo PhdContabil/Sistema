@@ -257,7 +257,7 @@ export interface ExplicacaoErro { titulo: string; oQueFazer: string; ehTI: boole
 export function explicarErroRobo(erro: string): ExplicacaoErro {
   const e = String(erro || "");
   const tem = (r: RegExp) => r.test(e);
-  if (tem(/n[aã]o foi poss[ií]vel recuperar a lista de munic|indispon|503|502|504|ERR_CONNECTION|ERR_NAME|ERR_TIMED_OUT|net::|fora do ar|manuten/i))
+  if (tem(/PORTAL_INSTAVEL|page\.goto: Timeout|bot[aã]o Entrar|n[aã]o foi poss[ií]vel recuperar|n[aã]o saiu da tela de Pessoas|n[aã]o foi poss[ií]vel recuperar a lista de munic|indispon|503|502|504|ERR_CONNECTION|ERR_NAME|ERR_TIMED_OUT|net::|fora do ar|manuten/i))
     return { titulo: "O portal do governo está instável agora", oQueFazer: "Não é problema do sistema. Feche a janela do Chrome, espere alguns minutos e tente de novo.", ehTI: false };
   if (tem(/LOGIN_RECUSADO|senha.*(inv[aá]lid|incorret)|usu[aá]rio.*inv[aá]lid|bloquead/i))
     return { titulo: "O portal não aceitou o login (usuário ou senha)", oQueFazer: "Confira a senha da empresa em Controle e relatórios → Senhas (ou na Ficha → Senhas). Se a senha mudou no portal, atualize aqui e tente de novo.", ehTI: false };
