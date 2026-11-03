@@ -180,13 +180,32 @@ export const ROBO_VERSAO_MINIMA = 8; // v8: atualiza sozinho (botão "Atualizar 
 export const ROBO_INSTALADOR = "/robo/instalar-robo-nucleo.bat";
 export type RoboEstado = "ok" | "ausente" | "desatualizado";
 
-/** Confere se o robô está rodando neste computador e se é a versão atual. */
+async function statusRobo(): Promise<number | null> {
+  try { const j = await (await fetch(`${ROBO_URL}/status`, { cache: "no-store" })).json(); return Number(j.versao ?? 1); }
+  catch { return null; }
+}
+
+/**
+ * Confere se o robô está rodando e se é a versão publicada (public/robo/versao.txt).
+ * Quando sai versão nova, o robô v8+ é atualizado na hora, sozinho (baixa e reinicia), antes de usar.
+ */
 export async function verificarRobo(): Promise<RoboEstado> {
+  const atual = await statusRobo();
+  if (atual === null) return "ausente";
+  const publicada = await fetch(`/robo/versao.txt?t=${Date.now()}`, { cache: "no-store" }).then((r) => r.text()).then((t) => Number(t.trim()) || 0).catch(() => 0);
+  const alvo = Math.max(ROBO_VERSAO_MINIMA, publicada);
+  if (atual >= alvo) return "ok";
+  if (atual < 8) return "desatualizado"; // versões antigas não sabem se atualizar: instalador uma última vez
   try {
-    const r = await fetch(`${ROBO_URL}/status`, { cache: "no-store" });
-    const j = await r.json();
-    return Number(j.versao ?? 1) >= ROBO_VERSAO_MINIMA ? "ok" : "desatualizado";
-  } catch { return "ausente"; }
+    const r = await fetch(`${ROBO_URL}/atualizar`, { method: "POST" });
+    if (!r.ok) return "desatualizado";
+    for (let i = 0; i < 20; i++) {
+      await new Promise((ok) => setTimeout(ok, 1500));
+      const v = await statusRobo();
+      if (v !== null && v >= alvo) return "ok";
+    }
+  } catch { /* cai no aviso */ }
+  return "desatualizado";
 }
 
 /** Aviso com o link do instalador (baixa o .bat; ao abrir, ele instala/atualiza tudo sozinho). */

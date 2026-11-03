@@ -64,14 +64,13 @@ async function atualizarRobo() {
   }
 }
 
-/** Confere a versão do site ao abrir e a cada 2 horas; atualiza sozinho se não houver emissão em andamento. */
+/** Confere a versão do site ao abrir (o Núcleo também pede a atualização quando publica versão nova). */
 async function conferirAtualizacao() {
   try {
     if ((await versaoNoSite()) > VERSAO && ![...jobs.values()].some((j) => ATIVOS.includes(j.status))) await atualizarRobo();
   } catch { /* sem internet: tenta depois */ }
 }
 setTimeout(conferirAtualizacao, 15000);
-setInterval(conferirAtualizacao, 2 * 3600 * 1000);
 
 function cors(req, res) {
   const o = req.headers.origin || '';
