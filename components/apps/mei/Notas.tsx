@@ -13,6 +13,9 @@ const PESSOAS_SEM_TOMADOR = new Set([3, 3108]);
 const semTomador = (n: Nota) => n.codigopessoa == null || PESSOAS_SEM_TOMADOR.has(Number(n.codigopessoa));
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
+/** Data de baixa do profissional (31/12/2100 = sem baixa). */
+const baixaDe = (m: Mei): string | null => (m.fim && m.fim.slice(0, 10) < "2100-01-01" ? m.fim.slice(0, 10) : null);
+
 export default function Notas({ mei }: { mei: Mei[] }) {
   const [de, setDe] = useState(primeiroDiaMes());
   const [ate, setAte] = useState(ultimoDiaMes());
@@ -90,7 +93,7 @@ export default function Notas({ mei }: { mei: Mei[] }) {
       <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: 12 }}>
         <div style={st.card}>
           <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Profissionais ({prof.length})</h3>
-          <Tabela cab={["Cód.", "Profissional", ""]} linhas={prof.map((m) => [m.cod, m.razao, <button key="n" style={st.btn} onClick={() => setEmitir(m)}>Nota</button>])} />
+          <Tabela cab={["Cód.", "Profissional", ""]} linhas={prof.map((m) => [m.cod, <span key="r">{m.razao}{baixaDe(m) && <><br /><span style={{ ...st.mut, color: "var(--div)" }}>baixa em {dt(baixaDe(m))} — notas só até essa data</span></>}</span>, <button key="n" style={st.btn} onClick={() => setEmitir(m)}>Nota</button>])} />
         </div>
         <div style={st.card}>
           <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Notas do período</h3>
@@ -151,7 +154,15 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
   }, [m.cod]);
 
   // Robô (igual ao "Salvar" do Access): abre o Emissor Nacional no PC de quem emite e preenche a nota.
+  /** Profissional baixado: a nota não pode ter data depois da baixa (ela aparece no período só para as notas até lá). */
+  function foraDaBaixa(): boolean {
+    const b = baixaDe(m);
+    if (b && d.data > b.slice(0, 10)) { setErro(`Profissional baixado em ${dt(b)}: a nota só pode ter data até a baixa.`); return true; }
+    return false;
+  }
+
   async function preencherPortal() {
+    if (foraDaBaixa()) return;
     setErro("");
     const valor = Number(d.valor.replace(/\./g, "").replace(",", "."));
     if (!valor || !d.data) { setErro("Informe a data e o valor antes de preencher no portal."); return; }
@@ -186,6 +197,7 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
   }
 
   async function lancar(_lancarEntrada = false) {
+    if (foraDaBaixa()) return;
     setErro(""); setRes(null);
     const valor = d.valor.replace(/\./g, "").replace(",", ".");
     if (!d.numero || !Number(valor) || !d.data) { setErro("Informe o número da nota emitida no portal, a data e o valor."); return; }
