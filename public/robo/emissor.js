@@ -72,8 +72,8 @@ async function cliqueRobusto(page, seletores, nome, tentativas = 8) {
   throw new Error(`Não encontrei ${nome} no portal. ${ultimo ? ultimo.message.split('\n')[0] : ''}`);
 }
 
-async function select2(page, abrir, busca, escolherTexto) {
-  await acao(page, abrir, (l) => l.click(), { nome: 'lista de seleção' });
+async function select2(page, abrir, busca, escolherTexto, nome = 'lista de seleção') {
+  await acao(page, abrir, (l) => l.click(), { nome, timeout: 15000 });
   const campo = page.locator('.select2-container--open .select2-search__field').or(page.locator('xpath=/html/body/span/span/span[1]/input')).first();
   await campo.waitFor({ state: 'visible', timeout: 8000 });
   await campo.fill('');
@@ -185,11 +185,21 @@ async function preparar(job, creds, ctl) {
         await sleep(2000);
       } else ctl.log('Sem tomador: tomador não informado no portal (confira antes de emitir).');
       await acao(page, '#btnAvancar', (l) => l.click(), { nome: 'botão Avançar' });
+      // O portal às vezes demora (ou recusa) para sair da tela de Pessoas: espera a tela de Serviço.
+      await page.waitForURL(/\/DPS\/Servico/i, { timeout: 20000 }).catch(() => null);
+      if (/\/DPS\/Pessoas/i.test(page.url())) {
+        await cliqueRobusto(page, ['#btnAvancar'], 'botão Avançar', 3).catch(() => null);
+        await page.waitForURL(/\/DPS\/Servico/i, { timeout: 15000 }).catch(() => null);
+        if (/\/DPS\/Pessoas/i.test(page.url())) throw new Error('O portal não saiu da tela de Pessoas (confira data de competência e tomador na janela do Chrome).');
+      }
+      await page.waitForLoadState('domcontentloaded').catch(() => null);
+      await sleep(1500);
+      // município + serviço (o portal muda o layout: tenta o caminho antigo e, se não achar, as listas da tela)
+      await select2(page, ['xpath=/html/body/div[1]/form/div[1]/div/div/div[2]/div/span[1]/span[1]/span', '#pnlLocalPrestacao .select2-selection', 'form .select2-selection >> nth=0'],
+        job.municipio, `${job.municipio}/${job.uf}`, 'lista do município (local da prestação)');
       await sleep(2000);
-      // município + serviço
-      await select2(page, 'xpath=/html/body/div[1]/form/div[1]/div/div/div[2]/div/span[1]/span[1]/span', job.municipio, `${job.municipio}/${job.uf}`);
-      await sleep(2000);
-      await select2(page, 'xpath=/html/body/div[1]/form/div[2]/div/div[1]/div/div/span[1]/span[1]/span', busca, busca);
+      await select2(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[1]/div/div/span[1]/span[1]/span', '#pnlServicoPrestado .select2-selection', 'form .select2-selection >> nth=1'],
+        busca, busca, 'lista do código do serviço');
       await sleep(1500);
       await acao(page, ['xpath=/html/body/div[1]/form/div[2]/div/div[3]/div/div[1]/label/span/i'], (l) => l.click(), { nome: 'opção "não" (exportação/imunidade)' });
       await acao(page, '#ServicoPrestado_Descricao', (l) => l.fill(job.descricao || ''), { nome: 'descrição do serviço' });
