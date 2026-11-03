@@ -9,6 +9,9 @@
 // em disco (a senha chega do Núcleo a cada emissão e fica só na memória).
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const { spawn, spawnSync } = require('child_process');
 const { preparar, codigoServico, hoje } = require('./emissor');
 const { guiaDAS } = require('./das');
 const { abrirEmailOutlook } = require('./outlook');
@@ -18,6 +21,57 @@ const PORTA = +(process.env.ROBO_PORTA || 3199);
 const ORIGENS = ['https://system-contabilidade.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
+const VERSAO = 8;
+const SITE_ROBO = 'https://system-contabilidade.vercel.app/robo';
+const ARQUIVOS = ['robo-nucleo.js', 'emissor.js', 'das.js', 'outlook.js', 'package.json', 'versao.txt'];
+
+/** Versão publicada no site (versao.txt). */
+async function versaoNoSite() {
+  const r = await fetch(`${SITE_ROBO}/versao.txt?t=${Date.now()}`, { cache: 'no-store' });
+  return Number(String(await r.text()).trim()) || 0;
+}
+
+/**
+ * Atualiza sozinho: baixa os arquivos novos do site para esta pasta, instala dependências se o
+ * package.json mudou e reinicia o robô (o processo novo assume a porta assim que este sair).
+ */
+let atualizando = false;
+async function atualizarRobo() {
+  if (atualizando) return { ok: true, msg: 'já atualizando' };
+  atualizando = true;
+  try {
+    const nova = await versaoNoSite();
+    const pkgAntes = fs.existsSync(path.join(__dirname, 'package.json')) ? fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8') : '';
+    const baixados = {};
+    for (const f of ARQUIVOS) {
+      const r = await fetch(`${SITE_ROBO}/${f}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`falha ao baixar ${f} (HTTP ${r.status})`);
+      baixados[f] = Buffer.from(await r.arrayBuffer());
+    }
+    for (const [f, b] of Object.entries(baixados)) fs.writeFileSync(path.join(__dirname, f), b);
+    if (baixados['package.json'].toString('utf8') !== pkgAntes) {
+      const npm = path.join(path.dirname(process.execPath), 'npm.cmd');
+      spawnSync(npm, ['install', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: __dirname, shell: true, windowsHide: true, stdio: 'ignore' });
+    }
+    setTimeout(() => {
+      spawn(process.execPath, [path.join(__dirname, 'robo-nucleo.js')], { cwd: __dirname, detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      process.exit(0);
+    }, 500);
+    return { ok: true, de: VERSAO, para: nova };
+  } catch (e) {
+    atualizando = false;
+    return { ok: false, erro: String(e.message || e) };
+  }
+}
+
+/** Confere a versão do site ao abrir e a cada 2 horas; atualiza sozinho se não houver emissão em andamento. */
+async function conferirAtualizacao() {
+  try {
+    if ((await versaoNoSite()) > VERSAO && ![...jobs.values()].some((j) => ATIVOS.includes(j.status))) await atualizarRobo();
+  } catch { /* sem internet: tenta depois */ }
+}
+setTimeout(conferirAtualizacao, 15000);
+setInterval(conferirAtualizacao, 2 * 3600 * 1000);
 
 function cors(req, res) {
   const o = req.headers.origin || '';
@@ -34,14 +88,19 @@ function cors(req, res) {
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
 const publico = (j) => { const { creds, ctx, printB64, ...p } = j; void creds; void ctx; return { ...p, temPrint: !!printB64 }; };
 
-http.createServer(async (req, res) => {
+const servidor = http.createServer(async (req, res) => {
   const permitido = cors(req, res);
   if (req.method === 'OPTIONS') { res.writeHead(permitido ? 204 : 403); return res.end(); }
   if (!permitido) return send(res, 403, { erro: 'origem não permitida' });
   const u = new URL(req.url, 'http://x');
   try {
     if (req.method === 'GET' && u.pathname === '/status') {
-      return send(res, 200, { ok: true, versao: 7, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
+      return send(res, 200, { ok: true, versao: VERSAO, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
+    }
+    if (req.method === 'POST' && u.pathname === '/atualizar') {
+      if ([...jobs.values()].some((j) => ATIVOS.includes(j.status))) return send(res, 409, { erro: 'Tem uma emissão em andamento: termine ou cancele antes de atualizar.' });
+      const r = await atualizarRobo();
+      return send(res, r.ok ? 200 : 500, r);
     }
     let m;
     if (req.method === 'GET' && (m = u.pathname.match(/^\/jobs\/([A-Z0-9]+)$/))) {
@@ -120,4 +179,10 @@ http.createServer(async (req, res) => {
   } catch (e) {
     return send(res, 500, { erro: String(e.message || e) });
   }
-}).listen(PORTA, '127.0.0.1', () => console.log(`Robô NFS-e do Núcleo em http://localhost:${PORTA} (deixe esta janela aberta)`));
+});
+let tentativasPorta = 0;
+servidor.on('error', (e) => {
+  if (e.code === 'EADDRINUSE' && tentativasPorta++ < 30) return setTimeout(() => servidor.listen(PORTA, '127.0.0.1'), 1000);
+  console.error(e); process.exit(1);
+});
+servidor.listen(PORTA, '127.0.0.1', () => console.log(`Robô NFS-e do Núcleo v${VERSAO} em http://localhost:${PORTA} (deixe esta janela aberta)`));

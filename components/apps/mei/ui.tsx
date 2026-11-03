@@ -176,7 +176,7 @@ export function SelectSalao({ mei, valor, onChange, todos = true }: { mei: Mei[]
 
 // ---------------- Robô local (NFS-e e guia DAS) ----------------
 export const ROBO_URL = "http://localhost:3199";
-export const ROBO_VERSAO_MINIMA = 7; // v7: DPS completa espera a tela de Serviço (v5: PDF com nome e extensão)
+export const ROBO_VERSAO_MINIMA = 8; // v8: atualiza sozinho (botão "Atualizar robô"); v7: DPS completa espera a tela de Serviço
 export const ROBO_INSTALADOR = "/robo/instalar-robo-nucleo.bat";
 export type RoboEstado = "ok" | "ausente" | "desatualizado";
 
@@ -191,7 +191,33 @@ export async function verificarRobo(): Promise<RoboEstado> {
 
 /** Aviso com o link do instalador (baixa o .bat; ao abrir, ele instala/atualiza tudo sozinho). */
 export function AvisoRobo({ estado, fechar }: { estado: RoboEstado; fechar?: () => void }) {
+  const [atualizando, setAtualizando] = useState<"" | "rodando" | "ok" | "erro">("");
   if (estado === "ok") return null;
+  // Robô v8 ou mais novo: um clique atualiza (ele baixa a versão nova e reinicia sozinho).
+  async function atualizar() {
+    setAtualizando("rodando");
+    try {
+      const r = await fetch(`${ROBO_URL}/atualizar`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      for (let i = 0; i < 20; i++) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        if ((await verificarRobo()) === "ok") { setAtualizando("ok"); return; }
+      }
+      setAtualizando("erro");
+    } catch { setAtualizando("erro"); }
+  }
+  if (estado === "desatualizado" && atualizando !== "erro") return (
+    <div style={{ ...st.aviso, borderLeft: "4px solid var(--accent)", display: "grid", gap: 6 }}>
+      <b>{atualizando === "ok" ? "Robô atualizado! Pode clicar de novo no botão do robô." : "Tem uma versão nova do robô."}</b>
+      {atualizando !== "ok" && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={st.btnP} disabled={atualizando === "rodando"} onClick={atualizar}>{atualizando === "rodando" ? "Atualizando… (leva alguns segundos)" : "Atualizar robô"}</button>
+          {fechar && <button style={st.btn} onClick={fechar}>Fechar</button>}
+        </div>
+      )}
+      {atualizando === "ok" && fechar && <div><button style={st.btn} onClick={fechar}>Fechar</button></div>}
+    </div>
+  );
   return (
     <div style={{ ...st.aviso, borderLeft: "4px solid var(--accent)", display: "grid", gap: 6 }}>
       <b>{estado === "ausente" ? "O robô não está instalado (ou não está aberto) neste computador." : "Tem uma versão nova do robô."}</b>
