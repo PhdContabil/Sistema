@@ -22,7 +22,7 @@ function montar(cod: number, regime: string, inicio: string, plano: boolean, ext
   if (plano) corpo.copiar_plano_contas = true;
   // Plano referencial 2 e 3 (troca o que existir) e agenda da contabilização no QUIU (dia 26, +4 min).
   if (extras.corrigir) corpo.corrigir_plano_referencial = true;
-  if (extras.quiu) corpo.agendar_quiu = true;
+  if (extras.quiu) { corpo.agendar_quiu = true; corpo.agendar_patrimonial = true; } // patrimonial: mesmo dia/horário do contábil
   return corpo;
 }
 
