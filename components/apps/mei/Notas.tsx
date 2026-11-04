@@ -49,7 +49,9 @@ export default function Notas({ mei }: { mei: Mei[] }) {
           const j = await ler<{ dados: Nota[]; total: number; truncado: boolean }>("/fiscal/lancamentos", { tipo: "saida", salao: sal, data_inicio: a1, data_fim: b1 });
           todas.push(...(j.dados ?? [])); truncado = truncado || !!j.truncado;
         }
-        setNotas(todas);
+        // Só notas de MEI: o salão pode ter ME/EPP vinculados no Questor, que não entram na conferência do MEI.
+        const codsMei = new Set(mei.map((m) => m.cod));
+        setNotas(todas.filter((n) => codsMei.has(n.codigoempresa)));
         setInfo(`${todas.length} nota(s)${partes.length > 1 ? ` (período buscado em ${partes.length} partes)` : ""}${truncado ? " — parte do resultado foi cortada pela API (5000 linhas); diminua o período" : ""}`);
       } catch (e) { setInfo(e instanceof Error ? e.message : "Falha ao buscar as notas."); }
     })();
