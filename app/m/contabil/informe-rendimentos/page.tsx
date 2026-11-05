@@ -50,7 +50,7 @@ export default async function Page() {
         <div>
           <h1>Sistema Contábil</h1>
           <div className="desc">
-            Informe de rendimentos, aluguéis e ganho de capital (regime vem do Tareffa) e lucros distribuídos, lançados no Questor.
+            Informe de rendimentos e ganho de capital (regime vem do Tareffa) e lucros distribuídos, lançados no Questor.
           </div>
         </div>
       </div>
