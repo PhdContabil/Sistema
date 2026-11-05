@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasWriteKey, lancarLucroDistribuido } from "@/lib/questor";
 import { prepararLancamento, ErroLucro } from "@/lib/lucros-distribuidos-servico";
 import { chaveLancamento, jaLancado, registrarLog } from "@/lib/lucros-distribuidos-log";
-import { avisarLucro } from "@/lib/notificacao-teams";
+import { notificarLucro } from "@/lib/notificar-lucro";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +44,10 @@ export async function POST(req: Request) {
     await registrarLog({ ...base, status: "lancado", chaveQuestor: r.corpo.chave ?? null, resposta: r.corpo });
     const repetido = r.corpo.repetido === true;
     // Aviso no Teams só para lançamento novo; reenvio idempotente não avisa de novo.
-    const notificacao = repetido ? "desligada" : await avisarLucro({
+    const notificacao = repetido ? "desligada" : await notificarLucro({
       evento: "novo", competencia: e.competencia, codigoempresa: e.codigoempresa, nomeEmpresa: p.nomeEmpresa,
       nomeSocio: p.nomeSocio, codigosocio: e.codigosocio, rendimento: e.rendimento, imposto: e.imposto,
-    });
+    }, email);
     return NextResponse.json({ ok: true, repetido, chave: r.corpo.chave ?? null, avisos: r.corpo.avisos ?? [], notificacao });
   } catch (e) {
     if (e instanceof ErroLucro) return NextResponse.json({ error: e.message }, { status: e.status });

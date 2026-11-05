@@ -3,7 +3,7 @@ import { excluirLucroDistribuido, hasWriteKey } from "@/lib/questor";
 import { ErroLucro, resolverNomes } from "@/lib/lucros-distribuidos-servico";
 import { chaveExclusao, marcarExcluido, registrarLog } from "@/lib/lucros-distribuidos-log";
 import { ehData } from "@/lib/lucros-distribuidos";
-import { avisarLucro } from "@/lib/notificacao-teams";
+import { notificarLucro } from "@/lib/notificar-lucro";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
 
 export const dynamic = "force-dynamic";
@@ -49,10 +49,10 @@ export async function POST(req: Request) {
     });
     if (!r.ok) return NextResponse.json({ error: msgErro }, { status: r.status === 404 ? 501 : 502 });
     await marcarExcluido(codigoempresa, chaveQ);
-    const notificacao = await avisarLucro({
+    const notificacao = await notificarLucro({
       evento: "excluido", competencia: entrada.competencia, codigoempresa, nomeEmpresa: nomes.nomeEmpresa,
       nomeSocio: nomes.nomeSocio, codigosocio, rendimento: entrada.rendimento, imposto: entrada.imposto,
-    });
+    }, email);
     return NextResponse.json({ ok: true, notificacao });
   } catch (e) {
     if (e instanceof ErroLucro) return NextResponse.json({ error: e.message }, { status: e.status });
