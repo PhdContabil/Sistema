@@ -116,16 +116,9 @@ test("ganho de capital: exige valor", () => {
   assert.throws(() => montarPlano({ ...base, tipo: "ganho-capital", rendimento: 10, demaisReceitas: 0 }, "presumido"), InformeInvalido);
 });
 
-test("aluguéis no Presumido: igual ao rendimento do Access (CST 8, conta 2859)", () => {
-  const p = montarPlano({ ...base, tipo: "alugueis" }, "presumido");
-  assert.equal(p.tipo, "alugueis");
-  assert.equal(p.ecf[0].codigooperacaofis, 45040);
-  assert.equal(p.f100[0].cst, 8);
-  assert.equal(p.f100[0].contactb, 2859);
-});
-
-test("aluguéis no Real: recusa (regra não definida)", () => {
-  assert.throws(() => montarPlano({ ...base, tipo: "alugueis" }, "real"), InformeInvalido);
+test("aluguéis foi encerrado: não se lança mais, em nenhum regime", () => {
+  assert.throws(() => montarPlano({ ...base, tipo: "alugueis" as never }, "presumido"), InformeInvalido);
+  assert.throws(() => montarPlano({ ...base, tipo: "alugueis" as never }, "real"), InformeInvalido);
 });
 
 test("tipo inválido", () => {

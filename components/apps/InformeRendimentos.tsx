@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
-import { ROTULO_TIPO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
+import { ROTULO_TIPO, ROTULO_TIPO_ENCERRADO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
 import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
 import FiltrosLog, { FILTRO_VAZIO, aplicarFiltro, type FiltroLog } from "./FiltrosLog";
 import type { LinhaLog } from "@/lib/informe-rendimentos-log";
@@ -188,7 +188,7 @@ export default function InformeRendimentos({
         )}
 
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", marginTop: 14 }}>
-          {tipo !== "ganho-capital" && money(rendimento, setRendimento, tipo === "alugueis" ? "Aluguéis (rendimento)" : "Rendimentos (receita financeira)")}
+          {tipo !== "ganho-capital" && money(rendimento, setRendimento, "Rendimentos (receita financeira)")}
           {money(demais, setDemais, tipo === "ganho-capital" ? "Ganho de capital (demais receitas)" : "Demais receitas")}
           {tipo !== "ganho-capital" && money(dividendos, setDividendos, "Dividendos")}
           {tipo !== "ganho-capital" && money(retencao, setRetencao, "Retenção (IRRF)")}
@@ -274,7 +274,7 @@ export default function InformeRendimentos({
 
       <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de lançamentos ({logVisivel.length})</h3>
       <FiltrosLog filtro={filtroLog} onChange={(f) => { setFiltroLog(f); setPaginaLog(0); }} rotuloTipo="Tipo" placeholder="Buscar por empresa, código ou responsável"
-        opcoesTipo={[...Object.entries(ROTULO_TIPO).map(([valor, rotulo]) => ({ valor, rotulo })), { valor: "historico", rotulo: "Histórico" }]}
+        opcoesTipo={[...Object.entries({ ...ROTULO_TIPO, ...ROTULO_TIPO_ENCERRADO }).map(([valor, rotulo]) => ({ valor, rotulo })), { valor: "historico", rotulo: "Histórico" }]}
         total={log.length} exibidas={logVisivel.length} />
       <div className="table-wrap">
         <table className="grid">
@@ -292,7 +292,7 @@ export default function InformeRendimentos({
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
                 <td style={{ textAlign: "left" }}>{l.codigoempresa} · {l.nome_empresa ?? ""}</td>
                 <td>{l.competencia.split("-").reverse().join("/")}</td>
-                <td>{l.tipo === "historico" ? "Histórico" : (ROTULO_TIPO[l.tipo as TipoInforme] ?? l.tipo)}</td>
+                <td>{l.tipo === "historico" ? "Histórico" : (ROTULO_TIPO[l.tipo as TipoInforme] ?? ROTULO_TIPO_ENCERRADO[l.tipo] ?? l.tipo)}</td>
                 <td>{l.regime === "real" ? "Real" : l.regime === "presumido" ? "Presumido" : "—"}</td>
                 <td>{formatBRL(l.rendimento)}</td><td>{formatBRL(l.demais_receitas)}</td>
                 <td>{formatBRL(l.dividendos)}</td><td>{formatBRL(l.retencao)}</td>

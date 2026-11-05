@@ -13,22 +13,26 @@
 export type Regime = "presumido" | "real";
 
 /**
- * Os três formulários do Access (Informe de Rendimentos, Aluguéis e Ganho de
- * Capital) faziam os MESMOS lançamentos no Questor — só mudava o título e, no
- * ganho de capital, o único campo usado era "Demais receitas". Aqui viram um só
- * motor com o tipo registrado no log (no Access os três caíam no mesmo
- * LogOperacoes, sem como distinguir).
+ * Os formulários do Access (Informe de Rendimentos e Ganho de Capital) faziam os
+ * MESMOS lançamentos no Questor — só mudava o título e, no ganho de capital, o
+ * único campo usado era "Demais receitas". Aqui viram um só motor com o tipo
+ * registrado no log (no Access caíam no mesmo LogOperacoes, sem como distinguir).
+ *
+ * Aluguéis foi encerrado (a contabilidade não usa mais): não se lança mais,
+ * mas o histórico antigo continua com o rótulo (ver ROTULO_TIPO_ENCERRADO).
  */
-export type TipoInforme = "rendimentos" | "alugueis" | "ganho-capital";
+export type TipoInforme = "rendimentos" | "ganho-capital";
 
 export const ROTULO_TIPO: Record<TipoInforme, string> = {
   rendimentos: "Informe de Rendimentos",
-  alugueis: "Aluguéis",
   "ganho-capital": "Ganho de Capital",
 };
 
+/** Tipos que não se lançam mais, só aparecem no histórico antigo. */
+export const ROTULO_TIPO_ENCERRADO: Record<string, string> = { alugueis: "Aluguéis (encerrado)" };
+
 export function ehTipoInforme(v: unknown): v is TipoInforme {
-  return v === "rendimentos" || v === "alugueis" || v === "ganho-capital";
+  return v === "rendimentos" || v === "ganho-capital";
 }
 
 /** Lê a descrição do regime do Tareffa. Devolve null para o que não é suportado. */
@@ -211,12 +215,6 @@ export function validarEntrada(e: EntradaInforme, hoje = new Date()): EntradaInf
  */
 export function montarPlano(entrada: EntradaInforme, regime: Regime): PlanoInforme {
   const e = validarEntrada(entrada);
-  if (e.tipo === "alugueis" && regime === "real") {
-    // O Access lançava aluguel como o rendimento do Presumido (CST 08, conta
-    // 2859). Para o Real não há regra definida (CST, conta contábil, incidência):
-    // melhor recusar do que gravar errado na escrituração.
-    throw new InformeInvalido("Aluguéis em Lucro Real: a regra (CST e conta contábil) ainda não foi definida. Nada foi calculado.");
-  }
   const dataEcf = primeiroDiaDoMes(e.competencia);
   const dataF100 = ultimoDiaDoMes(e.competencia);
   const avisos: string[] = [];

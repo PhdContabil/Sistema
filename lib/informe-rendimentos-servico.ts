@@ -47,7 +47,9 @@ export async function prepararInforme(corpo: Record<string, unknown>): Promise<I
   let entrada: EntradaInforme;
   try {
     entrada = validarEntrada({
-      tipo: ehTipoInforme(corpo.tipo) ? corpo.tipo : "rendimentos",
+      tipo: corpo.tipo === undefined || corpo.tipo === null || corpo.tipo === ""
+        ? "rendimentos"
+        : (corpo.tipo as EntradaInforme["tipo"]),
       codigoempresa: Number(corpo.codigoempresa),
       competencia: String(corpo.competencia ?? ""),
       rendimento: numero(corpo.rendimento),
