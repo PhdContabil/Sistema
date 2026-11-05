@@ -118,7 +118,7 @@ export interface DadosAvisoInforme {
 }
 
 /**
- * Linha da lista LogOperacoes (informe, aluguéis e ganho de capital usam a
+ * Linha da lista LogOperacoes (informe e ganho de capital usam a
  * mesma lista, sem coluna de tipo — como no Access). DATALCTOFIS = primeiro dia
  * da competência.
  */
