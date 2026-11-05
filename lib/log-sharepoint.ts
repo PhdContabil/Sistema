@@ -28,10 +28,10 @@ export const CAMPOS_PADRAO = {
 } as const;
 export type Campos = Record<keyof typeof CAMPOS_PADRAO, string>;
 
-/** "2026-10" -> primeiro dia do mês à meia-noite de Brasília (03:00 UTC), como coluna de data do SharePoint. */
+/** "2026-10" -> primeiro dia do mês ao meio-dia UTC: o dia não muda ao converter para Brasília nem para o fuso do site (Pacífico), e o fluxo continua formatando o mês certo. */
 export function competenciaParaData(c: string): string {
   const m = /^(\d{4})-(\d{2})/.exec(c);
-  return m ? `${m[1]}-${m[2]}-01T03:00:00Z` : c;
+  return m ? `${m[1]}-${m[2]}-01T12:00:00Z` : c;
 }
 
 /** Campos da linha, com os mesmos valores que o Access gravava. */

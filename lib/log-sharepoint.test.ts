@@ -11,8 +11,8 @@ test("campos seguem o log do Access", () => {
   assert.equal(c.STATUS, "1º LANÇAMENTO");
   assert.equal(c.CODIGOEMPRESA, 1233);
   assert.equal(c.VALORRENDPAGO, 42312.89);
-  assert.equal(c.COMPETENCIA, "2026-10-01T03:00:00Z");
-  assert.equal(competenciaParaData("2026-12-31"), "2026-12-01T03:00:00Z");
+  assert.equal(c.COMPETENCIA, "2026-10-01T12:00:00Z");
+  assert.equal(competenciaParaData("2026-12-31"), "2026-12-01T12:00:00Z");
   assert.equal(montarCamposSp({ ...d, evento: "excluido" }, "x").STATUS, "LANÇAMENTO EXCLUIDO");
   assert.equal(montarCamposSp({ ...d, evento: "alterado" }, "x").STATUS, "LANÇAMENTO ALTERADO");
 });
