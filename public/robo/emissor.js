@@ -272,7 +272,17 @@ async function preparar(job, creds, ctl) {
           await page.locator('.modal.show button:has-text("OK"), .modal.show button:has-text("Fechar"), .swal2-confirm').first().click({ timeout: 2000 }).catch(() => null);
           await sleep(5000);
         }
-      } else ctl.log('Sem tomador: tomador não informado no portal (confira antes de emitir).');
+      } else {
+        // Sem tomador: marcar "Tomador/Adquirente não informado" (senão o portal não deixa avançar).
+        await cliqueRobusto(page, [
+          '#pnlTomador label:has-text("não informado")',
+          '#pnlTomador label:has-text("Não informado")',
+          'xpath=//*[@id="pnlTomador"]//label[contains(translate(normalize-space(.),"NÃOINFRMD","nãoinfrmd"),"não informado")]',
+          'label:has-text("Tomador/Adquirente não informado")',
+        ], 'opção "Tomador/Adquirente não informado"');
+        await sleep(2000);
+        ctl.log('Sem tomador: marcado "Tomador/Adquirente não informado".');
+      }
       await acao(page, '#btnAvancar', (l) => l.click(), { nome: 'botão Avançar' });
       // O portal às vezes demora (ou recusa) para sair da tela de Pessoas: espera a tela de Serviço.
       await page.waitForURL(/\/DPS\/Servico/i, { timeout: 20000 }).catch(() => null);
