@@ -52,17 +52,24 @@ export function montarCamposSp(d: DadosAvisoLucro, responsavel: string, agora = 
 
 interface OpcoesSp { env?: Record<string, string | undefined>; fetchFn?: typeof fetch; timeoutMs?: number; agora?: Date }
 
-/** Grava a linha. Nunca lança e nunca registra segredo nem resposta da Graph. */
-export async function registrarLogSharepoint(d: DadosAvisoLucro, responsavel: string, o: OpcoesSp = {}): Promise<ResultadoLogSp> {
+/**
+ * Cria um item numa lista do SharePoint pela Graph (app com Sites.Selected).
+ * Nunca lança e nunca registra segredo nem a resposta da Graph.
+ * `montarCampos` recebe as variáveis de ambiente (para nomes de coluna opcionais).
+ */
+export async function gravarItemSharepoint(
+  listaIdVar: string,
+  montarCampos: (env: Record<string, string | undefined>) => Record<string, unknown>,
+  o: OpcoesSp = {},
+): Promise<ResultadoLogSp> {
   const env = o.env ?? process.env;
   const t = env.SHAREPOINT_TENANT_ID, id = env.SHAREPOINT_CLIENT_ID, seg = env.SHAREPOINT_CLIENT_SECRET;
-  const site = env.SHAREPOINT_SITE_ID, lista = env.SHAREPOINT_LISTA_LUCROS_ID;
+  const site = env.SHAREPOINT_SITE_ID, lista = env[listaIdVar];
   if (!t || !id || !seg || !site || !lista) return "desligado";
   const f = o.fetchFn ?? fetch;
   const sinal = () => AbortSignal.timeout(o.timeoutMs ?? 8000);
   try {
-    let campos: Campos = { ...CAMPOS_PADRAO };
-    if (env.SHAREPOINT_LUCROS_CAMPOS) campos = { ...campos, ...JSON.parse(env.SHAREPOINT_LUCROS_CAMPOS) };
+    const fields = montarCampos(env);
 
     const tk = await f(`https://login.microsoftonline.com/${encodeURIComponent(t)}/oauth2/v2.0/token`, {
       method: "POST",
@@ -77,7 +84,7 @@ export async function registrarLogSharepoint(d: DadosAvisoLucro, responsavel: st
     const r = await f(`https://graph.microsoft.com/v1.0/sites/${encodeURIComponent(site)}/lists/${encodeURIComponent(lista)}/items`, {
       method: "POST",
       headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ fields: montarCamposSp(d, responsavel, o.agora, campos) }),
+      body: JSON.stringify({ fields }),
       signal: sinal(),
     });
     if (!r.ok) { console.error(`[sharepoint] gravação recusada (HTTP ${r.status})`); return "falhou"; }
@@ -86,4 +93,50 @@ export async function registrarLogSharepoint(d: DadosAvisoLucro, responsavel: st
     console.error("[sharepoint] falha ao gravar log:", e instanceof Error ? e.name : "erro");
     return "falhou";
   }
+}
+
+/** Log dos Lucros (lista LogOperacoes_lucros_distribuidos). */
+export function registrarLogSharepoint(d: DadosAvisoLucro, responsavel: string, o: OpcoesSp = {}): Promise<ResultadoLogSp> {
+  return gravarItemSharepoint("SHAREPOINT_LISTA_LUCROS_ID", (env) => {
+    let campos: Campos = { ...CAMPOS_PADRAO };
+    if (env.SHAREPOINT_LUCROS_CAMPOS) campos = { ...campos, ...JSON.parse(env.SHAREPOINT_LUCROS_CAMPOS) };
+    return montarCamposSp(d, responsavel, o.agora, campos);
+  }, o);
+}
+
+// ------------------------------------------------------------------ informe
+
+export interface DadosAvisoInforme {
+  /** AAAA-MM */
+  competencia: string;
+  codigoempresa: number;
+  nomeEmpresa: string | null;
+  rendimento: number;
+  retencao: number;
+  demaisReceitas: number;
+  dividendos: number;
+}
+
+/**
+ * Linha da lista LogOperacoes (informe, aluguéis e ganho de capital usam a
+ * mesma lista, sem coluna de tipo — como no Access). DATALCTOFIS = primeiro dia
+ * da competência.
+ */
+export function montarCamposInforme(d: DadosAvisoInforme, responsavel: string, agora = new Date()) {
+  return {
+    CODIGOEMPRESA: d.codigoempresa,
+    RENDIMENTO: d.rendimento,
+    RETENCAO: d.retencao,
+    DATALCTOFIS: competenciaParaData(d.competencia),
+    DATAHORA: agora.toISOString(),
+    NOMEESTAB: d.nomeEmpresa ?? "",
+    RESPONSAVEL: responsavel,
+    DEMAIS_RECEITAS: d.demaisReceitas,
+    DIVIDENDOS: d.dividendos,
+  };
+}
+
+/** Log do informe (lista LogOperacoes); o fluxo "Rendimentos - Cont / Fis" avisa o grupo. */
+export function registrarLogInforme(d: DadosAvisoInforme, responsavel: string, o: OpcoesSp = {}): Promise<ResultadoLogSp> {
+  return gravarItemSharepoint("SHAREPOINT_LISTA_INFORME_ID", () => montarCamposInforme(d, responsavel, o.agora), o);
 }
