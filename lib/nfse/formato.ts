@@ -221,6 +221,8 @@ export function linhaParaNota(l: LinhaBruta, prestador: Prestador = PRESTADOR_PH
   const descricao = campo(l, "descricao_servico");
   if (!descricao) problemas.push("Descrição do serviço vazia");
   if (l.cancelado === true) problemas.push("RPS cancelado no Questor");
+  // Rota da API traz o número da NFS-e quando o Questor já registrou uma: não emitir de novo.
+  if (campo(l, "nfse_numero")) problemas.push(`Já tem NFS-e ${campo(l, "nfse_numero")} registrada no Questor`);
 
   return {
     problemas,
@@ -461,4 +463,11 @@ export function competenciasParaPdf(dataPrestacao: string, hoje: string): [numbe
   const [ha, hm] = hoje.split("-").map(Number);
   if (!lista.some(([mm, aa]) => mm === hm && aa === ha)) lista.push([hm, ha]);
   return lista;
+}
+
+/** "05/11/2026 17:30:12" | "05/11/2026" -> ISO 8601 com fuso de Brasília. */
+export function dataHoraIso(br: string | null | undefined, padrao = new Date()): string {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec((br ?? "").trim());
+  if (!m) return padrao.toISOString();
+  return `${m[3]}-${m[2]}-${m[1]}T${m[4] ?? "12"}:${m[5] ?? "00"}:${m[6] ?? "00"}-03:00`;
 }

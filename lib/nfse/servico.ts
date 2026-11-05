@@ -8,8 +8,9 @@
 //                  prefeitura ainda não liberou o RPS anterior;
 //   3. pdf       — busca o link na prefeitura, baixa o PDF e publica no Zen.
 import { createClient } from "@supabase/supabase-js";
-import { linhaParaNota, textoMensagens, erroDeSequencia, competenciasParaPdf, type LinhaBruta, type NotaNfse } from "./formato";
+import { dataHoraIso, linhaParaNota, textoMensagens, erroDeSequencia, competenciasParaPdf, type LinhaBruta, type NotaNfse } from "./formato";
 import { emitir as emitirWs, verificar as verificarWs, linkPdf, NfseError } from "./taboao";
+import { gravarNfseNoQuestor } from "../questor";
 import { consultarCliente, uploadArquivo, importarDocumento, hasQuestorZenToken, ClienteNaoEncontradoError } from "../questor-zen";
 
 /** Categoria do Edoc onde o app Python já publicava as NFS-e. */
@@ -195,6 +196,21 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
     return { status: "erro", mensagem: "O link da prefeitura não devolveu um PDF (manutenção?). Tente de novo." };
   }
   await sb.from("nfse_notas").update({ pdf_ok: true }).eq("id", id);
+
+  // Número da NFS-e de volta no RPS do Questor (não trava o resto se falhar).
+  if (dados.numero_nota && dados.codigo_verificacao && !(l as LinhaNfse & { questor_ok?: boolean }).questor_ok) {
+    try {
+      const r = await gravarNfseNoQuestor(l.rps_serie, l.rps_numero, {
+        usuario: "nucleo-financeiro", numero_nfse: dados.numero_nota, serie_nfse: dados.serie_nota,
+        codigo_verificacao: dados.codigo_verificacao, data_emissao: dataHoraIso(dados.data_emissao),
+      }, { dryRun: false, idempotencyKey: `nucleo-nfse-${l.rps_serie}-${l.rps_numero}-${dados.numero_nota}` });
+      await sb.from("nfse_notas").update(r.ok
+        ? { questor_ok: true, questor_erro: null }
+        : { questor_erro: `HTTP ${r.status}: ${JSON.stringify(r.corpo.detail ?? r.corpo.erro ?? "").slice(0, 300)}` }).eq("id", id);
+    } catch (e) {
+      await sb.from("nfse_notas").update({ questor_erro: e instanceof Error ? e.message : "falha" }).eq("id", id);
+    }
+  }
 
   if (l.zen_documento_id) return { status: "ok", mensagem: `NFS-e ${dados.numero_nota}: PDF ok, já estava no Zen.` };
   if (!hasQuestorZenToken()) return { status: "ok", mensagem: `NFS-e ${dados.numero_nota}: PDF ok. Zen não configurado.` };

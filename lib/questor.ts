@@ -805,3 +805,15 @@ export function getRpsNfse(params: { data_inicio?: string; data_fim?: string; rp
   for (const [k, v] of Object.entries(params)) if (v != null && v !== "") q.set(k, String(v));
   return get<{ total: number; dados: RpsNfseQuestor[] }>(`/financeiro/nfse/rps?${q.toString()}`);
 }
+
+/** PATCH /financeiro/nfse/rps/{serie}/{numero}: grava no Questor o número da NFS-e emitida. */
+export function gravarNfseNoQuestor(
+  serie: string, numero: number,
+  dados: { usuario: string; numero_nfse: string; serie_nfse?: string | null; codigo_verificacao: string; data_emissao: string },
+  opts: { dryRun: boolean; idempotencyKey?: string }
+) {
+  return enviar<{ ok?: boolean; detail?: unknown; erro?: string }>(
+    "PATCH", `/financeiro/nfse/rps/${encodeURIComponent(serie)}/${numero}?dry_run=${opts.dryRun ? "true" : "false"}`, dados,
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}

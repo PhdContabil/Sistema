@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   lerCsv, linhaParaNota, montarSdtrps, lerResposta, erroDeSequencia, lerImpressao,
-  tipoLogradouro, converterValor, competenciasParaPdf,
+  tipoLogradouro, converterValor, competenciasParaPdf, dataHoraIso,
 } from "./formato.ts";
 
 const CSV = `"rps_serie","rps_numero","data_prestacao","valor_nota","observacao_nota","tipo_pessoa","cpf_cnpj","razao_social","inscricao_municipal","email","tipo_logradouro","logradouro","numero_endereco","complemento","bairro","municipio","uf","cep","descricao_servico","codigo_servico"
@@ -61,4 +61,21 @@ test("utilitários", () => {
   assert.deepEqual(tipoLogradouro("", "AVENIDA EUCLIDES"), ["Avenida", "EUCLIDES"]);
   assert.equal(converterValor("1614.15"), 1614.15);
   assert.deepEqual(competenciasParaPdf("2026-01-20", "2026-03-02"), [[1, 2026], [12, 2025], [3, 2026]]);
+});
+
+test("linha da API: números como texto/número, cancelada e já com NFS-e", () => {
+  const base = { rps_serie: "NF", rps_numero: 13400, data_prestacao: "2026-09-30", valor_nota: "552.31", tipo_pessoa: null,
+    cpf_cnpj: "61085212000103", razao_social: "X", logradouro: "Rua A", bairro: "B", municipio: "TABOAO DA SERRA", uf: "SP",
+    cep: "6775270", descricao_servico: "Contabilidade", codigo_servico: "17.19", cancelado: false, nfse_numero: null };
+  const ok = linhaParaNota(base);
+  assert.deepEqual(ok.problemas, []);
+  assert.equal(ok.nota.valor, 552.31);
+  assert.equal(ok.nota.tomador.tipo_pessoa, "J");
+  assert.ok(linhaParaNota({ ...base, cancelado: true }).problemas.some((p) => p.includes("cancelado")));
+  assert.ok(linhaParaNota({ ...base, nfse_numero: "21711" }).problemas.some((p) => p.includes("21711")));
+});
+
+test("data da NFS-e para o Questor", () => {
+  assert.equal(dataHoraIso("05/11/2026 17:30:12"), "2026-11-05T17:30:12-03:00");
+  assert.equal(dataHoraIso("05/11/2026"), "2026-11-05T12:00:00-03:00");
 });
