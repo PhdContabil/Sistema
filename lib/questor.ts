@@ -793,3 +793,15 @@ export async function getAtividadesMunicipais(uf: string, codigomunic: string | 
   const j = await get<{ dados?: { codigo: string; descricao: string }[] }>(`/lookups/atividades-municipais?uf=${encodeURIComponent(uf)}&codigomunic=${encodeURIComponent(String(codigomunic))}`);
   return (j.dados ?? []).map((x) => ({ codigo: String(x.codigo), descricao: String(x.descricao ?? "").trim() }));
 }
+
+// ------------------------------------------------- Financeiro / NFS-e da PHD
+// GET /financeiro/nfse/rps — pedida ao dev da API (docs/nfse-phd-api-questor.md).
+// Enquanto não existir, devolve 404 e a tela usa o upload do CSV do nSQL.
+
+export interface RpsNfseQuestor { [campo: string]: string | number | boolean | null }
+
+export function getRpsNfse(params: { data_inicio?: string; data_fim?: string; rps_inicio?: number; rps_fim?: number; codigoempresa?: number }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v != null && v !== "") q.set(k, String(v));
+  return get<{ total: number; dados: RpsNfseQuestor[] }>(`/financeiro/nfse/rps?${q.toString()}`);
+}

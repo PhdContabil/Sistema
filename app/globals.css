@@ -2409,3 +2409,17 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .fpg-q.ok { color: #16a34a; }
 .fpg-q.erro { color: #dc2626; }
 .fpg-reenviar { margin-left: 6px; padding: 2px 8px; font-size: 11px; }
+
+/* Financeiro › Emissão NFS-e PHD */
+.nfse-import { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.nfse-import label.btn { cursor: pointer; }
+.nfse-barra { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.nfse-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.nfse-tabela { width: 100%; }
+.nfse-tabela td { vertical-align: top; }
+.nfse-tabela td .obs { display: block; font-size: 11px; color: var(--muted); }
+.nfse-tabela .nfse-erro { color: #dc2626 !important; }
+.nfse-tabela .nfse-ok { color: #16a34a !important; font-weight: 600; }
+.nfse-acoes { white-space: nowrap; }
+.nfse-acoes .btn { margin-left: 4px; padding: 3px 8px; font-size: 12px; }
+.nfse-pausa .fp-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
