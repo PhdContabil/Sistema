@@ -49,7 +49,7 @@ Corpo (campos em minúsculas, nomes das colunas do Questor):
 
 `seq` **não** vem no corpo: a API calcula.
 
-`tipo` ∈ {`rendimentos`, `alugueis`, `ganho-capital`} é informativo (vai para o
+`tipo` ∈ {`rendimentos`, `ganho-capital`} é informativo (aluguéis foi encerrado pela contabilidade e não se lança mais) (vai para o
 log da API): os três usam **este mesmo endpoint**, porque no Access os
 formulários de Rendimentos, Aluguéis e Ganho de Capital gravavam as mesmas
 tabelas, com os mesmos códigos. No ganho de capital só há linha de ECF

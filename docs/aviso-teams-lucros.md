@@ -10,7 +10,7 @@ Funciona como no Access: a cada lançamento, alteração ou exclusão o Núcleo 
 
 ## Variáveis no Vercel (Production, segredo, nunca em chat/GitHub)
 
-`SHAREPOINT_TENANT_ID`, `SHAREPOINT_CLIENT_ID`, `SHAREPOINT_CLIENT_SECRET`, `SHAREPOINT_SITE_ID`, `SHAREPOINT_LISTA_LUCROS_ID`, `SHAREPOINT_LISTA_INFORME_ID` (lista LogOperacoes, do informe, aluguéis e ganho de capital), opcional `SHAREPOINT_LUCROS_CAMPOS`. Depois, novo deploy.
+`SHAREPOINT_TENANT_ID`, `SHAREPOINT_CLIENT_ID`, `SHAREPOINT_CLIENT_SECRET`, `SHAREPOINT_SITE_ID`, `SHAREPOINT_LISTA_LUCROS_ID`, `SHAREPOINT_LISTA_INFORME_ID` (lista LogOperacoes, do informe e do ganho de capital), opcional `SHAREPOINT_LUCROS_CAMPOS`. Depois, novo deploy.
 
 ## Comportamento
 
@@ -19,6 +19,6 @@ Funciona como no Access: a cada lançamento, alteração ou exclusão o Núcleo 
 - Reenvio já gravado e simulação de ajuste não gravam linha.
 - Alternativa direta (sem SharePoint): definir `TEAMS_WEBHOOK_LUCROS` com um webhook de Fluxos de trabalho do Teams. Use um ou outro, não os dois, para não duplicar a mensagem.
 
-## Informe de rendimentos, aluguéis e ganho de capital
+## Informe de rendimentos e ganho de capital
 
-Os três tipos gravam na lista `LogOperacoes` (a mesma, sem coluna de tipo, como no Access): CODIGOEMPRESA, RENDIMENTO, RETENCAO, DATALCTOFIS (primeiro dia da competência), DATAHORA, NOMEESTAB, RESPONSAVEL, DEMAIS_RECEITAS e DIVIDENDOS. O fluxo "Rendimentos - Cont / Fis" posta "Novo Rendimento Lançado" no grupo do Teams. Ative com a variável `SHAREPOINT_LISTA_INFORME_ID` (ID da lista, o mesmo do gatilho do fluxo). Alterar e excluir do informe ainda não existem no Núcleo, então só o lançamento novo avisa.
+Os dois tipos gravam na lista `LogOperacoes` (a mesma, sem coluna de tipo, como no Access): CODIGOEMPRESA, RENDIMENTO, RETENCAO, DATALCTOFIS (primeiro dia da competência), DATAHORA, NOMEESTAB, RESPONSAVEL, DEMAIS_RECEITAS e DIVIDENDOS. O fluxo "Rendimentos - Cont / Fis" posta "Novo Rendimento Lançado" no grupo do Teams. Ative com a variável `SHAREPOINT_LISTA_INFORME_ID` (ID da lista, o mesmo do gatilho do fluxo). Aluguéis foi encerrado e não se lança mais. Alterar e excluir do informe ainda não existem no Núcleo, então só o lançamento novo avisa.
