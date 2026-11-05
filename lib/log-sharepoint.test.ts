@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { competenciaParaData, montarCamposSp, registrarLogSharepoint } from "./log-sharepoint.ts";
+import { competenciaParaData, montarCamposInforme, montarCamposSp, registrarLogInforme, registrarLogSharepoint } from "./log-sharepoint.ts";
 import type { DadosAvisoLucro } from "./notificacao-teams.ts";
 
 const d: DadosAvisoLucro = { evento: "novo", competencia: "2026-10", codigoempresa: 1233, nomeEmpresa: "E&G", codigosocio: 7, nomeSocio: "GABRIEL", rendimento: 42312.89, imposto: 0 };
@@ -43,4 +43,29 @@ test("falhas viram 'falhou' sem vazar segredo", async () => {
     assert.equal(await registrarLogSharepoint(d, "x", { env, fetchFn: (async () => { throw new Error("SEGREDO"); }) as typeof fetch }), "falhou");
   } finally { console.error = orig; }
   assert.ok(logs.length === 2 && logs.every((l) => !l.includes("SEGREDO")));
+});
+
+const inf = { competencia: "2026-09", codigoempresa: 1302, nomeEmpresa: "JAGUARI LTDA", rendimento: 100, retencao: 20, demaisReceitas: 300, dividendos: 4 };
+const envInf = { ...env, SHAREPOINT_LISTA_INFORME_ID: "li" };
+
+test("campos do informe seguem a LogOperacoes do Access", () => {
+  const c = montarCamposInforme(inf, "julia@x.com", new Date("2026-11-05T12:00:00Z"));
+  assert.deepEqual(c, {
+    CODIGOEMPRESA: 1302, RENDIMENTO: 100, RETENCAO: 20, DATALCTOFIS: "2026-09-01T12:00:00Z",
+    DATAHORA: "2026-11-05T12:00:00.000Z", NOMEESTAB: "JAGUARI LTDA", RESPONSAVEL: "julia@x.com",
+    DEMAIS_RECEITAS: 300, DIVIDENDOS: 4,
+  });
+});
+
+test("informe: desligado sem a variável da lista; grava na lista do informe", async () => {
+  let n = 0;
+  assert.equal(await registrarLogInforme(inf, "x", { env, fetchFn: (async () => { n++; return new Response(null); }) as typeof fetch }), "desligado");
+  assert.equal(n, 0);
+  const urls: string[] = [];
+  const fetchFn = (async (u: string) => {
+    urls.push(u);
+    return u.includes("oauth2") ? new Response(JSON.stringify({ access_token: "tk" }), { status: 200 }) : new Response(null, { status: 201 });
+  }) as typeof fetch;
+  assert.equal(await registrarLogInforme(inf, "x", { env: envInf, fetchFn }), "gravado");
+  assert.match(urls[1]!, /lists\/li\/items/);
 });

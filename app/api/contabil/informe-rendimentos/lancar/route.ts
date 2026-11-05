@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hasWriteKey, lancarInformeRendimentos } from "@/lib/questor";
 import { prepararInforme, ErroInforme } from "@/lib/informe-rendimentos-servico";
 import { jaLancado, registrarLog } from "@/lib/informe-rendimentos-log";
+import { registrarLogInforme } from "@/lib/log-sharepoint";
 import { exigirContabil } from "../_auth";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,15 @@ export async function POST(req: Request) {
     }
 
     await registrarLog({ entrada: p.entrada, plano: p.plano, nomeEmpresa: p.nomeEmpresa, status: "lancado", responsavel: email, chave: p.chave, resposta: r.corpo });
-    return NextResponse.json({ ok: true, repetido: r.corpo.repetido === true, ecf: r.corpo.ecf, f100: r.corpo.f100, avisos: r.corpo.avisos ?? [] });
+    // Grava a linha na LogOperacoes (SharePoint): o fluxo do Power Automate avisa o grupo do Teams.
+    // Reenvio idempotente não grava de novo.
+    const repetido = r.corpo.repetido === true;
+    const e = p.entrada;
+    const notificacao = repetido ? "desligada" : (await registrarLogInforme({
+      competencia: e.competencia, codigoempresa: e.codigoempresa, nomeEmpresa: p.nomeEmpresa,
+      rendimento: e.rendimento, retencao: e.retencao, demaisReceitas: e.demaisReceitas, dividendos: e.dividendos,
+    }, email)) === "falhou" ? "falhou" : "ok";
+    return NextResponse.json({ ok: true, repetido, ecf: r.corpo.ecf, f100: r.corpo.f100, avisos: r.corpo.avisos ?? [], notificacao });
   } catch (e) {
     if (e instanceof ErroInforme) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[informe-rendimentos/lancar]", e);

@@ -126,7 +126,7 @@ export default function InformeRendimentos({
     setErro(null); setOk(null); setOcupado(true);
     try {
       const j = await chamar("/api/contabil/informe-rendimentos/lancar", { ...corpo(), confirmar: true });
-      setOk(j.repetido ? "Este lançamento já estava gravado no Questor — nada novo foi escrito." : "Informe lançado no Questor com sucesso.");
+      setOk(j.repetido ? "Este lançamento já estava gravado no Questor — nada novo foi escrito." : "Informe lançado no Questor com sucesso." + (j.notificacao === "falhou" ? " Atenção: o aviso no Teams não foi enviado." : ""));
       setRes(null); setRendimento(""); setDemais(""); setDividendos(""); setRetencao("");
       const l = await fetch("/api/contabil/informe-rendimentos/log").then((r) => r.json()).catch(() => null);
       if (l?.log) setLog(l.log);
