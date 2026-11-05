@@ -5,7 +5,7 @@
 // dela, como já faz. Falha aqui NÃO desfaz a aprovação: fica gravada no período
 // (questor_erro) e aparece na tela para reenviar.
 import { admin, diasEntre } from "./ferias";
-import { programarFeriasQuestor, type RespostaProgramacaoFerias } from "../questor";
+import { programarFeriasQuestor, excluirProgramacaoFeriasQuestor, type RespostaProgramacaoFerias } from "../questor";
 
 /** Só estas empresas aceitam escrita na API (PHD Contábil, Digital, Negócios). */
 const EMPRESAS_ESCRITA = [725, 893, 128];
@@ -96,4 +96,28 @@ export async function enviarFeriasAoQuestor(solicitacaoId: number, usuario: stri
     }
   }
   return res;
+}
+
+/**
+ * Tira do Questor as programações dos períodos de uma solicitação.
+ * Se o DP já calculou o recibo, a API devolve 409: aí nada é cancelado e a
+ * mudança tem de ser feita no Questor.
+ */
+export async function excluirFeriasDoQuestor(solicitacaoId: number, usuario: string): Promise<{ ok: boolean; erro?: string }> {
+  const sb = admin();
+  if (!sb) return { ok: false, erro: "Banco indisponível." };
+  const { data: periodos } = await sb.from("ferias_periodos")
+    .select("id,questor_prog_id").eq("solicitacao_id", solicitacaoId).not("questor_prog_id", "is", null);
+  // Confere todas antes (dry_run): não deixa metade cancelada.
+  for (const p of periodos ?? []) {
+    const t = await excluirProgramacaoFeriasQuestor(p.questor_prog_id as number, usuario, { dryRun: true });
+    if (t.status === 409) return { ok: false, erro: "O DP já calculou o recibo destas férias no Questor. A alteração precisa ser feita lá." };
+    if (!t.ok && t.status !== 404) return { ok: false, erro: `Questor recusou: ${texto(t.corpo.erros) || texto(t.corpo.detail ?? t.corpo.erro) || `HTTP ${t.status}`}` };
+  }
+  for (const p of periodos ?? []) {
+    const r = await excluirProgramacaoFeriasQuestor(p.questor_prog_id as number, usuario, { dryRun: false });
+    if (!r.ok && r.status !== 404) return { ok: false, erro: `Questor recusou: ${texto(r.corpo.erros) || texto(r.corpo.detail ?? r.corpo.erro) || `HTTP ${r.status}`}` };
+    await sb.from("ferias_periodos").update({ questor_prog_id: null, questor_data_pagamento: null, questor_erro: null }).eq("id", p.id);
+  }
+  return { ok: true };
 }

@@ -80,6 +80,22 @@ export default function ProgramacaoFerias() {
     carregar();
   }
 
+  /** Cancela férias aprovadas (tira do Questor também). true = cancelou. */
+  async function cancelar(solicitacaoId: number, nome: string): Promise<boolean> {
+    const motivo = window.prompt(`Cancelar as férias de ${nome}? Elas saem da agenda e do Questor.\n\nMotivo (opcional):`);
+    if (motivo === null) return false;
+    setMsg(null);
+    const r = await fetch("/api/pessoas/ferias/cancelar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ solicitacao_id: solicitacaoId, motivo }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { setMsg({ ok: false, texto: j.error ?? "Falha ao cancelar." }); return false; }
+    setMsg({ ok: true, texto: `Férias de ${nome} canceladas e retiradas do Questor. ${nome} foi avisado(a).` });
+    carregar();
+    return true;
+  }
+
   async function reenviarQuestor(solicitacaoId: number) {
     setMsg(null);
     const r = await fetch("/api/pessoas/ferias/questor", {
@@ -184,6 +200,14 @@ export default function ProgramacaoFerias() {
                                 <em className="fpg-q erro"> · fora do Questor{x.periodos.find((y) => y.questor_erro)?.questor_erro ? `: ${x.periodos.find((y) => y.questor_erro)!.questor_erro}` : ""}</em>
                                 <button type="button" className="btn fpg-reenviar" onClick={() => reenviarQuestor(x.id)}>Enviar ao Questor</button>
                               </>)}
+                          {x.status === "aprovada" && (
+                            <>
+                              <button type="button" className="btn fpg-reenviar" onClick={async () => {
+                                if (await cancelar(x.id, p.nome)) setAberto({ tipo: "programar", pessoa: p.id, aq: aq ?? undefined });
+                              }}>Remarcar</button>
+                              <button type="button" className="btn fpg-reenviar" onClick={() => cancelar(x.id, p.nome)}>Cancelar</button>
+                            </>
+                          )}
                         </span>
                       ))}
                     </td>

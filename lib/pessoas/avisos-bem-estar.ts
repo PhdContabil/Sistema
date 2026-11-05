@@ -13,9 +13,9 @@ import { enviarEmail, notificarTeams, avisarCanal, layoutEmail } from "./notific
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://system-contabilidade.vercel.app";
 const LINK = `${BASE}/m/pessoas/agenda`;
 
-// Teams DESLIGADO por enquanto (decisão de 28/09/2026): o relay pelo Power
-// Automate não está entregando. Só e-mail. Para religar: AVISO_BEM_ESTAR_TEAMS=1.
-const COM_TEAMS = process.env.AVISO_BEM_ESTAR_TEAMS === "1";
+// Teams LIGADO (15/10/2026): o fluxo "NC - Relay Teams" do Power Automate foi
+// criado e testado. Para desligar de novo: AVISO_BEM_ESTAR_TEAMS=0.
+const COM_TEAMS = process.env.AVISO_BEM_ESTAR_TEAMS !== "0";
 
 function dataBR(iso: string) {
   const [a, m, d] = iso.split("-");
