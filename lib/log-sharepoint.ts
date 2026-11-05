@@ -28,6 +28,12 @@ export const CAMPOS_PADRAO = {
 } as const;
 export type Campos = Record<keyof typeof CAMPOS_PADRAO, string>;
 
+/** "2026-10" -> primeiro dia do mês à meia-noite de Brasília (03:00 UTC), como coluna de data do SharePoint. */
+export function competenciaParaData(c: string): string {
+  const m = /^(\d{4})-(\d{2})/.exec(c);
+  return m ? `${m[1]}-${m[2]}-01T03:00:00Z` : c;
+}
+
 /** Campos da linha, com os mesmos valores que o Access gravava. */
 export function montarCamposSp(d: DadosAvisoLucro, responsavel: string, agora = new Date(), c: Campos = { ...CAMPOS_PADRAO }) {
   return {
@@ -35,7 +41,7 @@ export function montarCamposSp(d: DadosAvisoLucro, responsavel: string, agora = 
     [c.nomeEmpresa]: d.nomeEmpresa ?? "",
     [c.nomeSocio]: d.nomeSocio ?? `Sócio ${d.codigosocio}`,
     [c.codigoSocio]: d.codigosocio,
-    [c.competencia]: d.competencia.slice(0, 7),
+    [c.competencia]: competenciaParaData(d.competencia),
     [c.valor]: d.rendimento,
     [c.responsavel]: responsavel,
     [c.dataHora]: agora.toISOString(),

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { montarCamposSp, registrarLogSharepoint } from "./log-sharepoint.ts";
+import { competenciaParaData, montarCamposSp, registrarLogSharepoint } from "./log-sharepoint.ts";
 import type { DadosAvisoLucro } from "./notificacao-teams.ts";
 
 const d: DadosAvisoLucro = { evento: "novo", competencia: "2026-10", codigoempresa: 1233, nomeEmpresa: "E&G", codigosocio: 7, nomeSocio: "GABRIEL", rendimento: 42312.89, imposto: 0 };
@@ -11,7 +11,8 @@ test("campos seguem o log do Access", () => {
   assert.equal(c.STATUS, "1º LANÇAMENTO");
   assert.equal(c.CODIGOEMPRESA, 1233);
   assert.equal(c.VALORRENDPAGO, 42312.89);
-  assert.equal(c.COMPETENCIA, "2026-10");
+  assert.equal(c.COMPETENCIA, "2026-10-01T03:00:00Z");
+  assert.equal(competenciaParaData("2026-12-31"), "2026-12-01T03:00:00Z");
   assert.equal(montarCamposSp({ ...d, evento: "excluido" }, "x").STATUS, "LANÇAMENTO EXCLUIDO");
   assert.equal(montarCamposSp({ ...d, evento: "alterado" }, "x").STATUS, "LANÇAMENTO ALTERADO");
 });
