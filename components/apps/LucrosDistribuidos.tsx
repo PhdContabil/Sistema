@@ -136,6 +136,10 @@ export default function LucrosDistribuidos({
     };
   }
 
+  /** Complemento da mensagem de sucesso quando o aviso no Teams falha (o lançamento já foi feito). */
+  const avisoTeams = (j: { notificacao?: string }) =>
+    j.notificacao === "falhou" ? " Atenção: o aviso no Teams não foi enviado." : "";
+
   async function chamar(url: string, body: object) {
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
@@ -203,7 +207,7 @@ export default function LucrosDistribuidos({
     setErro(null); setOk(null); setOcupado(true);
     try {
       const j = await chamar("/api/contabil/lucros-distribuidos/lancar", { ...corpo(), confirmar: true });
-      setOk(j.repetido ? "Esta distribuição já estava gravada no Questor — nada novo foi escrito." : "Distribuição lançada no Questor com sucesso.");
+      setOk(j.repetido ? "Esta distribuição já estava gravada no Questor — nada novo foi escrito." : "Distribuição lançada no Questor com sucesso." + avisoTeams(j));
       setRes(null); setRendimento(""); setBase(""); setImposto(""); setTisencao(0);
       await atualizarLog();
       if (lista) await carregarLista();
@@ -234,8 +238,8 @@ export default function LucrosDistribuidos({
     if (!window.confirm("Alterar este lançamento no Questor?")) return;
     setErro(null); setOk(null); setOcupado(true);
     try {
-      await chamar("/api/contabil/lucros-distribuidos/ajustar", { ...corpoAjuste(ajuste), confirmar: true });
-      setOk("Lançamento alterado no Questor.");
+      const j = await chamar("/api/contabil/lucros-distribuidos/ajustar", { ...corpoAjuste(ajuste), confirmar: true });
+      setOk("Lançamento alterado no Questor." + avisoTeams(j));
       setAjuste(null);
       await Promise.all([carregarLista(), atualizarLog()]);
     } catch (e) {
@@ -250,12 +254,12 @@ export default function LucrosDistribuidos({
     )) return;
     setErro(null); setOk(null); setOcupado(true);
     try {
-      await chamar("/api/contabil/lucros-distribuidos/excluir", {
+      const j = await chamar("/api/contabil/lucros-distribuidos/excluir", {
         codigoempresa: item.codigoempresa, codigosocio: item.codigosocio, chave: item.chave,
         dataAtual: item.datalctofis.slice(0, 10), competencia: item.competencia.slice(0, 7),
-        rendimento: item.valorrendpago, confirmar: true,
+        rendimento: item.valorrendpago, imposto: item.valorimposto ?? 0, confirmar: true,
       });
-      setOk("Lançamento excluído do Questor.");
+      setOk("Lançamento excluído do Questor." + avisoTeams(j));
       await Promise.all([carregarLista(), atualizarLog()]);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao excluir.");
