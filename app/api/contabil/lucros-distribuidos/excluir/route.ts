@@ -3,6 +3,7 @@ import { excluirLucroDistribuido, hasWriteKey } from "@/lib/questor";
 import { ErroLucro, resolverNomes } from "@/lib/lucros-distribuidos-servico";
 import { chaveExclusao, marcarExcluido, registrarLog } from "@/lib/lucros-distribuidos-log";
 import { ehData } from "@/lib/lucros-distribuidos";
+import { avisarLucro } from "@/lib/notificacao-teams";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
   const dataAtual = String(c.dataAtual ?? "");
   const competencia = String(c.competencia ?? "");
   const rendimento = Number(c.rendimento ?? 0);
+  const imposto = Number(c.imposto ?? 0);
   if (![codigoempresa, codigosocio, chaveQ].every((n) => Number.isInteger(n) && n > 0) || !ehData(dataAtual)) {
     return NextResponse.json({ error: "Lançamento inválido." }, { status: 400 });
   }
@@ -35,7 +37,7 @@ export async function POST(req: Request) {
     const r = await excluirLucroDistribuido({ codigoempresa, chave: chaveQ, codigosocio, dataAtual }, { idempotencyKey: chave, usuario: email });
     const entrada = {
       codigoempresa, codigosocio, competencia: /^\d{4}-\d{2}/.test(competencia) ? competencia.slice(0, 7) : dataAtual.slice(0, 7),
-      dataPagamento: dataAtual, rendimento: Number.isFinite(rendimento) ? rendimento : 0, imposto: 0,
+      dataPagamento: dataAtual, rendimento: Number.isFinite(rendimento) ? rendimento : 0, imposto: Number.isFinite(imposto) ? imposto : 0,
     };
     const msgErro = r.ok ? null : r.status === 404
       ? "Lançamento não encontrado no Questor, ou a API ainda não tem o endpoint de exclusão. Nada foi excluído."
@@ -47,7 +49,11 @@ export async function POST(req: Request) {
     });
     if (!r.ok) return NextResponse.json({ error: msgErro }, { status: r.status === 404 ? 501 : 502 });
     await marcarExcluido(codigoempresa, chaveQ);
-    return NextResponse.json({ ok: true });
+    const notificacao = await avisarLucro({
+      evento: "excluido", competencia: entrada.competencia, codigoempresa, nomeEmpresa: nomes.nomeEmpresa,
+      nomeSocio: nomes.nomeSocio, codigosocio, rendimento: entrada.rendimento, imposto: entrada.imposto,
+    });
+    return NextResponse.json({ ok: true, notificacao });
   } catch (e) {
     if (e instanceof ErroLucro) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[lucros-distribuidos/excluir]", e);

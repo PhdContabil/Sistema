@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ajustarLucroDistribuido, hasWriteKey } from "@/lib/questor";
 import { prepararAjuste, ErroLucro } from "@/lib/lucros-distribuidos-servico";
 import { chaveAjuste, registrarLog } from "@/lib/lucros-distribuidos-log";
+import { avisarLucro } from "@/lib/notificacao-teams";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,12 @@ export async function POST(req: Request) {
       });
     }
     if (!r.ok) return NextResponse.json({ error: msgErro }, { status: r.status === 404 ? 501 : 502 });
-    return NextResponse.json({ ok: true, gravado: gravar, plano: p.plano, avisos: r.corpo.avisos ?? [] });
+    // Aviso no Teams só quando gravou de verdade (nunca na simulação).
+    const notificacao = gravar ? await avisarLucro({
+      evento: "alterado", competencia: e.competencia, codigoempresa: e.codigoempresa, nomeEmpresa: p.nomeEmpresa,
+      nomeSocio: p.nomeSocio, codigosocio: e.codigosocio, rendimento: e.rendimento, imposto: e.imposto,
+    }) : "desligada";
+    return NextResponse.json({ ok: true, gravado: gravar, plano: p.plano, avisos: r.corpo.avisos ?? [], notificacao });
   } catch (e) {
     if (e instanceof ErroLucro) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[lucros-distribuidos/ajustar]", e);
