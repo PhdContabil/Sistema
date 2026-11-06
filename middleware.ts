@@ -39,6 +39,9 @@ const PUBLIC_PATHS = [
   "/api/mei/pastas-fila",
   // Instalador e arquivos do robô local do Sistema MEI (sem segredos; o .bat baixa daqui)
   "/robo/",
+  // Termo de empréstimo de equipamento: assinatura por link (token secreto), sem login
+  "/termo/",
+  "/api/termo/",
 ];
 
 /** Domínio corporativo autorizado a entrar no hub. */

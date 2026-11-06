@@ -9,6 +9,7 @@ import {
 } from "@/lib/inventario";
 import { SERVIDOR_SPECS } from "@/lib/inventario-servidor";
 import { INPUT, BTN, BTN_PRIMARY, CARD } from "./TicketsBoard";
+import InventarioTermo from "./InventarioTermo";
 
 const ABAS: { id: CategoriaInventario | "servidor"; nome: string }[] = [
   { id: "notebook_uso", nome: "Em uso" },
@@ -67,6 +68,7 @@ export default function InventarioTI() {
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState<number | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [termo, setTermo] = useState<ItemInventario | null>(null);
 
   async function carregar() {
     const r = await fetch("/api/inventario", { cache: "no-store" });
@@ -294,6 +296,9 @@ export default function InventarioTI() {
                     <td className="px-4 py-2.5"><Badge tom={tomStatus(i.status)}>{i.status}</Badge></td>
                     <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 max-w-[420px] whitespace-pre-line text-xs font-mono">{obsVisivel(i.observacao)}</td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      {aba !== "periferico" && (
+                        <button onClick={() => setTermo(i)} title="Termo de responsabilidade (empréstimo)" className="inline-flex items-center justify-center h-7 px-2 rounded-lg text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 mr-1">Termo</button>
+                      )}
                       <button onClick={() => abrirEdicao(i)} title="Editar" className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 mr-1">
                         <svg viewBox="0 0 20 20" className="w-4 h-4" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-8.5 8.5a2 2 0 01-.878.507l-3 .857a.5.5 0 01-.62-.62l.857-3a2 2 0 01.507-.878l8.5-8.5z" /></svg>
                       </button>
@@ -319,6 +324,8 @@ export default function InventarioTI() {
           </div>
         </>
       )}
+
+      {termo && <InventarioTermo item={termo} fechar={() => { setTermo(null); carregar(); }} />}
 
       {modal && f && (
         <div className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4" onClick={() => setModal(null)}>
