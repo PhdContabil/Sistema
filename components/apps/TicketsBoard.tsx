@@ -915,7 +915,7 @@ function DetalheTicket({
             </div>
           )}
 
-          {t.sector === "trabalhista" && <PainelTarefaDp ticketId={String(t.id)} podeGerar={souVejoMedicao} />}
+          {t.sector === "trabalhista" && <PainelTarefaDp ticketId={String(t.id)} />}
 
           <div>
             <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Comentários ({comentarios.length})</h3>

@@ -76,6 +76,29 @@ export async function obterPedido(ticketId: string): Promise<PedidoTarefaDp | nu
   return (await ler())[ticketId] ?? null;
 }
 
+// ------------------------------------------------------------------ aprovadores
+// Quem pode aprovar além da T.I. (marcado na tela Tickets > Usuários; por enquanto só para o Trabalhista).
+const ARQ_APROV = "tarefas-dp-aprovadores.json";
+
+export async function lerAprovadores(): Promise<string[]> {
+  const sb = admin();
+  if (!sb) return [];
+  const { data, error } = await sb.storage.from(BUCKET).download(ARQ_APROV);
+  if (error || !data) return [];
+  try { return (JSON.parse(await data.text()) as string[]).map((e) => e.toLowerCase()); } catch { return []; }
+}
+
+export async function definirAprovador(email: string, aprova: boolean): Promise<string[]> {
+  const sb = admin();
+  if (!sb) throw new Error("Supabase não configurado.");
+  const e = email.toLowerCase();
+  const atual = (await lerAprovadores()).filter((x) => x !== e);
+  if (aprova) atual.push(e);
+  const { error } = await sb.storage.from(BUCKET).upload(ARQ_APROV, new Blob([JSON.stringify(atual)], { type: "application/json" }), { upsert: true, contentType: "application/json" });
+  if (error) throw new Error(error.message);
+  return atual;
+}
+
 // ------------------------------------------------------------------ Tareffa
 
 async function chamar(path: string, init: RequestInit = {}, tentou401 = false): Promise<unknown> {

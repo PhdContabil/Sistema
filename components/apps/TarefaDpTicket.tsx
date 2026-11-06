@@ -191,14 +191,15 @@ interface Resultado { servico: string; mes: string; ok: boolean; simulacao: bool
 interface Pedido extends DadosTarefaDp { empresaNome: string | null; status: string; criadoPor: string; resultados: Resultado[] }
 
 /** Painel no detalhe do ticket: mostra o pedido e (T.I.) simula/gera no Tareffa. */
-export function PainelTarefaDp({ ticketId, podeGerar }: { ticketId: string; podeGerar: boolean }) {
+export function PainelTarefaDp({ ticketId }: { ticketId: string }) {
+  const [podeGerar, setPodeGerar] = useState(false);
   const [pedido, setPedido] = useState<Pedido | null | undefined>(undefined);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/tickets/${ticketId}/tarefa-dp`).then((r) => r.json()).then((j) => setPedido(j.pedido ?? null)).catch(() => setPedido(null));
+    fetch(`/api/tickets/${ticketId}/tarefa-dp`).then((r) => r.json()).then((j) => { setPedido(j.pedido ?? null); setPodeGerar(!!j.podeAprovar); }).catch(() => setPedido(null));
   }, [ticketId]);
 
   async function agir(acao: "simular" | "gerar") {

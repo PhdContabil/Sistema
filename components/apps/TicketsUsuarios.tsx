@@ -231,6 +231,11 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
   const [overridesModal, setOverridesModal] = useState<OverridesPessoa>(OVERRIDES_VAZIO);
   const [perfis, setPerfis] = useState<PerfilAdmin[] | null>(null);
   const [corrigindo, setCorrigindo] = useState<string | null>(null); // e-mail em andamento
+  const [aprovadores, setAprovadores] = useState<string[]>([]);
+  const [aprovaModal, setAprovaModal] = useState(false);
+  useEffect(() => {
+    fetch("/api/tarefas-dp/aprovadores", { cache: "no-store" }).then((r) => r.json()).then((j) => setAprovadores(j.aprovadores ?? [])).catch(() => {});
+  }, []);
 
   async function carregarPerfis() {
     const r = await fetch("/api/pessoas/perfil-admin", { cache: "no-store" });
@@ -314,6 +319,7 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
 
   function abrirEdicao(u: PessoaTickets) {
     setOverridesModal(overridesPorEmail[u.email] ?? OVERRIDES_VAZIO);
+    setAprovaModal(aprovadores.includes(u.email.toLowerCase()));
     setModal({
       editando: true,
       form: { email: u.email, name: u.name, sector: u.sector },
@@ -322,6 +328,7 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
 
   function abrirNovo() {
     setOverridesModal(OVERRIDES_VAZIO);
+    setAprovaModal(false);
     setModal({ editando: false, form: { ...VAZIO } });
   }
 
@@ -354,6 +361,15 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
         });
         const jp = await rp.json().catch(() => ({}));
         if (!rp.ok) { setErro(jp.error ?? "Usuário salvo, mas as permissões não foram salvas."); return; }
+      }
+
+      const aprovaAtual = aprovadores.includes(form.email.toLowerCase());
+      const aprovaNovo = form.sector === "trabalhista" && aprovaModal;
+      if (aprovaAtual !== aprovaNovo) {
+        const ra = await fetch("/api/tarefas-dp/aprovadores", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: form.email, aprova: aprovaNovo }) });
+        const ja = await ra.json().catch(() => ({}));
+        if (!ra.ok) { setErro(ja.error ?? "Usuário salvo, mas a aprovação do Tareffa não foi salva."); return; }
+        setAprovadores(ja.aprovadores ?? []);
       }
 
       setOverridesPorEmail((o) => ({ ...o, [form.email]: overridesModal }));
@@ -590,6 +606,16 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
                   {SETORES.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
                 </select>
               </label>
+
+              {modal.form.sector === "trabalhista" && (
+                <label className="flex items-start gap-2 text-sm pt-1">
+                  <input type="checkbox" className="mt-0.5" checked={aprovaModal} onChange={(e) => setAprovaModal(e.target.checked)} />
+                  <span>
+                    Aprova tarefas do Tareffa
+                    <span className="block text-[11px] text-slate-400 dark:text-slate-500">Pode clicar em “Aprovar e gerar” nos pedidos de inclusão de tarefa (a T.I. já aprova por padrão).</span>
+                  </span>
+                </label>
+              )}
 
               {modal.editando && (
                 <div className="pt-2">
