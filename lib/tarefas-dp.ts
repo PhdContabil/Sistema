@@ -86,6 +86,7 @@ async function chamar(path: string, init: RequestInit = {}, tentou401 = false): 
   }).catch((e) => { throw new TareffaError(`Sem conexão com o Tareffa (${e instanceof Error ? e.message : e})`); });
   if (r.status === 401 && !tentou401) { invalidarTokenTareffa(); return chamar(path, init, true); }
   const txt = await r.text().catch(() => "");
+  if (path.includes("avulso")) console.log("[tarefa-dp] avulso", r.status, r.headers.get("content-type"), JSON.stringify({ req: init.body, resp: txt.slice(0, 500) }));
   if (!r.ok) throw new TareffaError(`Tareffa HTTP ${r.status}: ${txt.slice(0, 300)}`);
   // A rota de programação avulsa às vezes responde 200 com corpo vazio (igual ao fluxo do Societário, que já funciona).
   if (!txt.trim()) return {};
@@ -216,9 +217,9 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
       try {
         const j = (await chamar(`/servicos_programados/avulso`, { method: "POST", body: JSON.stringify(corpo) })) as { status?: string; message?: string };
         const msg = String(j.message ?? j.status ?? "");
-        const ok = String(j.status ?? "").toLowerCase() !== "error";
+        const ok = String(j.status ?? "").toLowerCase() === "success";
         const id = /ID:\s*(\d+)/i.exec(msg)?.[1];
-        novos.push({ ...base, ok, programacaoId: id ? Number(id) : null, mensagem: ok ? `${msg || "Tareffa aceitou (sem ID na resposta) — confira na tela"} (${descricao})` : `Tareffa recusou: ${msg || "sem detalhe"}` });
+        novos.push({ ...base, ok, programacaoId: id ? Number(id) : null, mensagem: ok ? `${msg || "Tareffa respondeu sem confirmação (resposta vazia) — NÃO confirmado, confira na tela"} (${descricao})` : `Tareffa recusou: ${msg || "sem detalhe"}` });
       } catch (e) {
         novos.push({ ...base, ok: false, programacaoId: null, mensagem: e instanceof Error ? e.message : String(e) });
       }
