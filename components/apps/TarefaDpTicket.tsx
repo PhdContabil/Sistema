@@ -73,7 +73,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
 
   const filtrados = useMemo(() => {
     const b = busca.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-    if (!b) return servicos.slice(0, 50);
+    if (b.length < 2) return [];
     return servicos.filter((s) => s.nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().includes(b)).slice(0, 50);
   }, [busca, servicos]);
 
@@ -101,6 +101,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
         )}
         <input className={`${INPUT} w-full mb-1`} placeholder="Buscar serviço (ex.: pensão, VT, cesta)" value={busca} onChange={(e) => setBusca(e.target.value)} />
         {erroLista && <p className="text-xs text-red-600">{erroLista}</p>}
+        {busca.trim().length >= 2 && (
         <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
           {filtrados.map((s) => (
             <label key={s.id} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
@@ -110,6 +111,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
           ))}
           {!filtrados.length && !erroLista && <p className="text-xs text-slate-500 p-2">{servicos.length ? "Nenhum serviço com esse nome." : "Carregando…"}</p>}
         </div>
+        )}
       </div>
       <div className="grid grid-cols-3 gap-2">
         <label className="block">
