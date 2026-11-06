@@ -92,8 +92,8 @@ export default function TermoPage({ params }: { params: { token: string } }) {
         ) : (
           <div className="nao-imprimir" style={{ marginTop: 24, borderTop: "1px solid #ddd", paddingTop: 16 }}>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <label style={{ flex: 2, minWidth: 220 }}>Nome completo<br /><input value={nome} onChange={(e) => setNome(e.target.value)} style={{ width: "100%", padding: 8, border: "1px solid #bbb", borderRadius: 6 }} /></label>
-              <label style={{ flex: 1, minWidth: 160 }}>CPF<br /><input value={cpf} onChange={(e) => setCpf(fmtCpf(e.target.value))} inputMode="numeric" style={{ width: "100%", padding: 8, border: "1px solid #bbb", borderRadius: 6 }} /></label>
+              <label style={{ flex: 2, minWidth: 220 }}>Nome completo<br /><input value={nome} onChange={(e) => setNome(e.target.value)} style={{ width: "100%", padding: 8, border: "1px solid #bbb", borderRadius: 6, background: "#fff", color: "#111" }} /></label>
+              <label style={{ flex: 1, minWidth: 160 }}>CPF<br /><input value={cpf} onChange={(e) => setCpf(fmtCpf(e.target.value))} inputMode="numeric" style={{ width: "100%", padding: 8, border: "1px solid #bbb", borderRadius: 6, background: "#fff", color: "#111" }} /></label>
             </div>
             <p style={{ margin: "14px 0 4px" }}>Assinatura (desenhe com o mouse ou o dedo):</p>
             <canvas ref={canvas} width={700} height={180} style={{ width: "100%", maxWidth: 700, height: 180, border: "1px dashed #888", borderRadius: 6, touchAction: "none", background: "#fafafa" }} />
