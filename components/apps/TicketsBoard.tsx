@@ -1162,6 +1162,7 @@ function NovoTicket({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [comTarefa, setComTarefa] = useState(false);
+  const [enviado, setEnviado] = useState<string | null>(null);
   const [tarefa, setTarefa] = useState<DadosTarefaDp>(dadosTarefaDpVazio);
 
   const { ti, ligacao } = pessoasAtribuiveis(pessoas, setor);
@@ -1184,6 +1185,8 @@ function NovoTicket({
       if (comTarefa && j.id) {
         const rp = await fetch(`/api/tickets/${j.id}/tarefa-dp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tarefa) });
         if (!rp.ok) { const jp = await rp.json().catch(() => ({})); setErro(`Ticket #${j.id} criado, mas o pedido do Tareffa falhou: ${jp.error ?? rp.status}`); return; }
+        setEnviado(String(j.id));
+        return;
       }
 
       // Já atribui de cara, se a pessoa escolheu alguém — reaproveita o
@@ -1218,6 +1221,14 @@ function NovoTicket({
             ✕
           </button>
         </div>
+        {enviado ? (
+          <div className="px-6 py-8 text-center space-y-3">
+            <div className="text-4xl">✓</div>
+            <p className="font-semibold">Pedido enviado — ticket #{enviado}</p>
+            <p className="text-sm text-slate-500">Está aguardando a aprovação da T.I. Assim que for aprovado, a tarefa é criada no Tareffa e o status aparece dentro do ticket.</p>
+            <button className={BTN_PRIMARY} onClick={onCriado}>Fechar</button>
+          </div>
+        ) : (<>
         <div className="px-6 py-5 space-y-4">
           {erro && <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-200 text-sm rounded-lg px-4 py-3">{erro}</div>}
           {setor === "trabalhista" && (
@@ -1274,9 +1285,10 @@ function NovoTicket({
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
           <button className={BTN} onClick={onFechar}>Cancelar</button>
           <button className={BTN_PRIMARY} onClick={criar} disabled={salvando || (!title.trim() && !comTarefa)}>
-            {salvando ? "Criando…" : "Criar ticket"}
+            {salvando ? (comTarefa ? "Enviando pedido…" : "Criando…") : (comTarefa ? "Enviar pedido" : "Criar ticket")}
           </button>
         </div>
+        </>)}
       </div>
     </div>
   );
