@@ -535,7 +535,8 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
       if (s.nomesocio.trim().length > 50) return "Confira o Quadro Societário: o nome do sócio pode ter no máximo 50 caracteres.";
       if (!s.datainicial) return "Confira o Quadro Societário: informe a data de entrada de cada sócio na sociedade.";
       if (!s.nomemae.trim() || !s.nomepai.trim()) return "Confira o Quadro Societário: informe o nome da mãe e do pai de cada sócio.";
-      if ([s.cpfmae, s.cpfpai].some((c) => { const d = somenteDigitos(c); return d.length > 0 && d.length !== 11; })) return "Confira o Quadro Societário: o CPF da mãe/pai é opcional, mas se preenchido precisa ter 11 dígitos.";
+      if (!ehMei && (somenteDigitos(s.cpfmae).length !== 11 || somenteDigitos(s.cpfpai).length !== 11)) return "Confira o Quadro Societário: informe o CPF da mãe e do pai de cada sócio (11 dígitos).";
+      if (ehMei && [s.cpfmae, s.cpfpai].some((c) => { const d = somenteDigitos(c); return d.length > 0 && d.length !== 11; })) return "Confira o Quadro Societário: o CPF da mãe/pai é opcional, mas se preenchido precisa ter 11 dígitos.";
     }
     return null;
   }
@@ -865,14 +866,14 @@ export default function CadastroEmpresaTab({ prefill, onPrefillConsumido, modo }
                 <label>Nome da mãe
                   <input type="text" required value={s.nomemae} onChange={(e) => editarSocio(s.id, { nomemae: e.target.value })} />
                 </label>
-                <label>CPF da mãe (opcional)
-                  <input type="text" placeholder="000.000.000-00" maxLength={14} value={s.cpfmae} onChange={(e) => editarSocio(s.id, { cpfmae: mascararCpf(e.target.value) })} />
+                <label>CPF da mãe{ehMei ? " (opcional)" : ""}
+                  <input type="text" required={!ehMei} placeholder="000.000.000-00" maxLength={14} value={s.cpfmae} onChange={(e) => editarSocio(s.id, { cpfmae: mascararCpf(e.target.value) })} />
                 </label>
                 <label>Nome do pai
                   <input type="text" required value={s.nomepai} onChange={(e) => editarSocio(s.id, { nomepai: e.target.value })} />
                 </label>
-                <label>CPF do pai (opcional)
-                  <input type="text" placeholder="000.000.000-00" maxLength={14} value={s.cpfpai} onChange={(e) => editarSocio(s.id, { cpfpai: mascararCpf(e.target.value) })} />
+                <label>CPF do pai{ehMei ? " (opcional)" : ""}
+                  <input type="text" required={!ehMei} placeholder="000.000.000-00" maxLength={14} value={s.cpfpai} onChange={(e) => editarSocio(s.id, { cpfpai: mascararCpf(e.target.value) })} />
                 </label>
                 <label>Quantidade de cotas
                   <input type="number" min={0} step={1} value={s.quantcotas} onChange={(e) => editarSocio(s.id, { quantcotas: e.target.value })} />
