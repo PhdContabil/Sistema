@@ -14,18 +14,20 @@ export interface DadosTarefaDp {
   mesInicial: string;
   qtdMeses: number;
   diaVencimento: number | null;
+  responsavel: { id: number; nome: string } | null;
   observacoes: string;
 }
 
 export function dadosTarefaDpVazio(): DadosTarefaDp {
   const d = new Date();
-  return { codigoErp: "", servicos: [], mesInicial: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, qtdMeses: 1, diaVencimento: null, observacoes: "" };
+  return { codigoErp: "", servicos: [], mesInicial: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, qtdMeses: 1, diaVencimento: null, responsavel: null, observacoes: "" };
 }
 
 export function erroTarefaDp(v: DadosTarefaDp): string | null {
   if (!/^\d+-\d+$/.test(v.codigoErp.trim())) return "Informe o código ERP da empresa (ex.: 1467-1).";
   if (!v.servicos.length) return "Escolha pelo menos um serviço.";
   if (!v.mesInicial) return "Informe o mês.";
+  if (!v.responsavel) return "Escolha o responsável no Tareffa.";
   return null;
 }
 
@@ -34,7 +36,8 @@ export function resumoTarefaDp(v: DadosTarefaDp): string {
     `Pedido de inclusão de tarefa no Tareffa (DP)`,
     `Empresa: ${v.codigoErp}`,
     `Serviços: ${v.servicos.map((s) => s.nome).join("; ")}`,
-    `A partir de: ${v.mesInicial.split("-").reverse().join("/")} · ${v.qtdMeses} mês(es)`,
+    `Competência a partir de: ${v.mesInicial.split("-").reverse().join("/")} · ${v.qtdMeses} mês(es)`,
+    v.responsavel ? `Responsável: ${v.responsavel.nome}` : "",
     v.diaVencimento ? `Dia de vencimento: ${v.diaVencimento}` : "",
     v.observacoes ? `Observações: ${v.observacoes}` : "",
   ].filter(Boolean).join("\n");
@@ -115,7 +118,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
       </div>
       <div className="grid grid-cols-3 gap-2">
         <label className="block">
-          <span className={lbl}>A partir de</span>
+          <span className={lbl}>Competência</span>
           <input type="month" className={`${INPUT} w-full`} value={valor.mesInicial} onChange={(e) => set({ mesInicial: e.target.value })} />
         </label>
         <label className="block">
@@ -129,10 +132,42 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
           <input type="number" min={1} max={31} className={`${INPUT} w-full`} value={valor.diaVencimento ?? ""} onChange={(e) => set({ diaVencimento: e.target.value ? Number(e.target.value) : null })} />
         </label>
       </div>
+      <Responsavel valor={valor.responsavel} onChange={(r) => set({ responsavel: r })} />
       <label className="block">
         <span className={lbl}>Observações da tarefa (opcional)</span>
         <textarea rows={2} className={`${INPUT} w-full`} value={valor.observacoes} onChange={(e) => set({ observacoes: e.target.value })} />
       </label>
+    </div>
+  );
+}
+
+function Responsavel({ valor, onChange }: { valor: { id: number; nome: string } | null; onChange: (r: { id: number; nome: string } | null) => void }) {
+  const [q, setQ] = useState("");
+  const [lista, setLista] = useState<{ id: number; nome: string }[]>([]);
+  useEffect(() => {
+    if (q.trim().length < 2) { setLista([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/tareffa/dp?usuario=${encodeURIComponent(q.trim())}`).then((r) => r.json()).then((j) => setLista(j.usuarios ?? [])).catch(() => setLista([]));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [q]);
+  return (
+    <div>
+      <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Responsável no Tareffa</span>
+      {valor ? (
+        <button type="button" onClick={() => onChange(null)} className="text-xs bg-blue-600 text-white rounded px-2 py-0.5">{valor.nome} ✕</button>
+      ) : (
+        <>
+          <input className={`${INPUT} w-full`} placeholder="Digite o nome (ex.: Marcio)" value={q} onChange={(e) => setQ(e.target.value)} />
+          {lista.length > 0 && (
+            <div className="max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg mt-1">
+              {lista.map((u) => (
+                <button type="button" key={u.id} onClick={() => { onChange(u); setQ(""); }} className="block w-full text-left px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">{u.nome}</button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -174,7 +209,8 @@ export function PainelTarefaDp({ ticketId, podeGerar }: { ticketId: string; pode
       </div>
       <p><b>Empresa:</b> {pedido.codigoErp}{pedido.empresaNome ? ` — ${pedido.empresaNome}` : ""}</p>
       <p><b>Serviços:</b> {pedido.servicos.map((s) => s.nome).join("; ")}</p>
-      <p><b>A partir de:</b> {pedido.mesInicial.split("-").reverse().join("/")} · {pedido.qtdMeses} mês(es){pedido.diaVencimento ? ` · vencimento dia ${pedido.diaVencimento}` : ""}</p>
+      {pedido.responsavel && <p><b>Responsável:</b> {pedido.responsavel.nome}</p>}
+      <p><b>Competência a partir de:</b> {pedido.mesInicial.split("-").reverse().join("/")} · {pedido.qtdMeses} mês(es){pedido.diaVencimento ? ` · vencimento dia ${pedido.diaVencimento}` : ""}</p>
       {pedido.observacoes && <p><b>Obs.:</b> {pedido.observacoes}</p>}
       {erro && <p className="text-red-600">{erro}</p>}
       {[...reais, ...sim].length > 0 && (

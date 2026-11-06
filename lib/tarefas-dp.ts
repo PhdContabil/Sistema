@@ -47,6 +47,7 @@ export interface PedidoTarefaDp {
   mesInicial: string; // AAAA-MM
   qtdMeses: number; // 1..3
   diaVencimento: number | null;
+  responsavel: { id: number; nome: string } | null;
   observacoes: string;
   criadoPor: string;
   criadoEm: string;
@@ -110,6 +111,16 @@ export async function buscarEmpresaErp(codigoErp: string): Promise<EmpresaTareff
   return x ? { id: x.id, codigoErp: erp, razaoSocial: x.razaoSocial ?? "", situacao: x.situacao ?? null } : null;
 }
 
+export interface UsuarioTareffa { id: number; nome: string }
+
+/** Usuários internos do Tareffa pelo nome (para o campo Responsável). */
+export async function buscarUsuarios(nome: string): Promise<UsuarioTareffa[]> {
+  const q = nome.trim();
+  if (q.length < 2) return [];
+  const j = (await chamar(`/usuarios?page_index=0&page_size=20&nome=${encodeURIComponent(q)}`)) as { records?: { id: number; nome: string; tipoUsuario?: number }[] };
+  return (j.records ?? []).filter((u) => u.tipoUsuario === 1).map((u) => ({ id: u.id, nome: u.nome }));
+}
+
 // ------------------------------------------------------------------ datas
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -119,7 +130,6 @@ function meses(inicio: string, qtd: number): { ano: number; mes: number }[] {
   for (let i = 0; i < qtd; i++) { out.push({ ano, mes }); mes++; if (mes > 12) { mes = 1; ano++; } }
   return out;
 }
-function anterior(m: { ano: number; mes: number }) { return m.mes === 1 ? { ano: m.ano - 1, mes: 12 } : { ano: m.ano, mes: m.mes - 1 }; }
 function ultimoDia(ano: number, mes: number) { return new Date(Date.UTC(ano, mes, 0)).getUTCDate(); }
 
 // ------------------------------------------------------------------ pedido
@@ -130,6 +140,7 @@ export interface EntradaPedido {
   mesInicial: string;
   qtdMeses: number;
   diaVencimento: number | null;
+  responsavel: { id: number; nome: string } | null;
   observacoes: string;
 }
 
@@ -140,6 +151,7 @@ export function validarEntrada(e: EntradaPedido): string | null {
   if (!/^\d{4}-\d{2}$/.test(e.mesInicial ?? "")) return "Informe o mês inicial.";
   if (![1, 2, 3].includes(Number(e.qtdMeses))) return "Quantidade de meses deve ser 1, 2 ou 3.";
   if (e.diaVencimento != null && !(e.diaVencimento >= 1 && e.diaVencimento <= 31)) return "Dia de vencimento deve ser de 1 a 31.";
+  if (!e.responsavel?.id) return "Escolha o responsável no Tareffa.";
   return null;
 }
 
@@ -157,6 +169,7 @@ export async function salvarPedido(ticketId: string, e: EntradaPedido, autor: st
     mesInicial: e.mesInicial,
     qtdMeses: Number(e.qtdMeses),
     diaVencimento: e.diaVencimento ? Number(e.diaVencimento) : null,
+    responsavel: e.responsavel ? { id: Number(e.responsavel.id), nome: String(e.responsavel.nome) } : null,
     observacoes: (e.observacoes ?? "").slice(0, 2000),
     criadoPor: autor,
     criadoEm: atual?.criadoEm ?? new Date().toISOString(),
@@ -189,6 +202,7 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
       const corpo: Record<string, unknown> = {
         servico: { id: s.id },
         cliente: { id: emp.id },
+        ...(p.responsavel ? { alocadoPara: { id: p.responsavel.id } } : {}),
         observacoes: [p.observacoes, `Criado pelo Núcleo · ticket #${ticketId} · aprovado por ${quem}`].filter(Boolean).join("\n"),
         referencia: `Ticket #${ticketId}`,
         tipoGeracao: 2,
@@ -198,15 +212,15 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
         valorUnitario: 0,
       };
       let descricao: string;
+      // Igual à tela "+ Avulso" do Tareffa: manda competência E dataVencimento (sem dia fixo, a data de hoje).
+      corpo.competencia = `${pad(m.mes)}/${m.ano}`;
       if (p.diaVencimento) {
         const d = Math.min(p.diaVencimento, ultimoDia(m.ano, m.mes));
-        const venc = `${m.ano}-${pad(m.mes)}-${pad(d)}`;
-        corpo.dataVencimento = `${venc}T23:00:00.000Z`;
-        descricao = `vencimento ${pad(d)}/${pad(m.mes)}/${m.ano}`;
+        corpo.dataVencimento = `${m.ano}-${pad(m.mes)}-${pad(d)}T12:00:00.000Z`;
+        descricao = `competência ${pad(m.mes)}/${m.ano}, vencimento ${pad(d)}/${pad(m.mes)}/${m.ano}`;
       } else {
-        const c = anterior(m);
-        corpo.competencia = `${pad(c.mes)}/${c.ano}`;
-        descricao = `competência ${pad(c.mes)}/${c.ano}`;
+        corpo.dataVencimento = new Date().toISOString();
+        descricao = `competência ${pad(m.mes)}/${m.ano}`;
       }
 
       if (simular) {

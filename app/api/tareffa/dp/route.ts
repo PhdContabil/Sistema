@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { listarServicosTareffa } from "@/lib/societario/tareffaServicos";
-import { buscarEmpresaErp } from "@/lib/tarefas-dp";
+import { buscarEmpresaErp, buscarUsuarios } from "@/lib/tarefas-dp";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,8 @@ export async function GET(req: Request) {
   const erp = new URL(req.url).searchParams.get("erp");
   try {
     if (erp) return NextResponse.json({ empresa: await buscarEmpresaErp(erp) });
+    const usuario = new URL(req.url).searchParams.get("usuario");
+    if (usuario) return NextResponse.json({ usuarios: await buscarUsuarios(usuario) });
     return NextResponse.json({ servicos: await listarServicosTareffa() });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
