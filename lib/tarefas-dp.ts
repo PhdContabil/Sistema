@@ -111,6 +111,27 @@ export async function buscarEmpresaErp(codigoErp: string): Promise<EmpresaTareff
   return x ? { id: x.id, codigoErp: erp, razaoSocial: x.razaoSocial ?? "", situacao: x.situacao ?? null } : null;
 }
 
+/** Empresas por código (ex.: 1467) ou parte do nome, para o autocompletar do formulário. */
+export async function buscarEmpresas(termo: string): Promise<EmpresaTareffa[]> {
+  const q = termo.trim();
+  if (q.length < 2) return [];
+  const porCodigo = /^\d+(-\d+)?$/.test(q);
+  const j = (await chamar(`/empresas/f?page_size=15&page_index=0`, {
+    method: "POST",
+    body: JSON.stringify({
+      codigoERP: porCodigo ? q : "", codigosERP: [], razaoSocial: porCodigo ? "" : q, cnpj: "", matriz: null, situacao: null,
+      isAtivo: false, classificacao: [], regimeTributario: [], cnaePrincipal: [],
+      departamento: { id: null, descricao: "" }, responsavel: { id: null, nome: "", email: "" }, caracteristicas: [],
+    }),
+  })) as { records?: { id: number; codigoErp?: string; razaoSocial?: string; situacao?: number }[] };
+  let lista = (j.records ?? []).filter((r) => r.codigoErp).map((r) => ({ id: r.id, codigoErp: String(r.codigoErp).trim(), razaoSocial: r.razaoSocial ?? "", situacao: r.situacao ?? null }));
+  if (porCodigo) {
+    const base = q.split("-")[0];
+    lista = lista.filter((e) => e.codigoErp.split("-")[0] === base || e.codigoErp === q);
+  }
+  return lista.slice(0, 10);
+}
+
 export interface UsuarioTareffa { id: number; nome: string }
 
 /** Usuários internos do Tareffa pelo nome (para o campo Responsável). */

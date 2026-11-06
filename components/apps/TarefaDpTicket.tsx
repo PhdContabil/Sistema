@@ -49,7 +49,10 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
   const [servicos, setServicos] = useState<ServicoOpcao[]>(cacheServicos ?? []);
   const [busca, setBusca] = useState("");
   const [erroLista, setErroLista] = useState<string | null>(null);
-  const [empresa, setEmpresa] = useState<string | null>(null);
+  const [buscaEmp, setBuscaEmp] = useState("");
+  const [empresas, setEmpresas] = useState<{ codigoErp: string; razaoSocial: string; situacao: number | null }[]>([]);
+  const [empNome, setEmpNome] = useState<string | null>(null);
+  const [buscandoEmp, setBuscandoEmp] = useState(false);
 
   useEffect(() => {
     if (cacheServicos) return;
@@ -61,18 +64,14 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
   }, []);
 
   useEffect(() => {
-    const erp = valor.codigoErp.trim();
-    if (!/^\d+-\d+$/.test(erp)) { setEmpresa(null); return; }
+    const q = buscaEmp.trim();
+    if (q.length < 2) { setEmpresas([]); return; }
     const t = setTimeout(() => {
-      setEmpresa("Buscando…");
-      fetch(`/api/tareffa/dp?erp=${encodeURIComponent(erp)}`).then((r) => r.json()).then((j) => {
-        if (j.error) setEmpresa(`Erro: ${j.error}`);
-        else if (!j.empresa) setEmpresa("Não encontrada no Tareffa.");
-        else setEmpresa(`${j.empresa.razaoSocial}${j.empresa.situacao != null && j.empresa.situacao !== 1 ? " (não ativa)" : ""}`);
-      }).catch(() => setEmpresa(null));
-    }, 500);
+      setBuscandoEmp(true);
+      fetch(`/api/tareffa/dp?empresa=${encodeURIComponent(q)}`).then((r) => r.json()).then((j) => setEmpresas(j.empresas ?? [])).catch(() => setEmpresas([])).finally(() => setBuscandoEmp(false));
+    }, 400);
     return () => clearTimeout(t);
-  }, [valor.codigoErp]);
+  }, [buscaEmp]);
 
   const filtrados = useMemo(() => {
     const b = busca.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -87,11 +86,27 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
 
   return (
     <div className="space-y-3 border border-blue-200 dark:border-blue-900 rounded-lg p-3 bg-blue-50/40 dark:bg-blue-950/20">
-      <p className="text-xs text-slate-500">Piloto: a T.I. confere e gera a tarefa no Tareffa depois de aprovar.</p>
+      <p className="text-xs text-slate-500">Depois de criado, o pedido fica no ticket como “Aguardando T.I.” até a aprovação. A tarefa só aparece no Tareffa depois que a T.I. clicar em “Aprovar e gerar”.</p>
       <label className="block">
-        <span className={lbl}>Empresa (código ERP)</span>
-        <input className={`${INPUT} w-full`} placeholder="1467-1" value={valor.codigoErp} onChange={(e) => set({ codigoErp: e.target.value })} />
-        {empresa && <span className="block text-xs mt-1 text-slate-600 dark:text-slate-400">{empresa}</span>}
+        <span className={lbl}>Empresa</span>
+        {valor.codigoErp ? (
+          <button type="button" onClick={() => { set({ codigoErp: "" }); setEmpNome(null); }} className="text-xs bg-blue-600 text-white rounded px-2 py-0.5 text-left">{valor.codigoErp}{empNome ? ` — ${empNome}` : ""} ✕</button>
+        ) : (
+          <>
+            <input className={`${INPUT} w-full`} placeholder="Código (ex.: 1467) ou nome da empresa" value={buscaEmp} onChange={(e) => setBuscaEmp(e.target.value)} />
+            {buscandoEmp && <span className="block text-xs mt-1 text-slate-500">Buscando no Tareffa…</span>}
+            {empresas.length > 0 && (
+              <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg mt-1">
+                {empresas.map((e) => (
+                  <button type="button" key={e.codigoErp} onClick={() => { set({ codigoErp: e.codigoErp }); setEmpNome(e.razaoSocial); setBuscaEmp(""); setEmpresas([]); }} className="block w-full text-left px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+                    {e.codigoErp} — {e.razaoSocial}{e.situacao != null && e.situacao !== 1 ? " (não ativa)" : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!buscandoEmp && buscaEmp.trim().length >= 2 && !empresas.length && <span className="block text-xs mt-1 text-slate-500">Nenhuma empresa encontrada.</span>}
+          </>
+        )}
       </label>
       <div>
         <span className={lbl}>Serviços ({valor.servicos.length} escolhido{valor.servicos.length === 1 ? "" : "s"})</span>
@@ -196,6 +211,7 @@ export function PainelTarefaDp({ ticketId, podeGerar }: { ticketId: string; pode
     } finally { setOcupado(false); setConfirmar(false); }
   }
 
+  if (pedido === undefined) return <div className="border border-blue-200 dark:border-blue-900 rounded-lg p-3 text-sm text-slate-500">Carregando pedido do Tareffa…</div>;
   if (!pedido) return null;
   const sim = pedido.resultados.filter((r) => r.simulacao);
   const reais = pedido.resultados.filter((r) => !r.simulacao);

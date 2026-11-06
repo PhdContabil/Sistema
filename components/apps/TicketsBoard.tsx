@@ -1223,10 +1223,11 @@ function NovoTicket({
           {setor === "trabalhista" && (
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={comTarefa} onChange={(e) => setComTarefa(e.target.checked)} />
-              Incluir tarefa no Tareffa (DP)
+              Incluir tarefa no Tareffa
             </label>
           )}
           {comTarefa && <FormTarefaDp valor={tarefa} onChange={setTarefa} />}
+          {!comTarefa && <>
           <label className="block">
             <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Título</span>
             <input
@@ -1267,6 +1268,7 @@ function NovoTicket({
               </select>
             </label>
           )}
+          </>}
           <p className="text-xs text-slate-500">O ticket entra no Backlog de {SETOR_NOME[setor] ?? setor}.</p>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
