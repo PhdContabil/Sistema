@@ -264,6 +264,6 @@ export async function middleware(req: NextRequest) {
 export const config = {
   // Protege o sistema inteiro, exceto assets estáticos e arquivos públicos.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|societario/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|txt|xml)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|societario/|api/versao|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|txt|xml)$).*)",
   ],
 };
