@@ -11,7 +11,11 @@ export default function VersaoWatcher() {
 
   useEffect(() => {
     let ativo = true;
+    let ultima = 0;
     async function checar(): Promise<boolean> {
+      // No máximo uma consulta a cada 2 min (trocar de aba várias vezes não gera chamada nova).
+      if (Date.now() - ultima < 120_000) return false;
+      ultima = Date.now();
       try {
         const r = await fetch("/api/versao", { cache: "no-store" });
         if (!r.ok) return false;
