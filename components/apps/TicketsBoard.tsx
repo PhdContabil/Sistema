@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
+import { FormTarefaDp, PainelTarefaDp, dadosTarefaDpVazio, erroTarefaDp, resumoTarefaDp, type DadosTarefaDp } from "./TarefaDpTicket";
 import {
   STATUS, PRIORIDADES, PRIORIDADE_NOME, SETOR_NOME,
   iniciais, primeiroNome, tempoRelativo, formatarDataHora,
@@ -914,6 +915,8 @@ function DetalheTicket({
             </div>
           )}
 
+          {t.sector === "trabalhista" && <PainelTarefaDp ticketId={String(t.id)} />}
+
           <div>
             <h3 className="text-xs uppercase tracking-widest text-slate-500 mb-2">Comentários ({comentarios.length})</h3>
             {comentarios.length === 0 && <p className="text-sm text-slate-500 italic mb-2">Nenhum comentário ainda.</p>}
@@ -1158,20 +1161,33 @@ function NovoTicket({
   const [atribuirA, setAtribuirA] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [comTarefa, setComTarefa] = useState(false);
+  const [enviado, setEnviado] = useState<string | null>(null);
+  const [tarefa, setTarefa] = useState<DadosTarefaDp>(dadosTarefaDpVazio);
 
   const { ti, ligacao } = pessoasAtribuiveis(pessoas, setor);
 
   async function criar() {
-    setSalvando(true);
     setErro(null);
+    if (comTarefa) { const e = erroTarefaDp(tarefa); if (e) { setErro(e); return; } }
+    setSalvando(true);
     try {
+      const titulo = title.trim() || (comTarefa ? `Incluir serviço - ${tarefa.codigoErp.trim()}` : "");
+      const desc = comTarefa ? [resumoTarefaDp(tarefa), description.trim()].filter(Boolean).join("\n\n") : description;
       const r = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, sector: setor, priority }),
+        body: JSON.stringify({ title: titulo, description: desc, sector: setor, priority }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(j.error ?? "Não foi possível criar."); return; }
+
+      if (comTarefa && j.id) {
+        const rp = await fetch(`/api/tickets/${j.id}/tarefa-dp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tarefa) });
+        if (!rp.ok) { const jp = await rp.json().catch(() => ({})); setErro(`Ticket #${j.id} criado, mas o pedido do Tareffa falhou: ${jp.error ?? rp.status}`); return; }
+        setEnviado(String(j.id));
+        return;
+      }
 
       // Já atribui de cara, se a pessoa escolheu alguém — reaproveita o
       // mesmo PATCH usado no detalhe, que já dispara a notificação no Teams.
@@ -1205,8 +1221,24 @@ function NovoTicket({
             ✕
           </button>
         </div>
+        {enviado ? (
+          <div className="px-6 py-8 text-center space-y-3">
+            <div className="text-4xl">✓</div>
+            <p className="font-semibold">Pedido enviado — ticket #{enviado}</p>
+            <p className="text-sm text-slate-500">Está aguardando aprovação. Assim que for aprovado, o serviço é criado no Tareffa e o status aparece dentro do ticket.</p>
+            <button className={BTN_PRIMARY} onClick={onCriado}>Fechar</button>
+          </div>
+        ) : (<>
         <div className="px-6 py-5 space-y-4">
           {erro && <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-200 text-sm rounded-lg px-4 py-3">{erro}</div>}
+          {setor === "trabalhista" && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={comTarefa} onChange={(e) => setComTarefa(e.target.checked)} />
+              Incluir serviço no Tareffa
+            </label>
+          )}
+          {comTarefa && <FormTarefaDp valor={tarefa} onChange={setTarefa} />}
+          {!comTarefa && <>
           <label className="block">
             <span className="block text-xs uppercase tracking-widest text-slate-500 mb-1.5">Título</span>
             <input
@@ -1247,14 +1279,16 @@ function NovoTicket({
               </select>
             </label>
           )}
+          </>}
           <p className="text-xs text-slate-500">O ticket entra no Backlog de {SETOR_NOME[setor] ?? setor}.</p>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
           <button className={BTN} onClick={onFechar}>Cancelar</button>
-          <button className={BTN_PRIMARY} onClick={criar} disabled={salvando || !title.trim()}>
-            {salvando ? "Criando…" : "Criar ticket"}
+          <button className={BTN_PRIMARY} onClick={criar} disabled={salvando || (!title.trim() && !comTarefa)}>
+            {salvando ? (comTarefa ? "Enviando pedido…" : "Criando…") : (comTarefa ? "Enviar pedido" : "Criar ticket")}
           </button>
         </div>
+        </>)}
       </div>
     </div>
   );
