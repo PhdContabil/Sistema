@@ -18,7 +18,7 @@ const { abrirEmailOutlook } = require('./outlook');
 
 const PORTA = +(process.env.ROBO_PORTA || 3199);
 // Só o site do Núcleo manda comandos. localhost só com ROBO_DEV=1 (testes de desenvolvimento).
-const ORIGENS = ['https://system-contabilidade.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
+const ORIGENS = ['https://system-contabilidade.vercel.app', 'https://system-contabilidade-git-dev-tecnologia-ph-d-s-projects.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
 const VERSAO = 11;
@@ -122,7 +122,7 @@ const servidor = http.createServer(async (req, res) => {
       if (!(+b.valor > 0)) erros.push('valor inválido');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data || '')) erros.push('data inválida'); else if (b.data > hoje()) erros.push('data futura não permitida');
       const tom = String(b.tomadorCnpj || '').replace(/\D/g, '');
-      if (!(tom.length === 14 || tom.length === 11)) erros.push('CNPJ/CPF do tomador (salão) inválido');
+      if (tom && !(tom.length === 14 || tom.length === 11)) erros.push('CNPJ/CPF do tomador (salão) inválido'); // vazio = sem tomador
       if ([...jobs.values()].some((j) => ATIVOS.includes(j.status))) erros.push('já existe uma emissão em andamento — conclua ou cancele');
       if (erros.length) return send(res, 422, { erro: erros.join(' · ') });
       const id = 'E' + Date.now().toString(36).toUpperCase();
