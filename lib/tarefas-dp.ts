@@ -110,7 +110,6 @@ async function chamar(path: string, init: RequestInit = {}, tentou401 = false): 
   }).catch((e) => { throw new TareffaError(`Sem conexão com o Tareffa (${e instanceof Error ? e.message : e})`); });
   if (r.status === 401 && !tentou401) { invalidarTokenTareffa(); return chamar(path, init, true); }
   const txt = await r.text().catch(() => "");
-  if (path.includes("avulso")) console.log("[tarefa-dp] avulso", r.status, r.headers.get("content-type"), JSON.stringify({ req: init.body, resp: txt.slice(0, 500) }));
   if (!r.ok) throw new TareffaError(`Tareffa HTTP ${r.status}: ${txt.slice(0, 300)}`);
   // A rota de programação avulsa às vezes responde 200 com corpo vazio (igual ao fluxo do Societário, que já funciona).
   if (!txt.trim()) return {};
@@ -252,24 +251,6 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
     if (jaFeito(s.id)) continue;
     if (!emp) { novos.push({ ...base, ok: false, mensagem: `Empresa ${p.codigoErp} não encontrada no Tareffa.` }); continue; }
     if (simular) {
-      // DIAGNÓSTICO (temporário): formato das regras de característica do serviço.
-      try {
-        const rg = await chamar(`https://prd-api-tareffa-spring-full.ottimizza.dev/api/regra_caracteristicas/servicos/${s.id}?page_size=999&page_index=0`);
-        console.log("[tarefa-dp] regras", s.id, JSON.stringify(rg).slice(0, 3000));
-      } catch (e) { console.log("[tarefa-dp] regras erro", s.id, String(e)); }
-      const resumo = (x: unknown) => JSON.stringify(x, (k, v) => (/token|senha|password|secret/i.test(k) ? undefined : v)).slice(0, 3000);
-      for (const url of [
-        `/servicos/${s.id}`,
-        `/servicos/${s.id}/caracteristicas`,
-        `https://prd-api-tareffa-spring-full.ottimizza.dev/api/servicos/${s.id}`,
-        `https://prd-api-tareffa-spring-full.ottimizza.dev/api/servicos/${s.id}/caracteristicas`,
-      ]) {
-        try { console.log("[tarefa-dp] diag", url, resumo(await chamar(url))); } catch (e) { console.log("[tarefa-dp] diag erro", url, String(e).slice(0, 200)); }
-      }
-      try {
-        const ce = await chamar(`/classificacoes/519881/empresa/${emp.id}/caracteristicas`);
-        console.log("[tarefa-dp] carac-empresa", JSON.stringify(ce).slice(0, 2000));
-      } catch (e) { console.log("[tarefa-dp] carac-empresa erro", String(e)); }
       const aviso = emp.situacao != null && emp.situacao !== 1 ? " · ATENÇÃO: empresa não ativa" : "";
       novos.push({ ...base, ok: true, mensagem: `Vincularia o serviço a ${emp.razaoSocial} e geraria a programação de ${rotuloMeses}${aviso}.` });
       continue;
