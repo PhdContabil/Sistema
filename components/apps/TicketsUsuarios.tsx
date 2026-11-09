@@ -611,8 +611,8 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
                 <label className="flex items-start gap-2 text-sm pt-1">
                   <input type="checkbox" className="mt-0.5" checked={aprovaModal} onChange={(e) => setAprovaModal(e.target.checked)} />
                   <span>
-                    Aprova tarefas do Tareffa
-                    <span className="block text-[11px] text-slate-400 dark:text-slate-500">Pode clicar em “Aprovar e gerar” nos pedidos de inclusão de tarefa (a T.I. já aprova por padrão).</span>
+                    Aprova serviços do Tareffa
+                    <span className="block text-[11px] text-slate-400 dark:text-slate-500">Pode clicar em “Aprovar e gerar” nos pedidos de inclusão de serviço (a T.I. já aprova por padrão).</span>
                   </span>
                 </label>
               )}

@@ -33,7 +33,7 @@ export function erroTarefaDp(v: DadosTarefaDp): string | null {
 
 export function resumoTarefaDp(v: DadosTarefaDp): string {
   return [
-    `Pedido de inclusão de tarefa no Tareffa (DP)`,
+    `Pedido de inclusão de serviço no Tareffa`,
     `Empresa: ${v.codigoErp}`,
     `Serviços: ${v.servicos.map((s) => s.nome).join("; ")}`,
     `Competência a partir de: ${v.mesInicial.split("-").reverse().join("/")} · ${v.qtdMeses} mês(es)`,
@@ -86,7 +86,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
 
   return (
     <div className="space-y-3 border border-blue-200 dark:border-blue-900 rounded-lg p-3 bg-blue-50/40 dark:bg-blue-950/20">
-      <p className="text-xs text-slate-500">Depois de criado, o pedido fica no ticket como “Aguardando T.I.” até a aprovação. A tarefa só aparece no Tareffa depois que a T.I. clicar em “Aprovar e gerar”.</p>
+      <p className="text-xs text-slate-500">Depois de criado, o pedido fica no ticket como “Aguardando T.I.” até a aprovação. O serviço só aparece no Tareffa depois que a T.I. clicar em “Aprovar e gerar”.</p>
       <label className="block">
         <span className={lbl}>Empresa</span>
         {valor.codigoErp ? (
@@ -149,7 +149,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
       </div>
       <Responsavel valor={valor.responsavel} onChange={(r) => set({ responsavel: r })} />
       <label className="block">
-        <span className={lbl}>Observações da tarefa (opcional)</span>
+        <span className={lbl}>Observações (opcional)</span>
         <textarea rows={2} className={`${INPUT} w-full`} value={valor.observacoes} onChange={(e) => set({ observacoes: e.target.value })} />
       </label>
     </div>
@@ -221,7 +221,7 @@ export function PainelTarefaDp({ ticketId }: { ticketId: string }) {
   return (
     <div className="border border-blue-200 dark:border-blue-900 rounded-lg p-3 bg-blue-50/40 dark:bg-blue-950/20 text-sm space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs uppercase tracking-widest text-slate-500">Tarefa no Tareffa (DP)</h3>
+        <h3 className="text-xs uppercase tracking-widest text-slate-500">Serviço no Tareffa</h3>
         <span className={`text-xs font-semibold ${cor}`}>{pedido.status === "concluido" ? "Gerado" : pedido.status === "com_erro" ? "Com erro" : "Aguardando T.I."}</span>
       </div>
       <p><b>Empresa:</b> {pedido.codigoErp}{pedido.empresaNome ? ` — ${pedido.empresaNome}` : ""}</p>

@@ -230,6 +230,9 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
   const reg = await ler();
   const p = reg[ticketId];
   if (!p) throw new Error("Pedido não encontrado.");
+  // PAUSADO: a programação avulsa cria "(A)". O certo é vincular o serviço (e a característica) à empresa
+  // e gerar a programação normal. Até isso ficar pronto, só a simulação funciona.
+  if (!simular) throw new Error("Geração pausada: em ajuste para vincular o serviço à empresa em vez de criar avulso.");
 
   const emp = await buscarEmpresaErp(p.codigoErp);
   const agora = new Date().toISOString();

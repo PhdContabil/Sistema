@@ -1172,7 +1172,7 @@ function NovoTicket({
     if (comTarefa) { const e = erroTarefaDp(tarefa); if (e) { setErro(e); return; } }
     setSalvando(true);
     try {
-      const titulo = title.trim() || (comTarefa ? `Incluir tarefa - ${tarefa.codigoErp.trim()}` : "");
+      const titulo = title.trim() || (comTarefa ? `Incluir serviço - ${tarefa.codigoErp.trim()}` : "");
       const desc = comTarefa ? [resumoTarefaDp(tarefa), description.trim()].filter(Boolean).join("\n\n") : description;
       const r = await fetch("/api/tickets", {
         method: "POST",
@@ -1225,7 +1225,7 @@ function NovoTicket({
           <div className="px-6 py-8 text-center space-y-3">
             <div className="text-4xl">✓</div>
             <p className="font-semibold">Pedido enviado — ticket #{enviado}</p>
-            <p className="text-sm text-slate-500">Está aguardando a aprovação da T.I. Assim que for aprovado, a tarefa é criada no Tareffa e o status aparece dentro do ticket.</p>
+            <p className="text-sm text-slate-500">Está aguardando aprovação. Assim que for aprovado, o serviço é criado no Tareffa e o status aparece dentro do ticket.</p>
             <button className={BTN_PRIMARY} onClick={onCriado}>Fechar</button>
           </div>
         ) : (<>
@@ -1234,7 +1234,7 @@ function NovoTicket({
           {setor === "trabalhista" && (
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={comTarefa} onChange={(e) => setComTarefa(e.target.checked)} />
-              Incluir tarefa no Tareffa
+              Incluir serviço no Tareffa
             </label>
           )}
           {comTarefa && <FormTarefaDp valor={tarefa} onChange={setTarefa} />}
