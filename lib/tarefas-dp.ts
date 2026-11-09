@@ -252,6 +252,19 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
     if (jaFeito(s.id)) continue;
     if (!emp) { novos.push({ ...base, ok: false, mensagem: `Empresa ${p.codigoErp} não encontrada no Tareffa.` }); continue; }
     if (simular) {
+      // DIAGNÓSTICO (temporário): formato das regras de característica do serviço.
+      try {
+        const rg = await chamar(`https://prd-api-tareffa-spring-full.ottimizza.dev/api/regra_caracteristicas/servicos/${s.id}?page_size=999&page_index=0`);
+        console.log("[tarefa-dp] regras", s.id, JSON.stringify(rg).slice(0, 3000));
+      } catch (e) { console.log("[tarefa-dp] regras erro", s.id, String(e)); }
+      try {
+        const cl = await chamar(`/classificacoes/p/999/page/0/f`, { method: "POST", body: JSON.stringify({}) });
+        console.log("[tarefa-dp] classificacoes", JSON.stringify(cl).slice(0, 3000));
+      } catch (e) { console.log("[tarefa-dp] classificacoes erro", String(e)); }
+      try {
+        const ce = await chamar(`/classificacoes/519881/empresa/${emp.id}/caracteristicas`);
+        console.log("[tarefa-dp] carac-empresa", JSON.stringify(ce).slice(0, 2000));
+      } catch (e) { console.log("[tarefa-dp] carac-empresa erro", String(e)); }
       const aviso = emp.situacao != null && emp.situacao !== 1 ? " · ATENÇÃO: empresa não ativa" : "";
       novos.push({ ...base, ok: true, mensagem: `Vincularia o serviço a ${emp.razaoSocial} e geraria a programação de ${rotuloMeses}${aviso}.` });
       continue;
