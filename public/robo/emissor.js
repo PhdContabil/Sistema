@@ -237,7 +237,10 @@ async function preparar(job, creds, ctl) {
     const valor = brMoney(job.valor);
     const busca = job.servicoBusca || codigoServico(job.codigoativmunic);
 
-    if (job.data === hoje()) {
+    // A tela simplificada do portal mudou e o robô não conseguia preencher o CPF/CNPJ do cliente (nov/2026).
+    // Agora toda emissão vai pela DPS completa, que aceita a data de hoje normalmente.
+    // Para voltar a usar a simplificada: variável NFSE_SIMPLIFICADA=1.
+    if (job.data === hoje() && process.env.NFSE_SIMPLIFICADA === '1') {
       ctl.log('Emissão do dia → DPS Simplificada.');
       await irPara(page, `${BASE}/DPS/Simplificada`);
       if (tomador) {
@@ -251,7 +254,7 @@ async function preparar(job, creds, ctl) {
       await sleep(2500);
       await acao(page, '#ValorServico', async (l) => { await l.fill(''); await l.type(valor, { delay: 30 }); }, { nome: 'campo valor' });
     } else {
-      ctl.log('Data diferente de hoje → DPS completa (competência ' + brDate(job.data) + ').');
+      ctl.log('DPS completa (competência ' + brDate(job.data) + ').');
       await irPara(page, `${BASE}/DPS/Pessoas`);
       await sleep(1000);
       // Reforma Tributária (IBS/CBS): responder "Não"
