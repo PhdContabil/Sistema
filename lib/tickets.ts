@@ -402,6 +402,22 @@ export interface OverridePermissao {
 }
 
 /** Todos os overrides de uma pessoa, já no formato usado pela tela (módulos + apps). */
+/** Permissões personalizadas de todo mundo numa consulta só (tela Usuários). */
+export async function listarPermissoesTodos(): Promise<Record<string, { modulos: Record<string, NivelPermissao>; apps: Record<string, Record<string, NivelPermissao>> }>> {
+  const db = ticketsDb();
+  if (!db) return {};
+  const { data, error } = await db.from("ticket_user_permissoes").select("email,modulo_id,app_nome,nivel");
+  if (error || !data) return {};
+  const out: Record<string, { modulos: Record<string, NivelPermissao>; apps: Record<string, Record<string, NivelPermissao>> }> = {};
+  for (const row of data as { email: string; modulo_id: string; app_nome: string | null; nivel: NivelPermissao }[]) {
+    const e = row.email.trim().toLowerCase();
+    const o = (out[e] ??= { modulos: {}, apps: {} });
+    if (row.app_nome) o.apps[row.modulo_id] = { ...(o.apps[row.modulo_id] ?? {}), [row.app_nome]: row.nivel };
+    else o.modulos[row.modulo_id] = row.nivel;
+  }
+  return out;
+}
+
 export async function listarPermissoesPessoa(email: string): Promise<{
   modulos: Record<string, NivelPermissao>;
   apps: Record<string, Record<string, NivelPermissao>>;

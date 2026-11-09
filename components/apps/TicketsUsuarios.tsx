@@ -287,14 +287,10 @@ export default function TicketsUsuarios({ meuEmail }: { meuEmail: string | null 
       carregarPerfis();
       // Carrega as permissões personalizadas de todo mundo pra já mostrar o
       // selo "N personalizada(s)" na tabela, sem precisar abrir cada edição.
-      const pares = await Promise.all(
-        lista.map(async (u) => {
-          const rp = await fetch(`/api/tickets/usuarios/${encodeURIComponent(u.email)}/permissoes`, { cache: "no-store" });
-          const jp = await rp.json().catch(() => ({}));
-          return [u.email, rp.ok ? (jp.overrides as OverridesPessoa) : OVERRIDES_VAZIO] as const;
-        })
-      );
-      setOverridesPorEmail(Object.fromEntries(pares));
+      const rp = await fetch("/api/tickets/usuarios/permissoes", { cache: "no-store" });
+      const jp = await rp.json().catch(() => ({}));
+      const porEmail = (rp.ok ? jp.porEmail : {}) as Record<string, OverridesPessoa>;
+      setOverridesPorEmail(Object.fromEntries(lista.map((u) => [u.email, porEmail[u.email.toLowerCase()] ?? OVERRIDES_VAZIO])));
     } else {
       setErro(j.error ?? "Não foi possível carregar.");
     }
