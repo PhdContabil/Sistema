@@ -27,7 +27,6 @@ export function erroTarefaDp(v: DadosTarefaDp): string | null {
   if (!/^\d+-\d+$/.test(v.codigoErp.trim())) return "Informe o código ERP da empresa (ex.: 1467-1).";
   if (!v.servicos.length) return "Escolha pelo menos um serviço.";
   if (!v.mesInicial) return "Informe o mês.";
-  if (!v.responsavel) return "Escolha o responsável no Tareffa.";
   return null;
 }
 
@@ -36,7 +35,7 @@ export function resumoTarefaDp(v: DadosTarefaDp): string {
     `Pedido de inclusão de serviço no Tareffa`,
     `Empresa: ${v.codigoErp}`,
     `Serviços: ${v.servicos.map((s) => s.nome).join("; ")}`,
-    `Competência a partir de: ${v.mesInicial.split("-").reverse().join("/")} · ${v.qtdMeses} mês(es)`,
+    `A partir de: ${v.mesInicial.split("-").reverse().join("/")} · ${v.qtdMeses} mês(es)`,
     v.responsavel ? `Responsável: ${v.responsavel.nome}` : "",
     v.diaVencimento ? `Dia de vencimento: ${v.diaVencimento}` : "",
     v.observacoes ? `Observações: ${v.observacoes}` : "",
@@ -131,7 +130,7 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
         </div>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className={lbl}>Competência</span>
           <input type="month" className={`${INPUT} w-full`} value={valor.mesInicial} onChange={(e) => set({ mesInicial: e.target.value })} />
@@ -142,12 +141,8 @@ export function FormTarefaDp({ valor, onChange }: { valor: DadosTarefaDp; onChan
             <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
           </select>
         </label>
-        <label className="block">
-          <span className={lbl}>Dia venc. (opc.)</span>
-          <input type="number" min={1} max={31} className={`${INPUT} w-full`} value={valor.diaVencimento ?? ""} onChange={(e) => set({ diaVencimento: e.target.value ? Number(e.target.value) : null })} />
-        </label>
+
       </div>
-      <Responsavel valor={valor.responsavel} onChange={(r) => set({ responsavel: r })} />
       <label className="block">
         <span className={lbl}>Observações (opcional)</span>
         <textarea rows={2} className={`${INPUT} w-full`} value={valor.observacoes} onChange={(e) => set({ observacoes: e.target.value })} />

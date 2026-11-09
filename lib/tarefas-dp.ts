@@ -102,7 +102,7 @@ export async function definirAprovador(email: string, aprova: boolean): Promise<
 // ------------------------------------------------------------------ Tareffa
 
 async function chamar(path: string, init: RequestInit = {}, tentou401 = false): Promise<unknown> {
-  const r = await fetch(`${API}${path}`, {
+  const r = await fetch(path.startsWith("http") ? path : `${API}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${await tokenTareffa()}`, "Content-Type": "application/json", Accept: "application/json" },
     cache: "no-store",
@@ -195,7 +195,6 @@ export function validarEntrada(e: EntradaPedido): string | null {
   if (!/^\d{4}-\d{2}$/.test(e.mesInicial ?? "")) return "Informe o mês inicial.";
   if (![1, 2, 3].includes(Number(e.qtdMeses))) return "Quantidade de meses deve ser 1, 2 ou 3.";
   if (e.diaVencimento != null && !(e.diaVencimento >= 1 && e.diaVencimento <= 31)) return "Dia de vencimento deve ser de 1 a 31.";
-  if (!e.responsavel?.id) return "Escolha o responsável no Tareffa.";
   return null;
 }
 
@@ -226,76 +225,78 @@ export async function salvarPedido(ticketId: string, e: EntradaPedido, autor: st
 }
 
 /** Executa (ou simula) o pedido. Pula o que já foi gerado com sucesso. */
+// Fluxo igual ao da tela do Tareffa (sem avulso):
+//  1) vincula cada serviço à empresa:   GET  /services/empresas/{id}/servicos/adicionar/{servicoId}
+//  2) gera a programação normal:        POST {PROG}/api/servico/programado/programacaoV3
+//     (por ano, com os meses marcados, só para o código ERP da empresa). A geração é assíncrona:
+//     o Tareffa responde "Gerando programação para os serviços!" e cria em seguida, com o
+//     responsável e as datas das regras do próprio serviço.
+const PROG = "https://prd-api-servico-programado.ottimizza.dev";
+const DEPARTAMENTO_DP = Number(process.env.TAREFFA_DEPARTAMENTO_DP_ID ?? 19910);
+const NOMES_MES = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
 export async function executarPedido(ticketId: string, simular: boolean, quem: string): Promise<PedidoTarefaDp> {
   const reg = await ler();
   const p = reg[ticketId];
   if (!p) throw new Error("Pedido não encontrado.");
-  // PAUSADO: a programação avulsa cria "(A)". O certo é vincular o serviço (e a característica) à empresa
-  // e gerar a programação normal. Até isso ficar pronto, só a simulação funciona.
-  if (!simular) throw new Error("Geração pausada: em ajuste para vincular o serviço à empresa em vez de criar avulso.");
 
   const emp = await buscarEmpresaErp(p.codigoErp);
   const agora = new Date().toISOString();
   const novos: ItemResultado[] = [];
-  const jaFeito = (sid: number, mes: string) => p.resultados.some((r) => r.ok && !r.simulacao && r.servicoId === sid && r.mes === mes);
+  const lista = meses(p.mesInicial, p.qtdMeses);
+  const rotuloMeses = lista.map((m) => `${pad(m.mes)}/${m.ano}`).join(", ");
+  const jaFeito = (sid: number) => p.resultados.some((r) => r.ok && !r.simulacao && r.servicoId === sid && r.mes === rotuloMeses);
 
   for (const s of p.servicos) {
-    for (const m of meses(p.mesInicial, p.qtdMeses)) {
-      const mes = `${pad(m.mes)}/${m.ano}`;
-      const base = { servicoId: s.id, servico: s.nome, mes, simulacao: simular, em: agora };
-      if (jaFeito(s.id, mes)) continue;
-      if (!emp) { novos.push({ ...base, ok: false, programacaoId: null, mensagem: `Empresa ${p.codigoErp} não encontrada no Tareffa.` }); continue; }
+    const base = { servicoId: s.id, servico: s.nome, mes: rotuloMeses, simulacao: simular, em: agora, programacaoId: null };
+    if (jaFeito(s.id)) continue;
+    if (!emp) { novos.push({ ...base, ok: false, mensagem: `Empresa ${p.codigoErp} não encontrada no Tareffa.` }); continue; }
+    if (simular) {
+      const aviso = emp.situacao != null && emp.situacao !== 1 ? " · ATENÇÃO: empresa não ativa" : "";
+      novos.push({ ...base, ok: true, mensagem: `Vincularia o serviço a ${emp.razaoSocial} e geraria a programação de ${rotuloMeses}${aviso}.` });
+      continue;
+    }
 
+    // 1) vínculo (se já estiver vinculado, o Tareffa recusa ou ignora — segue para a geração).
+    let avisoVinculo = "";
+    try {
+      await chamar(`/empresas/${emp.id}/servicos/adicionar/${s.id}`);
+    } catch (e) {
+      avisoVinculo = ` (vínculo: ${e instanceof Error ? e.message.slice(0, 150) : String(e)})`;
+    }
+
+    // 2) geração, um pedido por ano.
+    const porAno = new Map<number, number[]>();
+    for (const m of lista) porAno.set(m.ano, [...(porAno.get(m.ano) ?? []), m.mes]);
+    const msgs: string[] = [];
+    let ok = true;
+    for (const [ano, ms] of porAno) {
       const corpo: Record<string, unknown> = {
-        servico: { id: s.id },
-        cliente: { id: emp.id },
-        ...(p.responsavel ? { alocadoPara: { id: p.responsavel.id } } : {}),
-        observacoes: [p.observacoes, `Criado pelo Núcleo · ticket #${ticketId} · aprovado por ${quem}`].filter(Boolean).join("\n"),
-        referencia: `Ticket #${ticketId}`,
-        tipoGeracao: 2,
-        retificacao: false,
-        nrOcorrencias: 1,
-        tempoUnitario: 0,
-        valorUnitario: 0,
+        gerarPara: 1, apagarNaoIniciados: false, programadoParaAno: ano,
+        gerarParaEmpresasPorCodigoERP: [p.codigoErp], servicosId: [s.id],
+        departamentoId: DEPARTAMENTO_DP, unidadeNegocio: null, caracteristicaId: null,
       };
-      let descricao: string;
-      // Igual à tela "+ Avulso" do Tareffa: manda competência E dataVencimento (sem dia fixo, a data de hoje).
-      corpo.competencia = `${pad(m.mes)}/${m.ano}`;
-      if (p.diaVencimento) {
-        const d = Math.min(p.diaVencimento, ultimoDia(m.ano, m.mes));
-        corpo.dataVencimento = `${m.ano}-${pad(m.mes)}-${pad(d)}T12:00:00.000Z`;
-        descricao = `competência ${pad(m.mes)}/${m.ano}, vencimento ${pad(d)}/${pad(m.mes)}/${m.ano}`;
-      } else {
-        corpo.dataVencimento = new Date().toISOString();
-        descricao = `competência ${pad(m.mes)}/${m.ano}`;
-      }
-
-      if (simular) {
-        const aviso = emp.situacao != null && emp.situacao !== 1 ? ` · ATENÇÃO: empresa com situação ${emp.situacao} (não ativa)` : "";
-        novos.push({ ...base, ok: true, programacaoId: null, mensagem: `Seria criada: ${s.nome} para ${emp.razaoSocial}, ${descricao}${aviso}.` });
-        continue;
-      }
+      NOMES_MES.forEach((n, i) => { corpo[`programadoPara${n}`] = ms.includes(i + 1); });
       try {
-        const j = (await chamar(`/servicos_programados/avulso`, { method: "POST", body: JSON.stringify(corpo) })) as { status?: string; message?: string };
-        const msg = String(j.message ?? j.status ?? "");
-        const ok = String(j.status ?? "").toLowerCase() === "success";
-        const id = /ID:\s*(\d+)/i.exec(msg)?.[1];
-        novos.push({ ...base, ok, programacaoId: id ? Number(id) : null, mensagem: ok ? `${msg || "Tareffa respondeu sem confirmação (resposta vazia) — NÃO confirmado, confira na tela"} (${descricao})` : `Tareffa recusou: ${msg || "sem detalhe"}` });
+        const j = (await chamar(`${PROG}/api/servico/programado/programacaoV3`, { method: "POST", body: JSON.stringify(corpo) })) as { status?: string; message?: string };
+        const sucesso = String(j.status ?? "").toLowerCase() === "success";
+        ok = ok && sucesso;
+        msgs.push(sucesso ? `${j.message ?? "Gerando"} (${ms.map(pad).join(",")}/${ano})` : `Tareffa recusou: ${j.message ?? "sem detalhe"}`);
       } catch (e) {
-        novos.push({ ...base, ok: false, programacaoId: null, mensagem: e instanceof Error ? e.message : String(e) });
+        ok = false;
+        msgs.push(e instanceof Error ? e.message : String(e));
       }
     }
+    novos.push({ ...base, ok, mensagem: msgs.join(" · ") + avisoVinculo + (ok ? " — confira no Tareffa em alguns minutos." : "") });
   }
 
-  // Simulação não fica no histórico definitivo: troca as simulações anteriores pelas novas.
   p.resultados = [...p.resultados.filter((r) => !r.simulacao), ...novos];
   if (!simular) {
-    const reais = p.resultados.filter((r) => !r.simulacao);
-    const total = p.servicos.length * p.qtdMeses;
-    const okCount = new Set(reais.filter((r) => r.ok).map((r) => `${r.servicoId}|${r.mes}`)).size;
-    p.status = okCount >= total ? "concluido" : "com_erro";
+    const okCount = new Set(p.resultados.filter((r) => !r.simulacao && r.ok).map((r) => r.servicoId)).size;
+    p.status = okCount >= p.servicos.length ? "concluido" : "com_erro";
   }
   if (emp) { p.empresaNome = emp.razaoSocial; p.tareffaEmpresaId = emp.id; }
+  void quem;
   reg[ticketId] = p;
   await salvar(reg);
   return p;
