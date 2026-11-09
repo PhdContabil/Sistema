@@ -257,10 +257,15 @@ export async function executarPedido(ticketId: string, simular: boolean, quem: s
         const rg = await chamar(`https://prd-api-tareffa-spring-full.ottimizza.dev/api/regra_caracteristicas/servicos/${s.id}?page_size=999&page_index=0`);
         console.log("[tarefa-dp] regras", s.id, JSON.stringify(rg).slice(0, 3000));
       } catch (e) { console.log("[tarefa-dp] regras erro", s.id, String(e)); }
-      try {
-        const cl = await chamar(`/classificacoes/p/999/page/0/f`, { method: "POST", body: JSON.stringify({}) });
-        console.log("[tarefa-dp] classificacoes", JSON.stringify(cl).slice(0, 3000));
-      } catch (e) { console.log("[tarefa-dp] classificacoes erro", String(e)); }
+      const resumo = (x: unknown) => JSON.stringify(x, (k, v) => (/token|senha|password|secret/i.test(k) ? undefined : v)).slice(0, 3000);
+      for (const url of [
+        `/servicos/${s.id}`,
+        `/servicos/${s.id}/caracteristicas`,
+        `https://prd-api-tareffa-spring-full.ottimizza.dev/api/servicos/${s.id}`,
+        `https://prd-api-tareffa-spring-full.ottimizza.dev/api/servicos/${s.id}/caracteristicas`,
+      ]) {
+        try { console.log("[tarefa-dp] diag", url, resumo(await chamar(url))); } catch (e) { console.log("[tarefa-dp] diag erro", url, String(e).slice(0, 200)); }
+      }
       try {
         const ce = await chamar(`/classificacoes/519881/empresa/${emp.id}/caracteristicas`);
         console.log("[tarefa-dp] carac-empresa", JSON.stringify(ce).slice(0, 2000));
