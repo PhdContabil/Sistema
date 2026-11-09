@@ -69,13 +69,13 @@ const TTL = 10 * 60 * 1000;
 const TTL_PERSISTIDO = 6 * 60 * 60 * 1000;
 const BUCKET_CACHE = "cache-nucleo";
 const ARQ_CACHE = "mei-lista-v2.json";
-async function lerPersistido(): Promise<{ t: number; v: MeiItem[] } | null> {
+async function lerPersistido(ignorarValidade = false): Promise<{ t: number; v: MeiItem[] } | null> {
   try {
     const { supabaseAdmin } = await import("@/lib/societario/supabase");
     const { data } = await supabaseAdmin().storage.from(BUCKET_CACHE).download(ARQ_CACHE);
     if (!data) return null;
     const c = JSON.parse(await data.text()) as { t: number; v: MeiItem[] };
-    return Array.isArray(c?.v) && Date.now() - c.t < TTL_PERSISTIDO ? c : null;
+    return Array.isArray(c?.v) && (ignorarValidade || Date.now() - c.t < TTL_PERSISTIDO) ? c : null;
   } catch { return null; }
 }
 async function salvarPersistido(c: { t: number; v: MeiItem[] }) {
@@ -108,7 +108,22 @@ const hojeBR = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 
  */
 export async function listaMEI(forcar = false): Promise<MeiItem[]> {
   if (!forcar && cache && Date.now() - cache.t < TTL) return cache.v;
-  if (!forcar) { const p = await lerPersistido(); if (p) { cache = p; return p.v; } }
+  const salvo = await lerPersistido(true);
+  if (!forcar && salvo && Date.now() - salvo.t < TTL_PERSISTIDO) { cache = salvo; return salvo.v; }
+  // Montar a lista consulta o Questor inteiro e às vezes passa de 60 s (504). Se não sair em 40 s,
+  // devolve a última lista salva (mesmo vencida) em vez de deixar a tela sem nada.
+  try {
+    return await Promise.race([
+      montarListaMEI(),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Questor demorou mais de 40 s para montar a lista MEI.")), 40_000)),
+    ]);
+  } catch (e) {
+    if (salvo) { cache = { t: Date.now() - TTL + 60_000, v: salvo.v }; return salvo.v; }
+    throw e;
+  }
+}
+
+async function montarListaMEI(): Promise<MeiItem[]> {
   const [me, r] = await Promise.all([
     q("/mei/empresas", { limit: 5000 }),
     q("/empresas/cadastro", { apenas_ativas: "false", detalhado: "true" }),
