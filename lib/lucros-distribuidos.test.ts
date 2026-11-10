@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  LucroInvalido, montarAjuste, montarPlano, sugerirIrrf, ultimoDiaDoMes, type EntradaLucro,
+  LucroInvalido, desdobrarLiquido, montarAjuste, montarPlano, sugerirIrrf, ultimoDiaDoMes, type EntradaLucro,
 } from "./lucros-distribuidos.ts";
 
 const base: EntradaLucro = {
@@ -99,4 +99,26 @@ test("ajuste: novos valores e data da DP", () => {
 test("ajuste exige a chave e a data atual", () => {
   assert.throws(() => montarAjuste({ ...base, chave: 0, dataAtual: "2026-03-31" }), LucroInvalido);
   assert.throws(() => montarAjuste({ ...base, chave: 1, dataAtual: "x" }), LucroInvalido);
+});
+
+test("desdobrarLiquido: exemplo do chamado #1411 (líquido 55.555,00)", () => {
+  assert.deepEqual(desdobrarLiquido(55555, "2026-11"), { rendimento: 61727.78, base: 61727.78, imposto: 6172.78 });
+});
+
+test("desdobrarLiquido: até R$ 50.000 de líquido ou antes de 2026 não retém", () => {
+  assert.deepEqual(desdobrarLiquido(50000, "2026-11"), { rendimento: 50000, base: 0, imposto: 0 });
+  assert.deepEqual(desdobrarLiquido(12345.67, "2026-11"), { rendimento: 12345.67, base: 0, imposto: 0 });
+  assert.deepEqual(desdobrarLiquido(80000, "2025-12"), { rendimento: 80000, base: 0, imposto: 0 });
+  assert.deepEqual(desdobrarLiquido(0, "2026-11"), { rendimento: 0, base: 0, imposto: 0 });
+  assert.deepEqual(desdobrarLiquido(Number.NaN, "2026-11"), { rendimento: 0, base: 0, imposto: 0 });
+});
+
+test("desdobrarLiquido: o líquido sempre bate em centavos e o imposto fica a 1 centavo de 10%", () => {
+  for (let c = 5000001; c <= 5003000; c++) {
+    const liquido = c / 100;
+    const d = desdobrarLiquido(liquido, "2026-11");
+    assert.equal(Math.round((d.rendimento - d.imposto) * 100), c, `líquido ${liquido}`);
+    assert.ok(Math.abs(d.imposto * 100 - d.rendimento * 10) <= 1.0001, `imposto ${liquido}`);
+    assert.equal(d.base, d.rendimento);
+  }
 });

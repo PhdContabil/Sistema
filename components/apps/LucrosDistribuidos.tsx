@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
-import { ISENCOES, sugerirIrrf, type PlanoLucro } from "@/lib/lucros-distribuidos";
+import { ISENCOES, desdobrarLiquido, sugerirIrrf, type PlanoLucro } from "@/lib/lucros-distribuidos";
 import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
 import FiltrosLog, { FILTRO_VAZIO, aplicarFiltro, type FiltroLog } from "./FiltrosLog";
 import type { LinhaLogLucro } from "@/lib/lucros-distribuidos-log";
@@ -129,6 +129,17 @@ export default function LucrosDistribuidos({
 
   const liquido = Math.max(0, num(rendimento) - num(imposto));
 
+  // Valor líquido digitado (null = mostra o líquido calculado a partir dos outros campos). Chamado #1411.
+  const [liquidoTxt, setLiquidoTxt] = useState<string | null>(null);
+  function aoDigitarLiquido(s: string) {
+    const v = s.replace(/[^\d.,]/g, "");
+    setLiquidoTxt(v); setRes(null);
+    const d = desdobrarLiquido(num(v), competencia);
+    setRendimento(texto(d.rendimento)); setBase(texto(d.base)); setImposto(texto(d.imposto));
+  }
+  /** Mexeu em outro campo: volta a mostrar o líquido calculado. */
+  const editando = (set: (s: string) => void) => (s: string) => { setLiquidoTxt(null); set(s); };
+
   function corpo() {
     return {
       codigoempresa: codigo, codigosocio: Number(socio), competencia, dataPagamento,
@@ -208,7 +219,7 @@ export default function LucrosDistribuidos({
     try {
       const j = await chamar("/api/contabil/lucros-distribuidos/lancar", { ...corpo(), confirmar: true });
       setOk(j.repetido ? "Esta distribuição já estava gravada no Questor — nada novo foi escrito." : "Distribuição lançada no Questor com sucesso." + avisoTeams(j));
-      setRes(null); setRendimento(""); setBase(""); setImposto(""); setTisencao(0);
+      setRes(null); setRendimento(""); setBase(""); setImposto(""); setTisencao(0); setLiquidoTxt(null);
       await atualizarLog();
       if (lista) await carregarLista();
     } catch (e) {
@@ -309,7 +320,13 @@ export default function LucrosDistribuidos({
           <label style={campo}>
             Competência
             <input style={entrada} type="month" value={competencia}
-              onChange={(e) => { setCompetencia(e.target.value); setRes(null); recalcularIrrf(rendimento, e.target.value); }} />
+              onChange={(e) => {
+                setCompetencia(e.target.value); setRes(null);
+                if (liquidoTxt !== null) { // líquido digitado: refaz o cálculo reverso na nova competência
+                  const d = desdobrarLiquido(num(liquidoTxt), e.target.value);
+                  setRendimento(texto(d.rendimento)); setBase(texto(d.base)); setImposto(texto(d.imposto));
+                } else recalcularIrrf(rendimento, e.target.value);
+              }} />
           </label>
           <label style={campo}>
             Data do pagamento
@@ -320,17 +337,22 @@ export default function LucrosDistribuidos({
         {codigo && <div style={{ fontSize: 12, color: "var(--muted, #667)", marginTop: 6 }}>{codigo} · {nomeEscolhida}</div>}
 
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", marginTop: 14 }}>
-          {money(rendimento, setRendimento, "Rendimento", (s) => recalcularIrrf(s, competencia))}
-          {money(base, setBase, "Base IRRF")}
-          {money(imposto, setImposto, "Imposto retido")}
+          {money(rendimento, editando(setRendimento), "Rendimento", (s) => recalcularIrrf(s, competencia))}
+          {money(base, editando(setBase), "Base IRRF")}
+          {money(imposto, editando(setImposto), "Imposto retido")}
           <label style={campo}>
             Valor líquido
-            <input style={{ ...entrada, textAlign: "right", opacity: 0.8 }} readOnly value={liquido ? formatBRL(liquido) : ""} placeholder="0,00" />
+            <input style={{ ...entrada, textAlign: "right" }} inputMode="decimal" placeholder="0,00"
+              title="Digite o valor que caiu na conta do sócio: o sistema calcula rendimento, base e imposto"
+              value={liquidoTxt ?? (liquido ? formatBRL(liquido) : "")}
+              onChange={(e) => aoDigitarLiquido(e.target.value)}
+              onBlur={() => setLiquidoTxt(null)} />
           </label>
           {selectIsencao(tisencao, setTisencao)}
         </div>
         <div style={{ fontSize: 12, color: "var(--muted, #667)", marginTop: 6 }}>
           IRRF sugerido: 10% sobre o total quando a distribuição passa de R$ 50.000,00, em competências de 2026 em diante. Base e imposto podem ser corrigidos.
+          Dá para preencher só o Valor líquido (o que caiu na conta do sócio): acima de R$ 50.000,00 o rendimento é o líquido ÷ 0,90 e o imposto são 10% dele.
         </div>
 
         <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
