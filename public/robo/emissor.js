@@ -237,23 +237,45 @@ async function preparar(job, creds, ctl) {
     const valor = brMoney(job.valor);
     const busca = job.servicoBusca || codigoServico(job.codigoativmunic);
 
-    // A tela simplificada do portal mudou e o robô não conseguia preencher o CPF/CNPJ do cliente (nov/2026).
-    // Agora toda emissão vai pela DPS completa, que aceita a data de hoje normalmente.
-    // Para voltar a usar a simplificada: variável NFSE_SIMPLIFICADA=1.
-    if (job.data === hoje() && process.env.NFSE_SIMPLIFICADA === '1') {
-      ctl.log('Emissão do dia → DPS Simplificada.');
-      await irPara(page, `${BASE}/DPS/Simplificada`);
-      if (tomador) {
-        await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/input', 'input[id*="Tomador" i]'], (l) => l.fill(tomador), { nome: 'campo do tomador' });
+    let simplificadaOk = false;
+    // Nota do dia COM tomador: tela simplificada (pedido do MEI/Carla). Se algo falhar, segue pela completa.
+    // Para desligar a simplificada: variável NFSE_SIMPLIFICADA=0.
+    if (job.data === hoje() && tomador && process.env.NFSE_SIMPLIFICADA !== '0') {
+      try {
+        ctl.log('Emissão do dia com tomador → DPS Simplificada.');
+        await irPara(page, `${BASE}/DPS/Simplificada`);
+        await acao(page, '#InscricaoCliente', async (l) => { await l.fill(''); await l.type(tomador, { delay: 30 }); }, { nome: 'CPF/CNPJ do cliente' });
         await sleep(500);
-        await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[1]/div/div[1]/div/div/span/button[1]'], (l) => l.click(), { nome: 'botão pesquisar tomador' });
-        await sleep(2500);
-      } else ctl.log('Sem tomador: campo do tomador deixado em branco.');
-      await acao(page, ['xpath=/html/body/div[1]/form/div[1]/div/div[2]/div/div/div/div/a/span'], (l) => l.click(), { nome: 'lista de serviço' });
-      await acao(page, ['xpath=//li[contains(text(), "padrao")]', 'li:has-text("padrao")'], (l) => l.click(), { nome: 'serviço "padrao" (cadastre-o no portal)' });
-      await sleep(2500);
-      await acao(page, '#ValorServico', async (l) => { await l.fill(''); await l.type(valor, { delay: 30 }); }, { nome: 'campo valor' });
-    } else {
+        await acao(page, '#btn_InscricaoCliente_pesquisar', (l) => l.click(), { nome: 'pesquisar cliente' });
+        let nome = '';
+        for (let i = 0; i < 12 && !nome; i++) { await sleep(1000); nome = (await page.inputValue('#NomeCliente').catch(() => '')).trim(); }
+        if (!nome) throw new Error('o portal não trouxe o nome do cliente');
+        ctl.log('Cliente: ' + nome + '.');
+        // Serviço favorito: o que tiver "padrão" no nome; se não houver, o primeiro cadastrado.
+        const opcoes = await page.$$eval('#IdServicoFavorito option', (os) => os.map((o) => ({ v: o.value, t: (o.textContent || '').trim() })).filter((o) => o.v));
+        if (!opcoes.length) throw new Error('nenhum serviço favorito cadastrado no portal');
+        const esc = opcoes.find((o) => /padr[aã]o/i.test(o.t)) || opcoes[0];
+        await page.evaluate((v) => {
+          const s = document.querySelector('#IdServicoFavorito');
+          s.value = v;
+          const jq = window.jQuery;
+          if (jq) jq(s).trigger('chosen:updated').trigger('change'); else s.dispatchEvent(new Event('change', { bubbles: true }));
+        }, esc.v);
+        ctl.log('Serviço favorito: ' + esc.t + '.');
+        await sleep(2000);
+        // Descrição da nota (substitui só nesta NFS-e o texto do favorito).
+        if (job.descricao) {
+          const abriu = await page.locator('#btnDescricao:not([disabled])').click({ timeout: 4000 }).then(() => true).catch(() => false);
+          if (abriu) { await sleep(800); await page.fill('#Descricao', job.descricao).catch(() => ctl.log('Descrição: não consegui preencher (fica a do favorito).')); }
+          else ctl.log('Descrição: botão indisponível (fica a do serviço favorito).');
+        }
+        await acao(page, '#ValorServico', async (l) => { await l.fill(''); await l.type(valor, { delay: 30 }); }, { nome: 'campo valor' });
+        simplificadaOk = true;
+      } catch (e) {
+        ctl.log('Simplificada não deu certo (' + String(e.message).split('\n')[0] + '); seguindo pela DPS completa.');
+      }
+    }
+    if (!simplificadaOk) {
       ctl.log('DPS completa (competência ' + brDate(job.data) + ').');
       await irPara(page, `${BASE}/DPS/Pessoas`);
       await sleep(1000);
