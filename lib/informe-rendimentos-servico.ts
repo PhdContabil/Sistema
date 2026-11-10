@@ -3,7 +3,7 @@
 // Compartilhado por /calcular e /lancar para os dois decidirem igual.
 
 import {
-  InformeInvalido, montarPlano, validarEntrada, ROTULO_REGIME, ehTipoInforme,
+  InformeInvalido, montarPlano, planoZerado, validarEntrada, ROTULO_REGIME, ehTipoInforme,
   type EntradaInforme, type PlanoInforme, type Regime,
 } from "./informe-rendimentos";
 import { obterRegimeEmpresa } from "./tareffa-regime";
@@ -93,7 +93,8 @@ export async function prepararInforme(corpo: Record<string, unknown>): Promise<I
     throw e;
   }
   const realLiberado = process.env.INFORME_LUCRO_REAL_LIBERADO === "1";
-  const bloqueado = r.regime === "real" && !realLiberado;
+  // Zerado não grava nada no Questor, então não depende da liberação do Lucro Real.
+  const bloqueado = r.regime === "real" && !realLiberado && !planoZerado(plano);
 
   return {
     entrada, regime: r.regime, regimeDescricao: r.regimeDescricao ?? ROTULO_REGIME[r.regime],
