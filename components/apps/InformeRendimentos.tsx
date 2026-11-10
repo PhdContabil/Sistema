@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
+import { resolverCampo, temConta } from "@/lib/expressao-valor";
 import { planoZerado, ROTULO_TIPO, ROTULO_TIPO_ENCERRADO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
 import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
 import FiltrosLog, { FILTRO_VAZIO, aplicarFiltro, type FiltroLog } from "./FiltrosLog";
@@ -94,8 +95,15 @@ export default function InformeRendimentos({
   const regimeTexto = !codigo ? "" : regimeCarregando ? "Consultando o Tareffa…"
     : regimeErro ? "Não encontrado" : regimeInfo ? (regimeInfo.regime === "real" ? "Lucro Real" : regimeInfo.regime === "presumido" ? "Lucro Presumido" : (regimeInfo.descricao ?? "Sem regime no Tareffa")) : "";
 
+  /** Resolve contas como "100+20" nos campos antes de enviar (lança Error em português se inválido). */
   function corpo() {
-    return { tipo, codigoempresa: codigo, competencia, rendimento, demaisReceitas: demais, dividendos, retencao };
+    return {
+      tipo, codigoempresa: codigo, competencia,
+      rendimento: resolverCampo(rendimento, "Rendimentos"),
+      demaisReceitas: resolverCampo(demais, tipo === "ganho-capital" ? "Ganho de capital" : "Demais receitas"),
+      dividendos: resolverCampo(dividendos, "Dividendos"),
+      retencao: resolverCampo(retencao, "Retenção"),
+    };
   }
 
   async function chamar(url: string, body: object) {
@@ -138,11 +146,25 @@ export default function InformeRendimentos({
     } finally { setOcupado(false); }
   }
 
+  /** Enter ou sair do campo: "100+20" vira "120,00"; conta inválida ou negativa mostra o erro. */
+  function aplicarConta(v: string, set: (s: string) => void, rotulo: string) {
+    if (v.trim() === "") return;
+    try {
+      const novo = resolverCampo(v, rotulo);
+      if (temConta(v)) { set(novo); setErro(null); setRes(null); }
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Conta inválida.");
+    }
+  }
+
   const money = (v: string, set: (s: string) => void, rotulo: string) => (
     <label style={campo}>
       {rotulo}
-      <input style={{ ...entrada, textAlign: "right" }} inputMode="decimal" placeholder="0,00" value={v}
-        onChange={(e) => { set(e.target.value.replace(/[^\d.,]/g, "")); setRes(null); }} />
+      <input style={{ ...entrada, textAlign: "right" }} inputMode="text" placeholder="0,00" value={v}
+        title="Aceita contas: 100+20 ou 90-10 e Enter"
+        onChange={(e) => { set(e.target.value.replace(/[^\d.,+\-\s]/g, "")); setRes(null); }}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); aplicarConta(v, set, rotulo); } }}
+        onBlur={() => aplicarConta(v, set, rotulo)} />
     </label>
   );
 
@@ -201,7 +223,7 @@ export default function InformeRendimentos({
           <button className="btn primary" disabled={ocupado || !codigo} onClick={simular}>
             {ocupado && !res ? "Consultando…" : "Simular"}
           </button>
-          <span style={{ fontSize: 12, color: "var(--muted, #667)" }}>Nada é gravado até você confirmar.</span>
+          <span style={{ fontSize: 12, color: "var(--muted, #667)" }}>Nada é gravado até você confirmar. Nos valores dá para digitar contas, como 100+20 ou 90-10, e apertar Enter.</span>
         </div>
       </div>
 
