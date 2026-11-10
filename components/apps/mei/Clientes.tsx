@@ -95,6 +95,7 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   const [encerrar, setEncerrar] = useState(false);
   const [editar, setEditar] = useState(false);
+  const [perguntaReativar, setPerguntaReativar] = useState(false);
 
   useEffect(() => {
     setTarefas(null); setOss(null); setObs(null);
@@ -108,11 +109,11 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) { setObs(obsEd); setObsEd(null); }
   }
-  async function reativar() {
-    if (!confirm(`Reativar ${m.cod} - ${m.razao}? (encerramento volta para 31/12/2100)`)) return;
-    // Reativar "só para controle" (envio pontual) não pode voltar a cobrar: o financeiro só é reativado
-    // quando a pessoa escolhe, ou depois pela O.S. de entrada.
-    const financeiro = confirm("Reativar também no FINANCEIRO (volta a cobrar mensalidade)?\n\nOK = sim, reativar o financeiro\nCancelar = não, só para controle (o financeiro continua inativo)");
+  function reativar() { setPerguntaReativar(true); }
+  // Reativar só no MEI (controle, DAS, nova O.S. de entrada) não pode voltar a cobrar: o financeiro só é
+  // reativado quando a pessoa escolhe isso explicitamente.
+  async function confirmarReativar(financeiro: boolean) {
+    setPerguntaReativar(false);
     const r = await api("POST", `/empresas/${m.cod}/reativar`, { corpo: { reativar_financeiro: financeiro }, idempotencia: `mei-reativar-${m.cod}-${hojeISO()}-${financeiro ? "fin" : "ctrl"}` });
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) mudou();
@@ -254,6 +255,21 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
         </div>
       )}
 
+      {perguntaReativar && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setPerguntaReativar(false)}>
+          <div style={{ background: "#fff", color: "#0f172a", borderRadius: 12, padding: 20, maxWidth: 460, width: "100%", boxShadow: "0 10px 30px rgba(0,0,0,.25)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 16 }}>Reativar {m.cod} - {m.razao}</h3>
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#475569" }}>O encerramento volta para 31/12/2100. Escolha se o financeiro também volta:</p>
+            <button style={{ ...st.btn, width: "100%", marginBottom: 8, textAlign: "left" }} onClick={() => confirmarReativar(false)}>
+              <b>Reativar só no MEI</b><br /><span style={{ fontSize: 12 }}>Financeiro continua inativo (sem mensalidade). Use para guias DAS, envios pontuais ou nova O.S. de entrada.</span>
+            </button>
+            <button style={{ ...st.btn, width: "100%", marginBottom: 8, textAlign: "left" }} onClick={() => confirmarReativar(true)}>
+              <b>Reativar no MEI e no financeiro</b><br /><span style={{ fontSize: 12 }}>Volta a cobrar a mensalidade do cadastro antigo.</span>
+            </button>
+            <button style={{ ...st.btnD, width: "100%" }} onClick={() => setPerguntaReativar(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {encerrar && <Encerramento m={m} fechar={() => setEncerrar(false)} mudou={mudou} />}
       {editar && <EditarDados m={m} fechar={() => setEditar(false)} mudou={mudou} />}
     </div>
