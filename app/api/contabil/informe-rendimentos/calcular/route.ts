@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasWriteKey, lancarInformeRendimentos } from "@/lib/questor";
+import { planoZerado } from "@/lib/informe-rendimentos";
 import { prepararInforme, ErroInforme } from "@/lib/informe-rendimentos-servico";
 import { jaLancado } from "@/lib/informe-rendimentos-log";
 import { exigirContabil } from "../_auth";
@@ -22,7 +23,10 @@ export async function POST(req: Request) {
     const p = await prepararInforme(corpo);
 
     let questor: { disponivel: boolean; motivo?: string; avisos?: string[]; ecf?: unknown[]; f100?: unknown[] };
-    if (!hasWriteKey()) {
+    if (planoZerado(p.plano)) {
+      // Informe zerado: nada vai para o Questor (só o aviso no Teams), então não há o que simular lá.
+      questor = { disponivel: true, avisos: [] };
+    } else if (!hasWriteKey()) {
       questor = { disponivel: false, motivo: "QUESTOR_WRITE_KEY não configurada no servidor." };
     } else {
       try {

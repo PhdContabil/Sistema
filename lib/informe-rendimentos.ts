@@ -196,8 +196,10 @@ export function validarEntrada(e: EntradaInforme, hoje = new Date()): EntradaInf
     out.rendimento = 0; out.dividendos = 0; out.retencao = 0;
     if (out.demaisReceitas <= 0) throw new InformeInvalido("Informe o valor do ganho de capital (maior que zero).");
   }
-  if (out.rendimento + out.demaisReceitas + out.dividendos + out.retencao <= 0) {
-    throw new InformeInvalido("Informe ao menos um valor maior que zero.");
+  // Informe de rendimentos pode ser lançado zerado, como no Access (chamado #1410):
+  // nada vai para o Questor, só o aviso zerado no Teams. Ver planoZerado().
+  if (out.rendimento + out.demaisReceitas + out.dividendos + out.retencao < 0) {
+    throw new InformeInvalido("Informe valores válidos.");
   }
   return out;
 }
@@ -213,6 +215,11 @@ export function validarEntrada(e: EntradaInforme, hoje = new Date()): EntradaInf
  *    crédito sobre a receita — como na tela do Questor.
  * Dividendos ficam sem incidência nos dois.
  */
+/** Plano sem nenhuma linha para o Questor (informe lançado zerado): só o aviso no Teams. */
+export function planoZerado(p: { ecf: unknown[]; f100: unknown[] }): boolean {
+  return p.ecf.length === 0 && p.f100.length === 0;
+}
+
 export function montarPlano(entrada: EntradaInforme, regime: Regime): PlanoInforme {
   const e = validarEntrada(entrada);
   const dataEcf = primeiroDiaDoMes(e.competencia);
@@ -273,7 +280,7 @@ export function montarPlano(entrada: EntradaInforme, regime: Regime): PlanoInfor
 
   if (e.retencao > 0) addEcf(OPERACAO_ECF.retencao, e.retencao, "IRRF retido (ECF)");
 
-  if (regime === "real") {
+  if (regime === "real" && (ecf.length > 0 || f100.length > 0)) {
     avisos.push("Lucro Real: os códigos de operação da ECF (45040, 45058 e 45118) vieram do Presumido e ainda não foram confirmados para este regime.");
   }
 

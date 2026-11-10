@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  regimeDeDescricao, tributo, montarPlano, ultimoDiaDoMes, validarEntrada, InformeInvalido,
+  regimeDeDescricao, tributo, montarPlano, planoZerado, ultimoDiaDoMes, validarEntrada, InformeInvalido,
   type EntradaInforme,
 } from "./informe-rendimentos.ts";
 
@@ -98,7 +98,7 @@ test("validação", () => {
   assert.throws(() => validarEntrada({ ...base, competencia: "2099-01" }), InformeInvalido);
   assert.throws(() => validarEntrada({ ...base, rendimento: -1 }), InformeInvalido);
   assert.throws(() => validarEntrada({ ...base, rendimento: Number.NaN }), InformeInvalido);
-  assert.throws(() => validarEntrada({ ...base, rendimento: 0 }), InformeInvalido);
+  assert.doesNotThrow(() => validarEntrada({ ...base, rendimento: 0 })); // zerado é permitido (#1410)
 });
 
 test("ganho de capital: só demais receitas (ECF 45058), sem F100, nos dois regimes", () => {
@@ -123,4 +123,21 @@ test("aluguéis foi encerrado: não se lança mais, em nenhum regime", () => {
 
 test("tipo inválido", () => {
   assert.throws(() => validarEntrada({ ...base, tipo: "outro" as never }), InformeInvalido);
+});
+
+test("informe zerado (#1410): aceita 0,00, não gera linha para o Questor nem aviso do Real", () => {
+  const zero = { ...base, rendimento: 0 };
+  for (const regime of ["presumido", "real"] as const) {
+    const p = montarPlano(zero, regime);
+    assert.equal(p.ecf.length, 0);
+    assert.equal(p.f100.length, 0);
+    assert.equal(planoZerado(p), true);
+    assert.deepEqual(p.avisos, []);
+  }
+  assert.equal(planoZerado(montarPlano(base, "presumido")), false);
+});
+
+test("zerado só vale para o informe; ganho de capital continua exigindo valor; negativo é recusado", () => {
+  assert.throws(() => montarPlano({ ...base, tipo: "ganho-capital", rendimento: 0, demaisReceitas: 0 }, "presumido"), InformeInvalido);
+  assert.throws(() => validarEntrada({ ...base, rendimento: -1 }), InformeInvalido);
 });

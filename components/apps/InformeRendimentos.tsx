@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatBRL } from "@/lib/conciliacao";
-import { ROTULO_TIPO, ROTULO_TIPO_ENCERRADO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
+import { planoZerado, ROTULO_TIPO, ROTULO_TIPO_ENCERRADO, type PlanoInforme, type TipoInforme } from "@/lib/informe-rendimentos";
 import PaginacaoLog, { LINHAS_POR_PAGINA } from "./PaginacaoLog";
 import FiltrosLog, { FILTRO_VAZIO, aplicarFiltro, type FiltroLog } from "./FiltrosLog";
 import type { LinhaLog } from "@/lib/informe-rendimentos-log";
@@ -120,13 +120,16 @@ export default function InformeRendimentos({
     if (!res) return;
     const p = res.plano;
     if (!window.confirm(
-      `Lançar no Questor?\n\nEmpresa ${p.codigoempresa} · ${res.regimeDescricao}\nCompetência ${p.competencia.split("-").reverse().join("/")}\n` +
-      `${p.ecf.length} lançamento(s) na ECF e ${p.f100.length} no F100.`
+      planoZerado(p)
+        ? `Lançar informe ZERADO?\n\nEmpresa ${p.codigoempresa} · ${res.regimeDescricao}\nCompetência ${p.competencia.split("-").reverse().join("/")}\n` +
+          "Nada será gravado no Questor; só o aviso zerado vai para o Teams."
+        : `Lançar no Questor?\n\nEmpresa ${p.codigoempresa} · ${res.regimeDescricao}\nCompetência ${p.competencia.split("-").reverse().join("/")}\n` +
+          `${p.ecf.length} lançamento(s) na ECF e ${p.f100.length} no F100.`
     )) return;
     setErro(null); setOk(null); setOcupado(true);
     try {
       const j = await chamar("/api/contabil/informe-rendimentos/lancar", { ...corpo(), confirmar: true });
-      setOk(j.repetido ? "Este lançamento já estava gravado no Questor — nada novo foi escrito." : "Informe lançado no Questor com sucesso." + (j.notificacao === "falhou" ? " Atenção: o aviso no Teams não foi enviado." : ""));
+      setOk(j.repetido ? "Este lançamento já estava gravado no Questor — nada novo foi escrito." : (j.zerado ? "Informe zerado registrado: nada foi gravado no Questor." : "Informe lançado no Questor com sucesso.") + (j.notificacao === "falhou" ? " Atenção: o aviso no Teams não foi enviado." : ""));
       setRes(null); setRendimento(""); setDemais(""); setDividendos(""); setRetencao("");
       const l = await fetch("/api/contabil/informe-rendimentos/log").then((r) => r.json()).catch(() => null);
       if (l?.log) setLog(l.log);
@@ -220,6 +223,9 @@ export default function InformeRendimentos({
           {res.plano.avisos.map((a) => <div key={a} className="banner">{a}</div>)}
           {(res.questor.avisos ?? []).map((a) => <div key={`q-${a}`} className="banner">Aviso do Questor: {a}</div>)}
           {res.motivoBloqueio && <div className="banner error">{res.motivoBloqueio}</div>}
+          {planoZerado(res.plano) && (
+            <div className="banner">Informe zerado: nada será gravado no Questor (ECF e F100). Só o aviso zerado vai para o Teams.</div>
+          )}
 
           <h3 style={{ fontSize: 14, margin: "8px 0" }}>ECF — OUTRAOPERACAOECF</h3>
           <div className="table-wrap" style={{ marginBottom: 14 }}>
@@ -263,7 +269,7 @@ export default function InformeRendimentos({
 
           <div style={{ marginTop: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn primary" disabled={ocupado || !res.gravacaoLiberada || !!res.jaLancadoEm} onClick={lancar}>
-              {ocupado ? "Lançando…" : "Lançar no Questor"}
+              {ocupado ? "Lançando…" : (planoZerado(res.plano) ? "Lançar zerado" : "Lançar no Questor")}
             </button>
             <span style={{ fontSize: 13 }}>
               PIS {reais(res.plano.totais.pis)} · COFINS {reais(res.plano.totais.cofins)}

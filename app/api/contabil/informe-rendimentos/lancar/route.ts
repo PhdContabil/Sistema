@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasWriteKey, lancarInformeRendimentos } from "@/lib/questor";
 import { prepararInforme, ErroInforme } from "@/lib/informe-rendimentos-servico";
+import { planoZerado } from "@/lib/informe-rendimentos";
 import { jaLancado, registrarLog } from "@/lib/informe-rendimentos-log";
 import { registrarLogInforme } from "@/lib/log-sharepoint";
 import { exigirContabil } from "../_auth";
@@ -38,7 +39,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const r = await lancarInformeRendimentos(p.plano, { dryRun: false, idempotencyKey: p.chave, usuario: email });
+    // Informe zerado (chamado #1410): não grava nada no Questor, mas segue o log e o aviso no Teams.
+    const zerado = planoZerado(p.plano);
+    const r: Awaited<ReturnType<typeof lancarInformeRendimentos>> = zerado
+      ? { ok: true, status: 200, corpo: { ok: true } as Awaited<ReturnType<typeof lancarInformeRendimentos>>["corpo"] }
+      : await lancarInformeRendimentos(p.plano, { dryRun: false, idempotencyKey: p.chave, usuario: email });
     if (!r.ok) {
       const msg = r.status === 404
         ? "A API do Questor ainda não tem o endpoint de informe de rendimentos. Nada foi gravado."
@@ -56,7 +61,7 @@ export async function POST(req: Request) {
       competencia: e.competencia, codigoempresa: e.codigoempresa, nomeEmpresa: p.nomeEmpresa,
       rendimento: e.rendimento, retencao: e.retencao, demaisReceitas: e.demaisReceitas, dividendos: e.dividendos,
     }, email)) === "falhou" ? "falhou" : "ok";
-    return NextResponse.json({ ok: true, repetido, ecf: r.corpo.ecf, f100: r.corpo.f100, avisos: r.corpo.avisos ?? [], notificacao });
+    return NextResponse.json({ ok: true, repetido, zerado, ecf: r.corpo.ecf, f100: r.corpo.f100, avisos: r.corpo.avisos ?? [], notificacao });
   } catch (e) {
     if (e instanceof ErroInforme) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[informe-rendimentos/lancar]", e);
