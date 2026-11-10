@@ -2423,3 +2423,62 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .nfse-acoes { white-space: nowrap; }
 .nfse-acoes .btn { margin-left: 4px; padding: 3px 8px; font-size: 12px; }
 .nfse-pausa .fp-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---- Financeiro > Termo de Confissão de Dívida ---- */
+.cd-grid { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .cd-grid { grid-template-columns: minmax(0, 1fr); } }
+.cd-passos { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cd-passo { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; box-shadow: var(--shadow); }
+.cd-passo h2 { margin: 0 0 2px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.cd-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
+.cd-dica { margin: 0 0 12px 30px; font-size: 12.5px; color: var(--muted); }
+.cd-contagem { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0 6px; font-size: 12.5px; color: var(--muted); }
+.cd-link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12.5px; cursor: pointer; margin-left: auto; }
+.cd-link:hover { text-decoration: underline; }
+.cd-lista { display: flex; flex-direction: column; gap: 6px; max-height: 380px; overflow: auto; }
+.cd-empresa { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; background: var(--surface); }
+.cd-empresa:hover { border-color: var(--accent); }
+.cd-empresa.on { background: var(--accent-soft); border-color: var(--accent); }
+.cd-empresa input { margin-top: 3px; }
+.cd-nome { display: block; font-weight: 500; line-height: 1.3; }
+.cd-cnpj { display: block; font-size: 12px; color: var(--muted); }
+.cd-tag { margin-left: 8px; font-size: 10.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-weight: 400; }
+.cd-vazio { color: var(--muted); font-size: 13px; padding: 8px 0; }
+.cd-emp { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.cd-emp:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+.cd-emp-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.cd-emp-topo h3 { margin: 0; font-size: 13px; min-width: 0; }
+.cd-sub { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cd-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cd-tab th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 6px; }
+.cd-tab td { padding: 3px 3px; }
+.cd-tab .search { min-width: 0; width: 100%; padding: 6px 8px; font-size: 13px; }
+.cd-gerar { margin-top: 8px; }
+.cd-gerar summary { cursor: pointer; color: var(--accent); font-size: 12.5px; }
+.cd-gerar-campos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; align-items: end; }
+@media (max-width: 520px) { .cd-gerar-campos { grid-template-columns: 1fr 1fr; } }
+.cd-duas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .cd-duas { grid-template-columns: 1fr; } }
+.cd-pilha { display: flex; flex-direction: column; gap: 10px; }
+.cd-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.cd-campo .search { min-width: 0; width: 100%; }
+.cd-resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.cd-resumo .card { min-width: 0; padding: 10px 12px; }
+.cd-resumo .card .v { font-size: 16px; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .cd-resumo { grid-template-columns: 1fr; } }
+.cd-previa { position: sticky; top: 12px; min-width: 0; }
+@media (max-width: 960px) { .cd-previa { position: static; } }
+.cd-previa-topo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cd-caixa { overflow: auto; max-height: calc(100vh - 150px); border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); padding: 16px; }
+@media (max-width: 960px) { .cd-caixa { max-height: none; } }
+/* a folha é sempre branca, nos dois temas: é o documento que vai para o PDF */
+.cd-folha { background: #fff; color: #111; font-family: "Times New Roman", Times, "Liberation Serif", serif; font-size: 13.5px; line-height: 1.55; max-width: 760px; margin: 0 auto; padding: clamp(24px, 6%, 64px); box-shadow: 0 1px 6px rgba(0,0,0,.18); min-height: 900px; }
+.cd-folha h1 { font-size: 17px; text-align: center; margin: 0 0 22px; font-weight: 700; }
+.cd-folha p { margin: 0 0 12px; text-align: justify; }
+.cd-folha .li { margin: 0 0 2px 22px; }
+.cd-folha .co { margin: 10px 0 0; font-weight: 700; }
+.cd-folha .tot { font-weight: 700; margin: 12px 0; }
+.cd-folha .dt { margin: 20px 0 0; }
+.cd-folha .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 46px; }
+.cd-folha .sign div { border-top: 1px solid #111; padding-top: 4px; text-align: center; font-size: 13px; min-height: 34px; }
+.cd-folha-vazia { text-align: center !important; color: #777; margin-top: 120px !important; }
