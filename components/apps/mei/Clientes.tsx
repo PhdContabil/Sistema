@@ -110,7 +110,10 @@ export function Ficha({ m, voltar, mudou, emitirNota }: { m: Mei; voltar: () => 
   }
   async function reativar() {
     if (!confirm(`Reativar ${m.cod} - ${m.razao}? (encerramento volta para 31/12/2100)`)) return;
-    const r = await api("POST", `/empresas/${m.cod}/reativar`, { idempotencia: `mei-reativar-${m.cod}-${hojeISO()}` });
+    // Reativar "só para controle" (envio pontual) não pode voltar a cobrar: o financeiro só é reativado
+    // quando a pessoa escolhe, ou depois pela O.S. de entrada.
+    const financeiro = confirm("Reativar também no FINANCEIRO (volta a cobrar mensalidade)?\n\nOK = sim, reativar o financeiro\nCancelar = não, só para controle (o financeiro continua inativo)");
+    const r = await api("POST", `/empresas/${m.cod}/reativar`, { corpo: { reativar_financeiro: financeiro }, idempotencia: `mei-reativar-${m.cod}-${hojeISO()}-${financeiro ? "fin" : "ctrl"}` });
     setMsg(resumoGravacao(r));
     if (r.status < 300 && !r.dryRunForcado) mudou();
   }
