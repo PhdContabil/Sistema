@@ -161,6 +161,9 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
   const emailAuto = false; // como no Paralegal: primeiro salva, depois a pessoa escolhe enviar ao Financeiro ou ao Geral
 
   const [baixado, setBaixado] = useState(false);
+  // Retorno à consultoria: cria um cadastro NOVO no financeiro (código novo) copiando o antigo, que fica
+  // baixado com o histórico — como no Access. Só para cliente baixado em O.S. nova.
+  const [retorno, setRetorno] = useState(false);
   useEffect(() => {
     if (!nova) return;
     const t = setTimeout(async () => {
@@ -191,7 +194,7 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
     setO((x) => ({ ...x, codigo: c.codigocliente, questor, razao: c.nome, cnpj: c.inscrfederal ?? "",
       logradouro: [c.tipologradouro, c.logradouro].filter(Boolean).join(" "), numero: c.numero ?? "", complemento: c.complemento ?? "", bairro: c.bairro ?? "",
       cidade: c.nomemunic ?? "", cep: c.cep ?? "", email: c.email ?? "", celular: c.telefone ?? "" }));
-    setBaixado(!!c.baixado);
+    setBaixado(!!c.baixado); setRetorno(!!c.baixado);
     setAchados([]); setBusca(""); setCobranca("profissional");
   }
 
@@ -218,10 +221,20 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
     if (!o.razao || !o.codigo) { setMsg({ ok: false, texto: "Escolha o cliente." }); return; }
     if (!o.cidade || !o.datainicio) { setMsg({ ok: false, texto: "Cidade e início dos trabalhos são obrigatórios (regra do Access)." }); return; }
     if (nova && !o.servico1) { setMsg({ ok: false, texto: "Informe ao menos o serviço 1." }); return; }
-    if (nova && (baixado || (m && !m.ativo)) && !confirm("Este cliente está inativo/baixado. A O.S. e a cobrança serão lançadas mesmo assim (o cadastro continua inativo). Continuar?")) return;
+    if (nova && baixado && retorno && cobranca === "profissional" && !confirm(`Retorno: vai CRIAR um cadastro novo no financeiro (cópia do ${o.codigo} - ${o.razao}) e lançar a O.S. e a cobrança nele. O cadastro antigo continua baixado, com o histórico. Continuar?`)) return;
+    if (nova && !(retorno && cobranca === "profissional") && (baixado || (m && !m.ativo)) && !confirm("Este cliente está inativo/baixado. A O.S. e a cobrança serão lançadas no cadastro antigo (que continua inativo). Continuar?")) return;
     if (!confirm(nova ? "Salvar a O.S. e lançar a cobrança no Questor?" : `Salvar as alterações da O.S. ${o.nos}? (a cobrança no Questor não é alterada, como no Access)`)) return;
     setSalvando(true); setLinhas([]);
     try {
+      let codNovo: number | null = null;
+      if (nova && baixado && retorno && cobranca === "profissional") {
+        const rr = await api<{ resultado?: { codigocliente?: number } ; codigocliente?: number }>("POST", `/cadastro/pessoa-financeiro/${o.codigo}/retorno`, { corpo: { codigoempresa_mei: o.questor ?? null }, idempotencia: `retorno-${o.codigo}-${o.data}` });
+        const rres = resumoGravacao(rr);
+        codNovo = Number(rr.dados?.resultado?.codigocliente ?? rr.dados?.codigocliente ?? 0) || null;
+        if (!rres.ok || !codNovo) { setMsg({ ok: false, texto: `Não foi possível criar o cadastro novo no financeiro: ${rres.texto}` }); return; }
+        o.codigo = codNovo; setO((x) => ({ ...x, codigo: codNovo! })); setBaixado(false);
+      }
+      const cobrado = codNovo ?? clienteCobrado;
       const r = nova
         ? await api<{ resultado?: OS }>("POST", "/mei/os", { corpo: camposOS(), idempotencia: `osmei-${o.codigo}-${o.data}-${o.servico1}-${totalCalc}` })
         : await api<{ resultado?: OS }>("PATCH", `/mei/os/${o.nos}`, { corpo: camposOS() });
@@ -230,31 +243,31 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
       const gravada = { ...o, ...(r.dados?.resultado ?? {}) } as OS;
       const out = [`O.S. ${gravada.nos ?? ""}: ${res.texto}`];
       // Cobrança no Questor (só na O.S. nova, como o ostroca).
-      if (nova && clienteCobrado) {
+      if (nova && cobrado) {
         for (let i = 0; i < 4; i++) {
           const cod = Number(servs[i]); const valor = Number(vals[i] ?? 0);
           if (!cod || (i > 0 && valor <= 0)) continue;
           const questor = o.questor ?? "";
           // Fixo: o Questor não aceita dois iguais no mesmo cliente com a mesma data de início
           // (vários MEIs do mesmo salão). Como o Access, usa o próximo dia livre.
-          const fixo = (dia: string) => api("POST", "/cadastro/servico-fixo", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, competinicialvalid: dia, valorservicofixo: valor, periodoservicofixo: PERIODO, compldescr: i === 0 ? `${questor} - ${String(o.razao).slice(0, 40)}` : String(questor), observacaoservicofixo: `${questor} - ${o.razao}`.slice(0, 250), codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-fixo-${cod}-${dia}` });
+          const fixo = (dia: string) => api("POST", "/cadastro/servico-fixo", { corpo: { codigocliente: cobrado, codigoservicoescrit: cod, competinicialvalid: dia, valorservicofixo: valor, periodoservicofixo: PERIODO, compldescr: i === 0 ? `${questor} - ${String(o.razao).slice(0, 40)}` : String(questor), observacaoservicofixo: `${questor} - ${o.razao}`.slice(0, 250), codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-fixo-${cod}-${dia}` });
           let diaFixo: string = String(o.datainicio);
           // Não duplica mensalidade: se este MEI já tem o mesmo serviço vigente nesse cliente, não lança.
           if (FIXOS.includes(cod) && questor) {
             try {
-              const j = await ler<{ dados: (Fixo & { codigocliente?: number; codigoempresa_mei?: number | null; competfinalvalid?: string | null })[] }>("/financeiro/servicos-fixos", { salao: clienteCobrado });
+              const j = await ler<{ dados: (Fixo & { codigocliente?: number; codigoempresa_mei?: number | null; competfinalvalid?: string | null })[] }>("/financeiro/servicos-fixos", { salao: cobrado });
               const vigente = (j.dados ?? []).find((x) => x.codigoservicoescrit === cod && Number(x.codigoempresa_mei) === Number(questor) && (!x.competfinalvalid || x.competfinalvalid >= String(o.datainicio)));
               if (vigente) {
-                out.push(`Cobrança serviço ${i + 1} (${cod}) NÃO lançada: o MEI ${questor} já tem essa mensalidade vigente no cliente ${clienteCobrado} desde ${String(vigente.competinicialvalid ?? "").split("-").reverse().join("/")} (${brl(vigente.valor)}). Se for reajuste, encerre a antiga no financeiro e lance a nova.`);
+                out.push(`Cobrança serviço ${i + 1} (${cod}) NÃO lançada: o MEI ${questor} já tem essa mensalidade vigente no cliente ${cobrado} desde ${String(vigente.competinicialvalid ?? "").split("-").reverse().join("/")} (${brl(vigente.valor)}). Se for reajuste, encerre a antiga no financeiro e lance a nova.`);
                 continue;
               }
             } catch { /* sem a conferência, segue e o Questor recusa duplicata na mesma data */ }
           }
           let rc: Awaited<ReturnType<typeof fixo>> = FIXOS.includes(cod)
             ? await fixo(diaFixo)
-            : await api("POST", "/cadastro/servico-variavel", { corpo: { codigocliente: clienteCobrado, codigoservicoescrit: cod, dataservvar: o.datainicio, qtdadeservvar: 1, valorunitservvar: valor, observservvar: `${questor} - ${String(o.razao).slice(0, 40)}`, codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-var-${cod}` });
+            : await api("POST", "/cadastro/servico-variavel", { corpo: { codigocliente: cobrado, codigoservicoescrit: cod, dataservvar: o.datainicio, qtdadeservvar: 1, valorunitservvar: valor, observservvar: `${questor} - ${String(o.razao).slice(0, 40)}`, codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-var-${cod}` });
           const x = resumoGravacao(rc);
-          out.push(`Cobrança serviço ${i + 1} (${cod}, ${FIXOS.includes(cod) ? "fixo mensal" : "variável"}, ${brl(valor)}, cliente ${clienteCobrado}): ${x.ok ? x.texto : mensagemErro(rc)}`);
+          out.push(`Cobrança serviço ${i + 1} (${cod}, ${FIXOS.includes(cod) ? "fixo mensal" : "variável"}, ${brl(valor)}, cliente ${cobrado}): ${x.ok ? x.texto : mensagemErro(rc)}`);
         }
       }
       setLinhas(out);
@@ -336,6 +349,12 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
         {grade(3, <>{campo("celular", "Celular")}{campo("indicacao", "Indicação")}{campo("tratadocom", "Tratado com")}</>)}
         {grade(3, <>{campo("usuario", "Colaborador")}</>)}
 
+        {nova && baixado && (
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "6px 0 10px", padding: 10, border: "1px solid #f59e0b", borderRadius: 8, background: "#fffbeb", color: "#78350f" }}>
+            <input type="checkbox" style={{ width: "auto", marginTop: 3 }} checked={retorno} onChange={(e) => setRetorno(e.target.checked)} />
+            <span><b>Retorno à consultoria: criar cadastro novo no financeiro</b><br />O cadastro {o.codigo} está baixado. Marcado: cria um código novo (cópia dos dados) e a cobrança vai nele; o antigo fica baixado com o histórico. Desmarcado: lança no cadastro antigo (serviço avulso).</span>
+          </label>
+        )}
         <h3 style={{ fontSize: 12 }}>Serviços</h3>
         {nova && (
           <div style={{ display: "flex", gap: 16, fontSize: 13, marginBottom: 10 }}>

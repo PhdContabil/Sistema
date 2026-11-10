@@ -27,7 +27,7 @@ export function gravacaoLiberada(recurso?: string): boolean {
 
 /** Qual recurso da trava uma rota da API usa. */
 export function recursoDaRota(caminho: string): string {
-  if (/^\/cadastro\/(empresa|pessoa-financeiro)$/.test(caminho)) return "cadastro";
+  if (/^\/cadastro\/(empresa|pessoa-financeiro)$/.test(caminho) || /^\/cadastro\/pessoa-financeiro\/\d+\/retorno$/.test(caminho)) return "cadastro";
   if (/^\/mei\/os/.test(caminho) || /^\/cadastro\/servico-(fixo|variavel)$/.test(caminho)) return "os";
   if (/^\/fiscal\/nota-servico(\/\d+\/\d+)?$/.test(caminho)) return "nota";
   if (/^\/mei\/credenciais/.test(caminho)) return "senhas";
@@ -62,6 +62,7 @@ const GRAVACAO: [string, RegExp][] = [
   ["DELETE", /^\/mei\/credenciais\/\d+$/],
   ["POST", /^\/empresas\/\d+\/(encerrar|reativar)$/],
   ["POST", /^\/cadastro\/(servico-fixo|servico-variavel|empresa|pessoa-financeiro)$/],
+  ["POST", /^\/cadastro\/pessoa-financeiro\/\d+\/retorno$/],
   ["PATCH", /^\/cadastro\/(estabelecimento|socio)\/\d+\/\d+$/],
   ["POST", /^\/fiscal\/nota-servico$/],
   ["PATCH", /^\/fiscal\/nota-servico\/\d+\/\d+$/],
