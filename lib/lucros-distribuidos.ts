@@ -72,6 +72,34 @@ export function sugerirIrrf(rendimento: number, competencia: string): { base: nu
   return { base: rendimento, imposto: dosCentavos(Math.round((centavos(rendimento) * ALIQUOTA_IRRF) / 100)) };
 }
 
+/**
+ * Cálculo reverso a partir do valor líquido (o que caiu na conta do sócio) —
+ * chamado #1411. Só há retenção quando o líquido passa de R$ 50.000,00 (e a
+ * competência é de 2026 em diante): aí o rendimento é o líquido ÷ 0,90, a base
+ * do IRRF é o rendimento e o imposto são 10% dele. O imposto sai de
+ * (rendimento − líquido) para o líquido bater exatamente em centavos; se
+ * existir um rendimento em que isso também seja 10% arredondado, ele é
+ * preferido. Até R$ 50.000,00 de líquido não há retenção: rendimento = líquido.
+ *
+ * Exemplo: líquido 55.555,00 → rendimento e base 61.727,78, imposto 6.172,78.
+ */
+export function desdobrarLiquido(liquido: number, competencia: string): { rendimento: number; base: number; imposto: number } {
+  const zero = { rendimento: 0, base: 0, imposto: 0 };
+  if (!Number.isFinite(liquido) || liquido <= 0) return zero;
+  const l = centavos(liquido);
+  const ano = Number(competencia.slice(0, 4));
+  if (!(liquido > LIMITE_IRRF) || !(ano >= ANO_INICIO_IRRF)) return { rendimento: dosCentavos(l), base: 0, imposto: 0 };
+
+  const taxa = ALIQUOTA_IRRF / 100;
+  const r0 = Math.round(l / (1 - taxa));
+  let r = r0;
+  for (const d of [0, 1, -1, 2, -2, 3, -3]) {
+    const c = r0 + d;
+    if (c - Math.round(c * taxa) === l) { r = c; break; }
+  }
+  return { rendimento: dosCentavos(r), base: dosCentavos(r), imposto: dosCentavos(r - l) };
+}
+
 export function validarEntrada(e: EntradaLucro): EntradaLucro {
   if (!Number.isInteger(e.codigoempresa) || e.codigoempresa <= 0) throw new LucroInvalido("Escolha a empresa.");
   if (!Number.isInteger(e.codigosocio) || e.codigosocio <= 0) throw new LucroInvalido("Escolha o sócio.");
