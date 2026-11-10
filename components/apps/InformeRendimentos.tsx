@@ -38,13 +38,15 @@ const data = (iso: string) => iso.split("-").reverse().join("/");
 const reais = (n: number) => `R$ ${formatBRL(n)}`;
 
 export default function InformeRendimentos({
-  empresas, logInicial, erroServidor,
+  empresas, logInicial, erroServidor, tipoFixo,
 }: {
   empresas: Array<{ codigo: number; nome: string }>;
   logInicial: LinhaLog[];
   erroServidor: string | null;
+  /** Aba própria de um tipo: esconde o seletor "Tipo" e mostra só o histórico desse tipo. */
+  tipoFixo?: TipoInforme;
 }) {
-  const [tipo, setTipo] = useState<TipoInforme>("rendimentos");
+  const [tipo, setTipo] = useState<TipoInforme>(tipoFixo ?? "rendimentos");
   const [busca, setBusca] = useState("");
   const [competencia, setCompetencia] = useState(mesAnterior());
   const [rendimento, setRendimento] = useState("");
@@ -174,7 +176,7 @@ export default function InformeRendimentos({
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", alignItems: "end" }}>
-          <label style={campo}>
+          {!tipoFixo && <label style={campo}>
             Tipo
             <select style={entrada} value={tipo}
               onChange={(e) => {
@@ -184,12 +186,12 @@ export default function InformeRendimentos({
               }}>
               {(Object.keys(ROTULO_TIPO) as TipoInforme[]).map((t) => <option key={t} value={t}>{ROTULO_TIPO[t]}</option>)}
             </select>
-          </label>
+          </label>}
           <label style={{ ...campo, gridColumn: "span 2" }}>
             Empresa (código ou nome)
-            <input style={entrada} list="informe-empresas" placeholder="Ex.: 1415" value={busca}
+            <input style={entrada} list={`informe-empresas-${tipoFixo ?? "todos"}`} placeholder="Ex.: 1415" value={busca}
               onChange={(e) => { setBusca(e.target.value); setRes(null); }} />
-            <datalist id="informe-empresas">
+            <datalist id={`informe-empresas-${tipoFixo ?? "todos"}`}>
               {empresas.map((e) => <option key={e.codigo} value={`${e.codigo} · ${e.nome}`} />)}
             </datalist>
           </label>
@@ -302,7 +304,9 @@ export default function InformeRendimentos({
 
       <h3 style={{ fontSize: 15, margin: "20px 0 8px" }}>Histórico de lançamentos ({logVisivel.length})</h3>
       <FiltrosLog filtro={filtroLog} onChange={(f) => { setFiltroLog(f); setPaginaLog(0); }} rotuloTipo="Tipo" placeholder="Buscar por empresa, código ou responsável"
-        opcoesTipo={[...Object.entries({ ...ROTULO_TIPO, ...ROTULO_TIPO_ENCERRADO }).map(([valor, rotulo]) => ({ valor, rotulo })), { valor: "historico", rotulo: "Histórico" }]}
+        opcoesTipo={tipoFixo
+          ? [{ valor: tipoFixo, rotulo: ROTULO_TIPO[tipoFixo] }]
+          : [...Object.entries({ ...ROTULO_TIPO, ...ROTULO_TIPO_ENCERRADO }).map(([valor, rotulo]) => ({ valor, rotulo })), { valor: "historico", rotulo: "Histórico" }]}
         total={log.length} exibidas={logVisivel.length} />
       <div className="table-wrap">
         <table className="grid">

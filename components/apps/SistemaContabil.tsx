@@ -6,11 +6,12 @@ import LucrosDistribuidos from "./LucrosDistribuidos";
 import type { LinhaLog } from "@/lib/informe-rendimentos-log";
 import type { LinhaLogLucro } from "@/lib/lucros-distribuidos-log";
 
-type Aba = "informe" | "lucros";
+type Aba = "informe" | "lucros" | "ganho";
 
 const ABAS: Array<{ id: Aba; rotulo: string }> = [
   { id: "informe", rotulo: "Informe de Rendimentos" },
   { id: "lucros", rotulo: "Lucros Distribuídos" },
+  { id: "ganho", rotulo: "Ganho de Capital" },
 ];
 
 /** Casca do app "Sistema Contábil": uma aba para cada formulário migrado do Access. */
@@ -37,9 +38,12 @@ export default function SistemaContabil({
           </button>
         ))}
       </div>
-      {/* As duas ficam montadas: trocar de aba não perde o que foi digitado. */}
+      {/* As abas ficam montadas: trocar de aba não perde o que foi digitado. */}
       <div hidden={aba !== "informe"}>
-        <InformeRendimentos empresas={empresas} logInicial={logInforme} erroServidor={erroServidor} />
+        <InformeRendimentos empresas={empresas} logInicial={logInforme.filter((l) => l.tipo !== "ganho-capital")} erroServidor={erroServidor} tipoFixo="rendimentos" />
+      </div>
+      <div hidden={aba !== "ganho"}>
+        <InformeRendimentos empresas={empresas} logInicial={logInforme.filter((l) => l.tipo === "ganho-capital")} erroServidor={erroServidor} tipoFixo="ganho-capital" />
       </div>
       <div hidden={aba !== "lucros"}>
         <LucrosDistribuidos empresas={empresas} logInicial={logLucros} erroServidor={erroServidor} />
