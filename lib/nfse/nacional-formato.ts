@@ -12,7 +12,8 @@ export interface ConfigNacional {
   serie: string;            // 1..49999 (aplicativo próprio)
   cTribNac: string;         // 6 dígitos
   cNBS: string;             // 9 dígitos
-  pTotTribSN: number;       // % aproximado dos tributos do Simples
+  opSimpNac: 1 | 2 | 3;     // 1 não optante, 2 MEI, 3 ME/EPP
+  pTotTribSN: number;       // % aproximado dos tributos do Simples (só ME/EPP)
   verAplic: string;
 }
 
@@ -24,6 +25,7 @@ export const PHD_NACIONAL: Omit<ConfigNacional, "ambiente" | "pTotTribSN"> = {
   serie: "1",
   cTribNac: "171901", // item 17.19 (contabilidade), desdobro 01 — CTN 171901000
   cNBS: "113022100",
+  opSimpNac: 3,
   verAplic: "NucleoContabil1",
 };
 
@@ -74,13 +76,24 @@ export function dhEmiAgora(agora = new Date()): string {
   return t.toISOString().slice(0, 19) + "-03:00";
 }
 
+/** O que falta na configuração da empresa para poder emitir. */
+export function problemasConfig(c: ConfigNacional): string[] {
+  const p: string[] = [];
+  if (dig(c.cnpj).length !== 14) p.push("CNPJ");
+  if (dig(c.cLocEmi).length !== 7) p.push("código IBGE do município (7 dígitos)");
+  if (dig(c.cTribNac).length !== 6) p.push("código de tributação nacional (6 dígitos)");
+  if (!(Number(c.serie) >= 1 && Number(c.serie) <= 49999)) p.push("série da DPS (1 a 49999)");
+  if (c.opSimpNac === 3 && !(c.pTotTribSN > 0)) p.push("% aproximado de tributos do Simples");
+  return p;
+}
+
 /** Problemas que a Sefin recusaria — barrados antes de enviar. */
-export function validarNac(n: NotaNac, hoje: string): string[] {
+export function validarNac(n: NotaNac, hoje: string, cnpjPrestador: string = PHD_NACIONAL.cnpj): string[] {
   const p: string[] = [];
   const t = n.tomador;
   const doc = dig(t.cpf_cnpj);
   if (doc.length !== 11 && doc.length !== 14) p.push("CPF/CNPJ do tomador inválido");
-  if (doc === PHD_NACIONAL.cnpj) p.push("Tomador igual ao prestador");
+  if (doc === cnpjPrestador) p.push("Tomador igual ao prestador");
   if (!t.razao_social.trim()) p.push("Nome do tomador vazio");
   if (doc.length === 14) {
     if (dig(t.cep).length !== 8) p.push("CEP do tomador inválido");
@@ -114,13 +127,13 @@ export function montarDps(n: NotaNac, c: ConfigNacional, dhEmi: string): { id: s
     + `<tpAmb>${c.ambiente}</tpAmb><dhEmi>${dhEmi}</dhEmi><verAplic>${txt(c.verAplic, 20)}</verAplic>`
     + `<serie>${Number(c.serie)}</serie><nDPS>${n.nDPS}</nDPS><dCompet>${n.dCompet}</dCompet>`
     + `<tpEmit>1</tpEmit><cLocEmi>${c.cLocEmi}</cLocEmi>`
-    + `<prest><CNPJ>${c.cnpj}</CNPJ>${c.im ? `<IM>${c.im}</IM>` : ""}<regTrib><opSimpNac>3</opSimpNac><regApTribSN>1</regApTribSN><regEspTrib>0</regEspTrib></regTrib></prest>`
+    + `<prest><CNPJ>${c.cnpj}</CNPJ>${c.im ? `<IM>${c.im}</IM>` : ""}<regTrib><opSimpNac>${c.opSimpNac}</opSimpNac>${c.opSimpNac === 3 ? "<regApTribSN>1</regApTribSN>" : ""}<regEspTrib>0</regEspTrib></regTrib></prest>`
     + `<toma>${tomaDoc}${im}<xNome>${txt(t.razao_social, 300)}</xNome>${end}${email}</toma>`
     + `<serv><locPrest><cLocPrestacao>${c.cLocEmi}</cLocPrestacao></locPrest>`
-    + `<cServ><cTribNac>${c.cTribNac}</cTribNac><xDescServ>${txt(n.descricao, 2000)}</xDescServ><cNBS>${c.cNBS}</cNBS></cServ>${info}</serv>`
+    + `<cServ><cTribNac>${c.cTribNac}</cTribNac><xDescServ>${txt(n.descricao, 2000)}</xDescServ>${dig(c.cNBS).length === 9 ? `<cNBS>${dig(c.cNBS)}</cNBS>` : ""}</cServ>${info}</serv>`
     + `<valores><vServPrest><vServ>${n.valor.toFixed(2)}</vServ></vServPrest>`
     + `<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>`
-    + `<totTrib><pTotTribSN>${c.pTotTribSN.toFixed(2)}</pTotTribSN></totTrib></trib></valores>`
+    + (c.opSimpNac === 3 ? `<totTrib><pTotTribSN>${c.pTotTribSN.toFixed(2)}</pTotTribSN></totTrib>` : `<totTrib><indTotTrib>0</indTotTrib></totTrib>`) + `</trib></valores>`
     + `</infDPS></DPS>`;
   return { id, xml };
 }

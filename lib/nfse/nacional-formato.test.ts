@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test lib/nfse/nacional-formato.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { idDps, montarDps, validarNac, txt, lerRespostaSefin, dhEmiAgora, PHD_NACIONAL } from "./nacional-formato.ts";
+import { idDps, montarDps, validarNac, txt, lerRespostaSefin, dhEmiAgora, problemasConfig, PHD_NACIONAL } from "./nacional-formato.ts";
 
 const cfg = { ...PHD_NACIONAL, ambiente: 2 as const, pTotTribSN: 6 };
 const nota = {
@@ -40,4 +40,13 @@ test("resposta da Sefin", () => {
   const e = lerRespostaSefin({ Erros: [{ Codigo: "E0014", Descricao: "DPS já usada" }] });
   assert.equal(e.erros[0].codigo, "E0014");
   assert.match(dhEmiAgora(new Date("2026-11-10T13:00:00Z")), /^2026-11-10T09:59:00-03:00$/);
+});
+
+test("regime por empresa: não optante usa indTotTrib e não manda regApTribSN", () => {
+  const { xml } = montarDps(nota, { ...cfg, opSimpNac: 1, cNBS: "" }, "2026-11-10T10:00:00-03:00");
+  assert.match(xml, /<opSimpNac>1<\/opSimpNac><regEspTrib>0<\/regEspTrib>/);
+  assert.match(xml, /<indTotTrib>0<\/indTotTrib>/);
+  assert.doesNotMatch(xml, /cNBS|pTotTribSN|regApTribSN/);
+  assert.deepEqual(problemasConfig(cfg), []);
+  assert.equal(problemasConfig({ ...cfg, cLocEmi: "", pTotTribSN: 0 }).length, 2);
 });

@@ -1,47 +1,26 @@
 // Cliente do Padrão Nacional de NFS-e (Sefin Nacional) — SERVIDOR.
-// Certificado A1 da PHD só na Vercel (Sensitive):
-//   NFSE_CERT_PFX_B64  — o arquivo .pfx em base64
-//   NFSE_CERT_SENHA    — senha do .pfx
-//   NFSE_AMBIENTE      — "producao" para valer; qualquer outra coisa = produção restrita (teste)
-//   NFSE_PTOT_TRIB_SN  — % aproximado dos tributos do Simples (pTotTribSN)
+// Não lê ambiente nem banco: recebe a configuração e o certificado A1 da
+// empresa emissora (ver lib/nfse/empresas.ts).
 import https from "node:https";
 import zlib from "node:zlib";
 import forge from "node-forge";
 import { SignedXml } from "xml-crypto";
-import { PHD_NACIONAL, montarDps, dhEmiAgora, lerRespostaSefin, lerNfse, textoErros, type ConfigNacional, type NotaNac } from "./nacional-formato";
+import { montarDps, dhEmiAgora, lerRespostaSefin, lerNfse, textoErros, problemasConfig, type ConfigNacional, type NotaNac } from "./nacional-formato";
 
 const C14N = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315";
 
 export class NacionalError extends Error {}
 
-export function ambiente(): 1 | 2 {
-  return process.env.NFSE_AMBIENTE === "producao" ? 1 : 2;
+function sefinUrl(amb: 1 | 2): string {
+  return amb === 1 ? "https://sefin.nfse.gov.br/SefinNacional" : "https://sefin.producaorestrita.nfse.gov.br/SefinNacional";
 }
 
-function sefinUrl(): string {
-  return ambiente() === 1 ? "https://sefin.nfse.gov.br/SefinNacional" : "https://sefin.producaorestrita.nfse.gov.br/SefinNacional";
-}
-
-export function config(): ConfigNacional {
-  const p = Number(String(process.env.NFSE_PTOT_TRIB_SN ?? "").replace(",", "."));
-  return { ...PHD_NACIONAL, ambiente: ambiente(), pTotTribSN: Number.isFinite(p) && p > 0 ? p : 0 };
-}
-
-export function certificadoConfigurado(): boolean {
-  return Boolean(process.env.NFSE_CERT_PFX_B64 && process.env.NFSE_CERT_SENHA);
-}
-
-interface Cert { keyPem: string; certPem: string; chainPem: string; certB64: string; cnpj: string | null; validade: Date }
-let cacheCert: Cert | null = null;
-
+export interface Cert { keyPem: string; certPem: string; chainPem: string; certB64: string; cnpj: string | null; validade: Date; titular: string }
 /** Abre o A1 com node-forge (aceita PFX legado RC2/3DES que o OpenSSL 3 recusa). */
-export function certificado(): Cert {
-  if (cacheCert) return cacheCert;
-  const b64 = process.env.NFSE_CERT_PFX_B64, senha = process.env.NFSE_CERT_SENHA;
-  if (!b64 || !senha) throw new NacionalError("Certificado A1 da PHD não configurado (NFSE_CERT_PFX_B64 e NFSE_CERT_SENHA na Vercel).");
+export function abrirPfx(pfx: Buffer, senha: string): Cert {
   let p12: forge.pkcs12.Pkcs12Pfx;
   try {
-    p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(forge.util.createBuffer(Buffer.from(b64, "base64").toString("binary"))), false, senha);
+    p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(forge.util.createBuffer(pfx.toString("binary"))), false, senha);
   } catch (e) {
     const m = e instanceof Error ? e.message : "";
     throw new NacionalError(/mac|password|decrypt/i.test(m) ? "Senha do certificado A1 incorreta." : `Não consegui abrir o certificado A1: ${m}`);
@@ -56,20 +35,20 @@ export function certificado(): Cert {
   const certPem = forge.pki.certificateToPem(titular);
   const cadeia = certs.filter((c) => c !== titular).map((c) => forge.pki.certificateToPem(c));
   const cn = String(titular.subject.getField("CN")?.value ?? "");
-  cacheCert = {
+  return {
     keyPem: forge.pki.privateKeyToPem(key),
     certPem,
     chainPem: [certPem, ...cadeia].join(""),
     certB64: certPem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, ""),
     cnpj: /:(\d{14})\s*$/.exec(cn)?.[1] ?? null,
     validade: titular.validity.notAfter,
+    titular: cn,
   };
-  return cacheCert;
 }
 
-function conferirCertificado(c: Cert, cnpj: string) {
+export function conferirCertificado(c: Cert, cnpj: string) {
   if (c.validade.getTime() < Date.now()) throw new NacionalError(`Certificado A1 vencido em ${c.validade.toLocaleDateString("pt-BR")}.`);
-  if (c.cnpj && c.cnpj.slice(0, 8) !== cnpj.slice(0, 8)) throw new NacionalError(`O certificado é do CNPJ ${c.cnpj}, não da PHD.`);
+  if (c.cnpj && c.cnpj.slice(0, 8) !== cnpj.slice(0, 8)) throw new NacionalError(`O certificado é do CNPJ ${c.cnpj}, não desta empresa.`);
 }
 
 /** XMLDSig enveloped sobre <infDPS>, sem prefixo ds: (E1228), RSA-SHA1 + C14N. */
@@ -114,15 +93,14 @@ export type ResultadoNac =
   | { ok: false; erro: string; codigos: string[] };
 
 /** Assina e envia uma DPS. Uma por chamada (a Sefin não recebe lote). */
-export async function emitirNacional(n: NotaNac): Promise<ResultadoNac> {
-  const cfg = config();
-  if (!(cfg.pTotTribSN > 0)) throw new NacionalError("Falta o % aproximado de tributos do Simples (NFSE_PTOT_TRIB_SN na Vercel).");
-  const c = certificado();
+export async function emitirNacional(n: NotaNac, cfg: ConfigNacional, c: Cert): Promise<ResultadoNac> {
+  const falta = problemasConfig(cfg);
+  if (falta.length) throw new NacionalError(`Configuração da empresa incompleta: ${falta.join(", ")}.`);
   conferirCertificado(c, cfg.cnpj);
   const { id, xml } = montarDps(n, cfg, dhEmiAgora());
   const assinado = assinar(xml, id, c);
   const dpsXmlGZipB64 = zlib.gzipSync(Buffer.from(assinado, "utf8")).toString("base64");
-  const r = await requisitar("POST", `${sefinUrl()}/nfse`, { dpsXmlGZipB64 }, c, 60_000);
+  const r = await requisitar("POST", `${sefinUrl(cfg.ambiente)}/nfse`, { dpsXmlGZipB64 }, c, 60_000);
   const resp = lerRespostaSefin(r.json);
   if (resp.chave && resp.erros.length === 0) {
     const nfseXml = resp.nfseB64 ? zlib.gunzipSync(Buffer.from(resp.nfseB64, "base64")).toString("utf8") : "";
@@ -134,9 +112,8 @@ export async function emitirNacional(n: NotaNac): Promise<ResultadoNac> {
 }
 
 /** NFS-e já emitida, pela chave de acesso (GET {Sefin}/nfse/{chave}). */
-export async function consultarNfse(chave: string): Promise<string | null> {
-  const c = certificado();
-  const r = await requisitar("GET", `${sefinUrl()}/nfse/${chave}`, null, c, 30_000);
+export async function consultarNfse(chave: string, amb: 1 | 2, c: Cert): Promise<string | null> {
+  const r = await requisitar("GET", `${sefinUrl(amb)}/nfse/${chave}`, null, c, 30_000);
   const b64 = (r.json as Record<string, string> | null)?.nfseXmlGZipB64 ?? (r.json as Record<string, string> | null)?.NfseXmlGZipB64;
   return b64 ? zlib.gunzipSync(Buffer.from(b64, "base64")).toString("utf8") : null;
 }

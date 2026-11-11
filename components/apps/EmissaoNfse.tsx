@@ -50,9 +50,123 @@ async function acao(id: number, nome: string) {
   return r.json().catch(() => ({ error: `HTTP ${r.status}` }));
 }
 
+interface Empresa {
+  codigoempresa: number; nome: string; cnpj: string; im: string; c_loc_emi: string; serie: string;
+  c_trib_nac: string; c_nbs: string; op_simp_nac: number; p_tot_trib_sn: number | null; ambiente: string;
+  cert_validade: string | null; cert_cnpj: string | null; cert_titular: string | null;
+  cert_enviado_por: string | null; cert_enviado_em: string | null; falta: string[]; certOk: boolean;
+}
+
+/** Dados fiscais e certificado A1 da empresa. O certificado só sobe: nunca é mostrado de volta. */
+function ConfigEmpresa({ emp, onSalvo, onErro }: { emp: Empresa; onSalvo: (t: string) => void; onErro: (t: string) => void }) {
+  const [f, setF] = useState({
+    im: emp.im, c_loc_emi: emp.c_loc_emi, serie: emp.serie, c_trib_nac: emp.c_trib_nac, c_nbs: emp.c_nbs,
+    op_simp_nac: String(emp.op_simp_nac), p_tot_trib_sn: emp.p_tot_trib_sn != null ? String(emp.p_tot_trib_sn) : "", ambiente: emp.ambiente,
+  });
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [senha, setSenha] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const campo = (k: keyof typeof f, rot: string, dica?: string, larg = 150) => (
+    <label className="campo-inline"><span>{rot}</span>
+      <input className="search" style={{ width: larg }} value={f[k]} placeholder={dica} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
+    </label>
+  );
+
+  async function salvar() {
+    setSalvando(true);
+    const r = await fetch("/api/financeiro/nfse/empresas", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ empresa: emp.codigoempresa, config: { ...f, op_simp_nac: Number(f.op_simp_nac), p_tot_trib_sn: f.p_tot_trib_sn === "" ? null : f.p_tot_trib_sn } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    setSalvando(false);
+    if (!r.ok) onErro(j.error ?? "Falha ao salvar."); else onSalvo(`Configuração da ${emp.nome} salva.`);
+  }
+
+  async function enviarCert() {
+    if (!arquivo || !senha) { onErro("Escolha o arquivo .pfx e digite a senha."); return; }
+    setSalvando(true);
+    const fd = new FormData();
+    fd.set("empresa", String(emp.codigoempresa)); fd.set("arquivo", arquivo); fd.set("senha", senha);
+    const r = await fetch("/api/financeiro/nfse/empresas", { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({}));
+    setSalvando(false);
+    if (!r.ok) { onErro(j.error ?? "Falha ao enviar o certificado."); return; }
+    setArquivo(null); setSenha("");
+    onSalvo(`Certificado de ${j.titular} (CNPJ ${j.cnpj}) salvo. Válido até ${new Date(j.validade).toLocaleDateString("pt-BR")}.`);
+  }
+
+  async function removerCert() {
+    if (!window.confirm(`Remover o certificado da ${emp.nome}? Ela deixa de emitir até enviar outro.`)) return;
+    const r = await fetch("/api/financeiro/nfse/empresas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ empresa: emp.codigoempresa, removerCertificado: true }) });
+    if (r.ok) onSalvo("Certificado removido."); else onErro("Falha ao remover.");
+  }
+
+  return (
+    <section className="bloco-edit nfse-config">
+      <h3>Configuração — {emp.nome}</h3>
+      <div className="nfse-config-grid">
+        <div>
+          <h4>Dados para a nota</h4>
+          <div className="linha-add">
+            {campo("im", "Inscrição municipal", "", 120)}
+            {campo("c_loc_emi", "IBGE do município", "7 dígitos", 110)}
+            {campo("serie", "Série da DPS", "1", 70)}
+            {campo("c_trib_nac", "Cód. tributação nacional", "ex.: 171901", 130)}
+            {campo("c_nbs", "NBS (opcional)", "9 dígitos", 120)}
+          </div>
+          <div className="linha-add">
+            <label className="campo-inline"><span>Regime</span>
+              <select className="search" value={f.op_simp_nac} onChange={(e) => setF({ ...f, op_simp_nac: e.target.value })}>
+                <option value="3">Simples Nacional (ME/EPP)</option>
+                <option value="2">MEI</option>
+                <option value="1">Não optante (Presumido/Real)</option>
+              </select>
+            </label>
+            {f.op_simp_nac === "3" && campo("p_tot_trib_sn", "% tributos do Simples", "ex.: 6,00", 110)}
+            <label className="campo-inline"><span>Ambiente</span>
+              <select className="search" value={f.ambiente} onChange={(e) => setF({ ...f, ambiente: e.target.value })}>
+                <option value="homologacao">Teste (produção restrita)</option>
+                <option value="producao">Produção (vale de verdade)</option>
+              </select>
+            </label>
+          </div>
+          {f.op_simp_nac === "1" && <p className="sub-info" style={{ color: "#dc2626" }}>Atenção: para não optante o Núcleo ainda não calcula retenções federais (IRRF, CSRF, INSS) na nota.</p>}
+          <button className="btn primary" disabled={salvando} onClick={salvar}>Salvar dados</button>
+        </div>
+        <div>
+          <h4>Certificado A1 (e-CNPJ)</h4>
+          <p className="sub-info">
+            {emp.cert_validade
+              ? <>Atual: <strong>{emp.cert_titular}</strong> · CNPJ {emp.cert_cnpj} · válido até {new Date(emp.cert_validade).toLocaleDateString("pt-BR")} · enviado por {emp.cert_enviado_por?.split("@")[0]}</>
+              : "Nenhum certificado enviado."}
+          </p>
+          <div className="linha-add">
+            <label className="btn">{arquivo ? arquivo.name : "Escolher .pfx"}
+              <input type="file" accept=".pfx,.p12" hidden onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
+            </label>
+            <input className="search" type="password" autoComplete="new-password" placeholder="Senha do certificado" value={senha} onChange={(e) => setSenha(e.target.value)} />
+            <button className="btn primary" disabled={salvando || !arquivo || !senha} onClick={enviarCert}>Enviar certificado</button>
+            {emp.cert_validade && <button className="btn" disabled={salvando} onClick={removerCert}>Remover</button>}
+          </div>
+          <p className="sub-info">O sistema confere a senha, a validade e se o CNPJ é o da empresa. O arquivo fica guardado cifrado no servidor e não aparece mais na tela.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function EmissaoNfse() {
   const [notas, setNotas] = useState<Nota[]>([]);
-  const [cfg, setCfg] = useState({ credenciais: true, pTotTribSN: true, ambiente: 2, zen: true });
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [empresa, setEmpresa] = useState<number>(() => {
+    try { return Number(window.localStorage.getItem("nfse-empresa")) || 0; } catch { return 0; }
+  });
+  const [zen, setZen] = useState(true);
+  const [abrirCfg, setAbrirCfg] = useState(false);
+  const emp = empresas.find((e) => e.codigoempresa === empresa) ?? null;
+  // Mantém os nomes usados no resto da tela.
+  const cfg = { credenciais: !!emp?.certOk, pTotTribSN: !!emp && emp.falta.length === 0, ambiente: emp?.ambiente === "producao" ? 1 : 2, zen };
   const [filtro, setFiltro] = useState("abertas");
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
@@ -67,11 +181,12 @@ export default function EmissaoNfse() {
   const parar = useRef(false);
 
   const carregar = useCallback(async () => {
-    const r = await fetch("/api/financeiro/nfse", { cache: "no-store" });
+    const r = await fetch(`/api/financeiro/nfse${empresa ? `?empresa=${empresa}` : ""}`, { cache: "no-store" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { setMsg({ ok: false, texto: j.error ?? "Falha ao carregar." }); return; }
-    setNotas(j.notas ?? []); setCfg({ credenciais: !!j.credenciais, pTotTribSN: !!j.pTotTribSN, ambiente: Number(j.ambiente) || 2, zen: !!j.zen });
-  }, []);
+    setNotas(j.notas ?? []); setEmpresas(j.empresas ?? []); setZen(!!j.zen);
+    if (!empresa && j.empresa) setEmpresa(j.empresa);
+  }, [empresa]);
   useEffect(() => { carregar(); }, [carregar]);
 
   const visiveis = useMemo(() => notas.filter((n) =>
@@ -89,7 +204,7 @@ export default function EmissaoNfse() {
     const texto = await lerArquivo(f);
     const r = await fetch("/api/financeiro/nfse", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ acao: "csv", texto, arquivo: f.name, data_manual: dataManual || undefined }),
+      body: JSON.stringify({ acao: "csv", empresa, texto, arquivo: f.name, data_manual: dataManual || undefined }),
     });
     const j = await r.json().catch(() => ({}));
     setOcupado(false);
@@ -102,7 +217,7 @@ export default function EmissaoNfse() {
     setOcupado(true); setMsg(null);
     const r = await fetch("/api/financeiro/nfse", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ acao: "questor", ...faixa, rps_inicio: Number(faixa.rps_inicio) || undefined, rps_fim: Number(faixa.rps_fim) || undefined, data_manual: dataManual || undefined }),
+      body: JSON.stringify({ acao: "questor", empresa, ...faixa, rps_inicio: Number(faixa.rps_inicio) || undefined, rps_fim: Number(faixa.rps_fim) || undefined, data_manual: dataManual || undefined }),
     });
     const j = await r.json().catch(() => ({}));
     setOcupado(false);
@@ -122,7 +237,7 @@ export default function EmissaoNfse() {
   async function emitirSelecionadas() {
     const fila = notas.filter((n) => sel.has(n.id)).sort((a, b) => a.rps_numero - b.rps_numero);
     if (fila.length === 0) return;
-    if (!window.confirm(`Emitir ${fila.length} nota(s) no Portal Nacional${cfg.ambiente === 1 ? " (PRODUÇÃO)" : " (TESTE - produção restrita)"}, da RPS ${fila[0].rps_numero} à ${fila[fila.length - 1].rps_numero}?\n\nIsso gera NFS-e de verdade.`)) return;
+    if (!window.confirm(`Emitir ${fila.length} nota(s) da ${emp?.nome ?? "empresa"} no Portal Nacional${cfg.ambiente === 1 ? " (PRODUÇÃO)" : " (TESTE - produção restrita)"}, da RPS ${fila[0].rps_numero} à ${fila[fila.length - 1].rps_numero}?\n\nIsso gera NFS-e de verdade.`)) return;
     setOcupado(true); setMsg(null); parar.current = false;
     setAndamento(Object.fromEntries(fila.map((n) => [n.id, { estado: "fila" } as Andamento])));
     let feitas = 0;
@@ -184,17 +299,29 @@ export default function EmissaoNfse() {
 
   return (
     <>
-      <div className={`banner ${cfg.ambiente === 1 ? "" : "error"}`}>
-        Portal Nacional de NFS-e — ambiente <strong>{cfg.ambiente === 1 ? "PRODUÇÃO" : "PRODUÇÃO RESTRITA (teste, sem valor fiscal)"}</strong>.
-        {cfg.ambiente !== 1 && <> Para valer, defina <strong>NFSE_AMBIENTE=producao</strong> na Vercel.</>}
-      </div>
-      {!cfg.credenciais && (
-        <div className="banner error">
-          Falta o certificado A1 da PHD na Vercel: <strong>NFSE_CERT_PFX_B64</strong> (o .pfx em base64) e <strong>NFSE_CERT_SENHA</strong>.
-          Sem ele dá para importar e conferir, mas não emitir.
-        </div>
+      <section className="bloco-edit nfse-empresa">
+        <label>
+          <span className="sub-info">Empresa emissora</span>
+          <select className="search" value={empresa} disabled={ocupado}
+                  onChange={(e) => { const v = Number(e.target.value); setEmpresa(v); setSel(new Set()); setAndamento({}); try { window.localStorage.setItem("nfse-empresa", String(v)); } catch { /* sem storage */ } }}>
+            {empresas.map((e) => <option key={e.codigoempresa} value={e.codigoempresa}>{e.nome} — {e.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}</option>)}
+          </select>
+        </label>
+        {emp && (
+          <div className="nfse-empresa-sit">
+            <span className={`badge ${cfg.ambiente === 1 ? "sit-ok" : "sit-observar"}`}>{cfg.ambiente === 1 ? "Produção" : "Teste (produção restrita)"}</span>
+            <span className={`badge ${emp.certOk ? "sit-ok" : "sit-critico"}`}>
+              {emp.certOk ? `Certificado válido até ${new Date(emp.cert_validade!).toLocaleDateString("pt-BR")}` : emp.cert_validade ? "Certificado vencido" : "Sem certificado"}
+            </span>
+            {emp.falta.length > 0 && <span className="badge sit-critico">Falta: {emp.falta.join(", ")}</span>}
+          </div>
+        )}
+        <button className="btn" onClick={() => setAbrirCfg((v) => !v)}>{abrirCfg ? "Fechar configuração" : "Configuração"}</button>
+      </section>
+      {abrirCfg && emp && <ConfigEmpresa key={emp.codigoempresa} emp={emp} onSalvo={(t) => { setMsg({ ok: true, texto: t }); carregar(); }} onErro={(t) => setMsg({ ok: false, texto: t })} />}
+      {emp && (!emp.certOk || emp.falta.length > 0) && !abrirCfg && (
+        <div className="banner error">A {emp.nome} ainda não pode emitir: abra <strong>Configuração</strong> para enviar o certificado A1 e completar os dados. Dá para importar e conferir as RPS enquanto isso.</div>
       )}
-      {!cfg.pTotTribSN && <div className="banner error">Falta <strong>NFSE_PTOT_TRIB_SN</strong> na Vercel: o % aproximado de tributos do Simples que vai na nota.</div>}
       {!cfg.zen && <div className="banner">Token do Zen não configurado: os PDFs não serão publicados no Edoc.</div>}
       {msg && <div className={`banner ${msg.ok ? "" : "error"}`}>{msg.texto}</div>}
       {progresso && <div className="banner">{progresso} <button className="btn" onClick={() => { parar.current = true; }}>Parar depois desta</button></div>}

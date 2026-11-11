@@ -2484,3 +2484,12 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .cd-folha-vazia { text-align: center !important; color: #777; margin-top: 120px !important; }
 .nfse-tabela .nfse-data { width: 130px; padding: 2px 4px; font-size: 12px; }
 .nfse-tabela .nfse-hist { min-width: 170px; }
+.nfse-empresa { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 14px; }
+.nfse-empresa label { display: flex; flex-direction: column; gap: 4px; }
+.nfse-empresa select { min-width: 320px; }
+.nfse-empresa-sit { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.nfse-config { margin-bottom: 14px; }
+.nfse-config-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
+.nfse-config h4 { margin: 0 0 8px; font-size: 13px; }
+.nfse-config .linha-add { flex-wrap: wrap; margin-bottom: 10px; }
+@media (max-width: 900px) { .nfse-config-grid { grid-template-columns: 1fr; } }
