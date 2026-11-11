@@ -44,9 +44,12 @@ function paraNota(l: LinhaNfse): NotaNfse {
  * Grava as linhas importadas. RPS já emitida (ou marcada manual) não é
  * sobrescrita: reimportar o mesmo CSV é seguro.
  */
-export async function importar(linhas: LinhaBruta[], origem: "csv" | "questor", arquivo: string | null, email: string) {
+export async function importar(linhas: LinhaBruta[], origem: "csv" | "questor", arquivo: string | null, email: string, dataManual?: string | null) {
   const sb = db();
-  const notas = linhas.map((l) => linhaParaNota(l)).filter((x) => x.nota.rps_numero > 0);
+  // Data de prestação/competência informada na tela (exceção do mês atual) vale para todas as RPS do lote.
+  const manual = dataManual && /^\d{4}-\d{2}-\d{2}$/.test(dataManual) ? dataManual : null;
+  const notas = linhas.map((l) => linhaParaNota(l)).filter((x) => x.nota.rps_numero > 0)
+    .map((x) => (manual ? { ...x, nota: { ...x.nota, data_prestacao: manual } } : x));
   const numeros = notas.map((x) => x.nota.rps_numero);
   const { data: existentes } = await sb.from("nfse_notas").select("rps_serie,rps_numero,status").in("rps_numero", numeros.length ? numeros : [0]);
   const travadas = new Set((existentes ?? []).filter((e) => ["emitida", "manual", "emitindo"].includes(e.status)).map((e) => `${e.rps_serie}-${e.rps_numero}`));
@@ -129,6 +132,15 @@ export async function emitirNota(id: number, email: string): Promise<ResultadoEm
     await sb.from("nfse_notas").update({ status: "erro", erro: msg, atualizado_em: new Date().toISOString() }).eq("id", id);
     return { ok: false, aguardar: false, erro: msg };
   }
+}
+
+/** Troca a data de prestação (competência) de uma RPS ainda não emitida. */
+export async function alterarData(id: number, data: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error("Data inválida.");
+  if (data > new Date().toISOString().slice(0, 10)) throw new Error("A prefeitura não aceita data futura.");
+  const { data: r } = await db().from("nfse_notas").update({ data_prestacao: data, atualizado_em: new Date().toISOString() })
+    .eq("id", id).in("status", ["pendente", "erro", "ignorada"]).select("id");
+  if (!r?.length) throw new Error("Só dá para mudar a data de RPS ainda não emitida.");
 }
 
 /** VERFICARPS: a prefeitura valida a nota sem emitir. Bom para o primeiro teste. */

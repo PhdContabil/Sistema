@@ -51,6 +51,7 @@ export default function EmissaoNfse() {
   const [progresso, setProgresso] = useState<string | null>(null);
   const [pausa, setPausa] = useState<{ nota: Nota; erro: string } | null>(null);
   const [faixa, setFaixa] = useState({ rps_inicio: "", rps_fim: "", data_inicio: "", data_fim: "" });
+  const [dataManual, setDataManual] = useState("");
   const decisao = useRef<((d: "repetir" | "manual" | "parar") => void) | null>(null);
   const parar = useRef(false);
 
@@ -77,7 +78,7 @@ export default function EmissaoNfse() {
     const texto = await lerArquivo(f);
     const r = await fetch("/api/financeiro/nfse", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ acao: "csv", texto, arquivo: f.name }),
+      body: JSON.stringify({ acao: "csv", texto, arquivo: f.name, data_manual: dataManual || undefined }),
     });
     const j = await r.json().catch(() => ({}));
     setOcupado(false);
@@ -90,7 +91,7 @@ export default function EmissaoNfse() {
     setOcupado(true); setMsg(null);
     const r = await fetch("/api/financeiro/nfse", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ acao: "questor", ...faixa, rps_inicio: Number(faixa.rps_inicio) || undefined, rps_fim: Number(faixa.rps_fim) || undefined }),
+      body: JSON.stringify({ acao: "questor", ...faixa, rps_inicio: Number(faixa.rps_inicio) || undefined, rps_fim: Number(faixa.rps_fim) || undefined, data_manual: dataManual || undefined }),
     });
     const j = await r.json().catch(() => ({}));
     setOcupado(false);
@@ -205,7 +206,16 @@ export default function EmissaoNfse() {
           <input className="search" type="date" value={faixa.data_fim} onChange={(e) => setFaixa({ ...faixa, data_fim: e.target.value })} title="até" />
           <button className="btn" disabled={ocupado} onClick={buscarQuestor}>Buscar no Questor</button>
         </div>
-        <p className="sub-info">Reimportar o mesmo arquivo é seguro: RPS já emitida não é tocada.</p>
+        <div className="nfse-import" style={{ marginTop: 10 }}>
+          <span className="sub-info"><strong>Data de prestação / competência</strong> (opcional, exceção do mês atual):</span>
+          <input className="search" type="date" value={dataManual} max={new Date().toISOString().slice(0, 10)}
+                 onChange={(e) => setDataManual(e.target.value)} title="Vale para todas as RPS importadas agora" />
+          {dataManual && <button className="btn" onClick={() => setDataManual("")}>Usar a data do Questor</button>}
+        </div>
+        <p className="sub-info">
+          Se preencher a data, ela substitui a do Questor em todas as RPS desta importação (dá para ajustar uma a uma na lista).
+          Reimportar é seguro: RPS já emitida não é tocada.
+        </p>
       </section>
 
       <section className="bloco-edit" style={{ marginTop: 16 }}>
@@ -255,7 +265,18 @@ export default function EmissaoNfse() {
                              onChange={() => setSel((s) => { const x = new Set(s); if (x.has(n.id)) x.delete(n.id); else x.add(n.id); return x; })} />
                     </td>
                     <td className="mono">{n.rps_serie}-{n.rps_numero}</td>
-                    <td>{dataBR(n.data_prestacao)}</td>
+                    <td>
+                      {["pendente", "erro", "ignorada"].includes(n.status) ? (
+                        <input className="search nfse-data" type="date" value={n.data_prestacao} disabled={ocupado}
+                               max={new Date().toISOString().slice(0, 10)}
+                               onChange={async (e) => {
+                                 const r = await fetch(`/api/financeiro/nfse/${n.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "data", data: e.target.value }) });
+                                 const j = await r.json().catch(() => ({}));
+                                 if (!r.ok || j.error) setMsg({ ok: false, texto: j.error ?? "Falha ao mudar a data." });
+                                 carregar();
+                               }} />
+                      ) : dataBR(n.data_prestacao)}
+                    </td>
                     <td className="col-empresa">
                       <span className="emp-nome">{n.tomador.razao_social}</span>
                       <span className="obs">{n.tomador.cpf_cnpj} · {n.tomador.municipio}{n.tomador.email ? ` · ${n.tomador.email}` : ""}</span>

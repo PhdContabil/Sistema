@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { exigirFinanceiro } from "../_auth";
-import { emitirNota, baixarEPublicar, marcarManual, ignorar, verificarNota } from "@/lib/nfse/servico";
+import { emitirNota, baixarEPublicar, marcarManual, ignorar, verificarNota, alterarData } from "@/lib/nfse/servico";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,10 +10,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const email = await exigirFinanceiro();
   if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Financeiro." }, { status: 403 });
   const id = Number(params.id);
-  let b: { acao?: string };
+  let b: { acao?: string; data?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
   try {
     switch (b.acao) {
+      case "data": await alterarData(id, b.data ?? ""); return NextResponse.json({ ok: true });
       case "verificar": return NextResponse.json(await verificarNota(id));
       case "emitir": return NextResponse.json(await emitirNota(id, email));
       case "pdf": return NextResponse.json(await baixarEPublicar(id));
