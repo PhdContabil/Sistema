@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 import { exigirFinanceiro } from "../_auth";
-import { emitirNota, baixarEPublicar, marcarManual, ignorar, verificarNota, alterarData } from "@/lib/nfse/servico";
+import { emitirNota, baixarEPublicar, marcarManual, ignorar, verificarNota, alterarData, pdfDaNota } from "@/lib/nfse/servico";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** DANFSe (PDF) da nota emitida. */
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const email = await exigirFinanceiro();
+  if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Financeiro." }, { status: 403 });
+  try {
+    const { nome, bytes } = await pdfDaNota(Number(params.id));
+    return new NextResponse(new Uint8Array(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${nome}"` } });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Falha." }, { status: 400 });
+  }
+}
 
 /** Ações numa nota: verificar | emitir | pdf | manual | ignorar | voltar. */
 export async function POST(req: Request, { params }: { params: { id: string } }) {

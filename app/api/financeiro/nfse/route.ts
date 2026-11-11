@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { exigirFinanceiro } from "./_auth";
 import { importar, listar } from "@/lib/nfse/servico";
 import { lerCsv } from "@/lib/nfse/formato";
-import { credenciaisOk } from "@/lib/nfse/taboao";
+import { certificadoConfigurado, config } from "@/lib/nfse/nacional";
 import { getRpsNfse, QuestorError } from "@/lib/questor";
 import { hasQuestorZenToken } from "@/lib/questor-zen";
 
@@ -15,7 +15,8 @@ export async function GET(req: Request) {
   const u = new URL(req.url).searchParams;
   try {
     const notas = await listar({ status: u.get("status") || undefined, de: Number(u.get("de")) || undefined, ate: Number(u.get("ate")) || undefined });
-    return NextResponse.json({ notas, credenciais: credenciaisOk(), zen: hasQuestorZenToken() });
+    const cfg = config();
+    return NextResponse.json({ notas, credenciais: certificadoConfigurado(), pTotTribSN: cfg.pTotTribSN > 0, ambiente: cfg.ambiente, zen: hasQuestorZenToken() });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Falha." }, { status: 500 });
   }

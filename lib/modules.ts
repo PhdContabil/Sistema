@@ -69,7 +69,7 @@ export const MODULES: ModuleDef[] = [
     apps: [
       { name: "Conciliação de Honorários", desc: "Honorários contratados x movimento real de cada setor.", href: "/m/financeiro/conciliacao" },
       { name: "Análise de Dissídio", desc: "Perfil das empresas por ano e simulação do reajuste anual.", href: "/m/financeiro/dissidio" },
-      { name: "Emissão NFS-e PHD", desc: "Notas da PHD em Taboão: emite em lote, baixa o PDF e publica no Zen.", href: "/m/financeiro/nfse" },
+      { name: "Emissão NFS-e PHD", desc: "Notas da PHD no Portal Nacional: emite uma a uma, gera o PDF e publica no Zen.", href: "/m/financeiro/nfse" },
       { name: "Termo de Confissão de Dívida", desc: "Gera o contrato com as empresas e os boletos em aberto, em PDF.", href: "/m/financeiro/confissao-divida" },
       { name: "Contas a Pagar", desc: "Gestão de fornecedores e agenda de pagamentos." },
       { name: "Contas a Receber", desc: "Controle de recebimentos e inadimplência." },

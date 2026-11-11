@@ -13,7 +13,7 @@ export default function Page() {
         <div>
           <h1>Emissão NFS-e PHD</h1>
           <div className="desc">
-            Notas da PHD em Taboão da Serra: importa as RPS, emite na prefeitura em ordem, baixa o PDF e publica no Zen.
+            Notas da PHD pelo Portal Nacional de NFS-e: importa as RPS do Questor, emite uma a uma, gera o PDF e publica no Zen.
           </div>
         </div>
       </div>

@@ -41,6 +41,8 @@ export interface Tomador {
   municipio: string;
   uf: string;
   cep: string;
+  /** Código IBGE do município (Padrão Nacional). Vem da API do Questor; se faltar, sai do CEP. */
+  ibge?: string;
 }
 
 export interface NotaNfse {
@@ -240,6 +242,7 @@ export function linhaParaNota(l: LinhaBruta, prestador: Prestador = PRESTADOR_PH
         email: emailPrincipal(campo(l, "email")),
         tipo_logradouro: tipoLog, logradouro, numero: numeroEnd,
         complemento: campo(l, "complemento"), bairro, municipio, uf, cep,
+        ibge: soDigitos(campo(l, "codigo_ibge") || campo(l, "ibge")),
       },
     },
   };
