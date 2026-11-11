@@ -14,7 +14,16 @@ interface Nota {
   problemas: string[]; status: string; erro: string | null; protocolo: string | null;
   numero_nota: string | null; link_pdf: string | null; pdf_ok: boolean;
   zen_documento_id: string | null; zen_erro: string | null; arquivo: string | null;
+  origem: string; criado_em: string; emitido_em: string | null; emitido_por: string | null; questor_ok?: boolean;
 }
+
+/** Andamento ao vivo de cada nota durante o envio (uma por vez). */
+type Andamento = { estado: "fila" | "enviando" | "aguardando" | "ok" | "erro" | "pulada"; texto?: string };
+const ANDAMENTO: Record<Andamento["estado"], [string, string]> = {
+  fila: ["Na fila", "badge-soft"], enviando: ["Enviando…", "sit-observar"], aguardando: ["Aguardando prefeitura", "sit-observar"],
+  ok: ["Enviada ✓", "sit-ok"], erro: ["Falhou", "sit-critico"], pulada: ["Marcada manual", "sit-observar"],
+};
+const dataHora = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "");
 
 const ROTULO: Record<string, [string, string]> = {
   pendente: ["Pendente", "badge-soft"], emitindo: ["Emitindo…", "sit-observar"], emitida: ["Emitida", "sit-ok"],
@@ -50,6 +59,8 @@ export default function EmissaoNfse() {
   const [ocupado, setOcupado] = useState(false);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [pausa, setPausa] = useState<{ nota: Nota; erro: string } | null>(null);
+  const [andamento, setAndamento] = useState<Record<number, Andamento>>({});
+  const marcar = (id: number, a: Andamento) => setAndamento((m) => ({ ...m, [id]: a }));
   const [faixa, setFaixa] = useState({ rps_inicio: "", rps_fim: "", data_inicio: "", data_fim: "" });
   const [dataManual, setDataManual] = useState("");
   const decisao = useRef<((d: "repetir" | "manual" | "parar") => void) | null>(null);
@@ -113,29 +124,33 @@ export default function EmissaoNfse() {
     if (fila.length === 0) return;
     if (!window.confirm(`Emitir ${fila.length} nota(s) na prefeitura, da RPS ${fila[0].rps_numero} à ${fila[fila.length - 1].rps_numero}?\n\nIsso gera NFS-e de verdade.`)) return;
     setOcupado(true); setMsg(null); parar.current = false;
+    setAndamento(Object.fromEntries(fila.map((n) => [n.id, { estado: "fila" } as Andamento])));
     let feitas = 0;
     for (let i = 0; i < fila.length && !parar.current; i++) {
       const n = fila[i];
       const inicio = Date.now();
       let tentativa = 0;
       for (;;) {
-        setProgresso(`Emitindo RPS ${n.rps_numero} (${i + 1} de ${fila.length})${tentativa ? ` — esperando a prefeitura liberar a sequência (tentativa ${tentativa})` : ""}…`);
+        setProgresso(`Enviando RPS ${n.rps_numero} (${i + 1} de ${fila.length})${tentativa ? ` — esperando a prefeitura liberar a sequência (tentativa ${tentativa})` : ""}…`);
+        marcar(n.id, tentativa ? { estado: "aguardando", texto: `tentativa ${tentativa}` } : { estado: "enviando" });
         const r = await acao(n.id, "emitir");
-        if (r.ok) { feitas++; break; }
+        if (r.ok) { feitas++; marcar(n.id, { estado: "ok", texto: r.protocolo ? `protocolo ${r.protocolo}` : undefined }); break; }
         if (r.aguardar && Date.now() - inicio < ESPERA_SEQUENCIA_MAX && !parar.current) {
           tentativa++;
           await esperar(Math.min(5000 * tentativa, 60000));
           continue;
         }
+        marcar(n.id, { estado: "erro", texto: r.erro ?? r.error });
         const d = await perguntar(n, r.erro ?? r.error ?? "Falha.");
         if (d === "repetir") { tentativa = 0; continue; }
-        if (d === "manual") { await acao(n.id, "manual"); break; }
+        if (d === "manual") { await acao(n.id, "manual"); marcar(n.id, { estado: "pulada" }); break; }
         parar.current = true; break;
       }
       await carregar();
       if (i < fila.length - 1 && !parar.current) await esperar(INTERVALO_MS);
     }
     setProgresso(null); setOcupado(false); setSel(new Set());
+    setAndamento((m) => Object.fromEntries(Object.entries(m).filter(([, a]) => a.estado !== "fila")));
     setMsg({ ok: true, texto: `${feitas} nota(s) emitida(s). Agora use "Baixar PDFs e publicar no Zen" (a prefeitura pode levar alguns minutos para liberar).` });
     carregar();
   }
@@ -249,12 +264,13 @@ export default function EmissaoNfse() {
                 <th className="col-empresa">Tomador</th>
                 <th className="num">Valor</th>
                 <th className="c-res">Situação</th>
+                <th>Histórico</th>
                 <th>NFS-e / Zen</th>
                 <th className="c-res">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {visiveis.length === 0 && <tr><td colSpan={8} className="vazio">Nada aqui. Importe o CSV do nSQL para começar.</td></tr>}
+              {visiveis.length === 0 && <tr><td colSpan={9} className="vazio">Nada aqui. Importe o CSV do nSQL para começar.</td></tr>}
               {visiveis.map((n) => {
                 const [rot, cls] = ROTULO[n.status] ?? [n.status, "badge-soft"];
                 const marcavel = ["pendente", "erro"].includes(n.status) && n.problemas.length === 0;
@@ -284,7 +300,20 @@ export default function EmissaoNfse() {
                       {n.erro && n.status !== "emitida" && <span className="obs nfse-erro">{n.erro}</span>}
                     </td>
                     <td className="num">{brl(n.valor)}</td>
-                    <td className="c-res"><span className={`badge ${cls}`}>{rot}</span></td>
+                    <td className="c-res">
+                      {andamento[n.id] ? (
+                        <>
+                          <span className={`badge ${ANDAMENTO[andamento[n.id].estado][1]}`}>{ANDAMENTO[andamento[n.id].estado][0]}</span>
+                          {andamento[n.id].texto && <span className="obs">{andamento[n.id].texto}</span>}
+                        </>
+                      ) : <span className={`badge ${cls}`}>{rot}</span>}
+                    </td>
+                    <td className="nfse-hist">
+                      <span className="obs">Sincronizada {dataHora(n.criado_em)} ({n.origem === "questor" ? "Questor" : "CSV"})</span>
+                      {n.emitido_em && <span className="obs">{n.status === "manual" ? "Manual" : "Enviada à prefeitura"} {dataHora(n.emitido_em)}{n.emitido_por ? ` por ${n.emitido_por.split("@")[0]}` : ""}</span>}
+                      {n.pdf_ok && <span className="obs">PDF baixado</span>}
+                      {n.questor_ok && <span className="obs nfse-ok">Número gravado no Questor</span>}
+                    </td>
                     <td>
                       {n.numero_nota ? <span>NFS-e <strong>{n.numero_nota}</strong></span> : n.protocolo ? <span className="obs">protocolo {n.protocolo}</span> : <span className="dash">–</span>}
                       {n.link_pdf && <> · <a href={n.link_pdf} target="_blank" rel="noopener noreferrer">PDF</a></>}

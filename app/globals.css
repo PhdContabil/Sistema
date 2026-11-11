@@ -2483,3 +2483,4 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .cd-folha .sign div { border-top: 1px solid #111; padding-top: 4px; text-align: center; font-size: 13px; min-height: 34px; }
 .cd-folha-vazia { text-align: center !important; color: #777; margin-top: 120px !important; }
 .nfse-tabela .nfse-data { width: 130px; padding: 2px 4px; font-size: 12px; }
+.nfse-tabela .nfse-hist { min-width: 170px; }
