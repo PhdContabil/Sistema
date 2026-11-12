@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { linhaParaNota, type LinhaBruta, type NotaNfse } from "./formato";
 import { validarNac, type NotaNac } from "./nacional-formato";
 import { problemasConfig } from "./nacional-formato";
-import { emitirNacional, consultarNfse, ibgePorCep, conferirCertificado, NacionalError } from "./nacional";
+import { emitirNacional, consultarNfse, ibgePorCep, conferirCertificado, baixarDanfseOficial, NacionalError } from "./nacional";
 import { carregarEmpresa } from "./empresas";
 import { gerarDanfse } from "./danfse";
 import { gravarNfseNoQuestor } from "../questor";
@@ -265,7 +265,7 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
     if (!xml) return { status: "pendente", mensagem: "A Sefin ainda não devolveu o XML da NFS-e. Tente de novo em alguns minutos." };
     await sb.from("nfse_notas").update({ nfse_xml: xml }).eq("id", id);
   }
-  const bytes = await gerarDanfse(xml, l.chave_acesso, l.ambiente ?? 2);
+  const { bytes, origem } = await pdfOficialOuLocal(l, xml);
   await sb.from("nfse_notas").update({ pdf_ok: true, atualizado_em: new Date().toISOString() }).eq("id", id);
   const numero = l.numero_nota ?? String(l.rps_numero);
 
@@ -285,6 +285,10 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
     }
   }
 
+  // Para o Zen só vai a nota oficial do Portal; se ela não veio, fica pendente para tentar de novo.
+  if (origem !== "oficial" && !l.zen_documento_id && l.ambiente === 1) {
+    return { status: "pendente", mensagem: `NFS-e ${l.numero_nota ?? l.rps_numero}: emitida, mas o Portal ainda não devolveu o PDF oficial. Use "Refazer PDF/Zen pendentes" em alguns minutos.` };
+  }
   if (l.zen_documento_id) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok, já estava no Zen.` };
   if (l.ambiente !== 1) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok (teste — não vai para o Zen).` };
   if (!hasQuestorZenToken()) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok. Zen não configurado.` };
@@ -308,11 +312,31 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
   }
 }
 
+/**
+ * PDF da nota: primeiro o DANFSe OFICIAL do Portal Nacional; se o serviço não
+ * responder, um espelho gerado do XML (marcado como não oficial no histórico).
+ */
+async function pdfOficialOuLocal(l: LinhaNfse, xml: string): Promise<{ bytes: Buffer; origem: "oficial" | "local" }> {
+  const sb = db();
+  try {
+    const emp = await carregarEmpresa(l.codigoempresa);
+    const r = await baixarDanfseOficial(l.chave_acesso!, l.ambiente === 1 ? 1 : 2, emp.cert);
+    if (r.pdf) {
+      await sb.from("nfse_notas").update({ pdf_origem: "oficial", pdf_oficial_erro: null }).eq("id", l.id);
+      return { bytes: r.pdf, origem: "oficial" };
+    }
+    await sb.from("nfse_notas").update({ pdf_origem: "local", pdf_oficial_erro: r.motivo.slice(0, 400) }).eq("id", l.id);
+  } catch (e) {
+    await sb.from("nfse_notas").update({ pdf_origem: "local", pdf_oficial_erro: e instanceof Error ? e.message.slice(0, 400) : "falha" }).eq("id", l.id);
+  }
+  return { bytes: await gerarDanfse(xml, l.chave_acesso!, l.ambiente ?? 2), origem: "local" };
+}
+
 /** PDF da nota para abrir/baixar na tela. */
 export async function pdfDaNota(id: number): Promise<{ nome: string; bytes: Buffer }> {
   const l = await obter(id);
   if (!l.chave_acesso) throw new Error("Nota sem chave de acesso.");
   const xml = l.nfse_xml ?? (await consultarNfse(l.chave_acesso, (l.ambiente === 1 ? 1 : 2), (await carregarEmpresa(l.codigoempresa)).cert));
   if (!xml) throw new Error("XML da NFS-e ainda indisponível.");
-  return { nome: nomePdf(l.numero_nota ?? String(l.rps_numero), l.tomador.razao_social), bytes: await gerarDanfse(xml, l.chave_acesso, l.ambiente ?? 2) };
+  return { nome: nomePdf(l.numero_nota ?? String(l.rps_numero), l.tomador.razao_social), bytes: (await pdfOficialOuLocal(l, xml)).bytes };
 }

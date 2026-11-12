@@ -130,3 +130,27 @@ export async function ibgePorCep(cep: string): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * DANFSe OFICIAL, gerado pelo próprio Portal Nacional (ADN): GET /danfse/{chave}
+ * com o certificado da empresa. Devolve o PDF ou o motivo de não ter vindo
+ * (o serviço já ficou fora do ar em 2026; quem chama cai no PDF local).
+ */
+export function baixarDanfseOficial(chave: string, amb: 1 | 2, c: Cert): Promise<{ pdf: Buffer | null; motivo: string }> {
+  const base = amb === 1 ? "https://adn.nfse.gov.br" : "https://adn.producaorestrita.nfse.gov.br";
+  return new Promise((resolve) => {
+    const agent = new https.Agent({ key: c.keyPem, cert: c.chainPem, minVersion: "TLSv1.2", keepAlive: false });
+    const req = https.request(`${base}/danfse/${chave}`, { method: "GET", agent, timeout: 25_000, headers: { Accept: "application/pdf" } }, (res) => {
+      const partes: Buffer[] = [];
+      res.on("data", (d) => partes.push(d));
+      res.on("end", () => {
+        const b = Buffer.concat(partes);
+        if (res.statusCode === 200 && b.subarray(0, 4).toString() === "%PDF") resolve({ pdf: b, motivo: "" });
+        else resolve({ pdf: null, motivo: `HTTP ${res.statusCode}: ${b.subarray(0, 200).toString("utf8").replace(/\s+/g, " ")}` });
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("tempo esgotado")));
+    req.on("error", (e) => resolve({ pdf: null, motivo: e.message }));
+    req.end();
+  });
+}

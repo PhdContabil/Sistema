@@ -14,7 +14,7 @@ interface Nota {
   problemas: string[]; status: string; erro: string | null; protocolo: string | null;
   numero_nota: string | null; link_pdf: string | null; pdf_ok: boolean;
   zen_documento_id: string | null; zen_erro: string | null; arquivo: string | null;
-  origem: string; criado_em: string; emitido_em: string | null; emitido_por: string | null; questor_ok?: boolean;
+  origem: string; pdf_origem?: string | null; criado_em: string; emitido_em: string | null; emitido_por: string | null; questor_ok?: boolean;
 }
 
 /** Andamento ao vivo de cada nota durante o envio (uma por vez). */
@@ -265,7 +265,7 @@ export default function EmissaoNfse() {
     filtro === "todas" ? true
       : filtro === "abertas" ? ["pendente", "erro", "emitindo"].includes(n.status)
       : filtro === "emitidas" ? ["emitida", "manual"].includes(n.status)
-      : filtro === "sem-pdf" ? n.status === "emitida" && (!n.pdf_ok || (!n.zen_documento_id && cfg.zen))
+      : filtro === "sem-pdf" ? n.status === "emitida" && (!n.pdf_ok || n.pdf_origem === "local" || (!n.zen_documento_id && cfg.zen))
       : n.status === filtro), [notas, filtro, cfg.zen, faixaLista]);
 
   const emitiveis = visiveis.filter((n) => ["pendente", "erro"].includes(n.status) && n.problemas.length === 0);
@@ -353,7 +353,7 @@ export default function EmissaoNfse() {
   }
 
   async function baixarPdfs() {
-    const fila = notas.filter((n) => n.status === "emitida" && (!n.pdf_ok || (!n.zen_documento_id && cfg.zen)))
+    const fila = notas.filter((n) => n.status === "emitida" && (!n.pdf_ok || n.pdf_origem === "local" || (!n.zen_documento_id && cfg.zen)))
       .sort((a, b) => a.rps_numero - b.rps_numero);
     if (fila.length === 0) { setMsg({ ok: true, texto: "Nenhuma nota esperando PDF ou Zen." }); return; }
     setOcupado(true); setMsg(null);
@@ -459,7 +459,7 @@ export default function EmissaoNfse() {
         <div className="nfse-barra">
           <div className="nfse-filtros">
             {[["abertas", `A emitir (${contagem((n) => ["pendente", "erro", "emitindo"].includes(n.status))})`],
-              ["sem-pdf", `Sem PDF/Zen (${contagem((n) => n.status === "emitida" && (!n.pdf_ok || (!n.zen_documento_id && cfg.zen)))})`],
+              ["sem-pdf", `Sem PDF/Zen (${contagem((n) => n.status === "emitida" && (!n.pdf_ok || n.pdf_origem === "local" || (!n.zen_documento_id && cfg.zen)))})`],
               ["emitidas", `Emitidas (${contagem((n) => ["emitida", "manual"].includes(n.status))})`],
               ["ignorada", "Ignoradas"], ["todas", "Todas"]].map(([id, rot]) => (
               <button key={id} className={`btn${filtro === id ? " primary" : ""}`} onClick={() => setFiltro(id)}>{rot}</button>
@@ -540,7 +540,7 @@ export default function EmissaoNfse() {
                     <td className="nfse-hist">
                       <span className="obs">Sincronizada {dataHora(n.criado_em)} ({n.origem === "questor" ? "Questor" : n.origem === "avulsa" ? "avulsa" : "CSV"})</span>
                       {n.emitido_em && <span className="obs">{n.status === "manual" ? "Manual" : "Enviada ao Portal Nacional"} {dataHora(n.emitido_em)}{n.emitido_por ? ` por ${n.emitido_por.split("@")[0]}` : ""}</span>}
-                      {n.pdf_ok && <span className="obs">PDF baixado</span>}
+                      {n.pdf_ok && <span className={`obs ${n.pdf_origem === "local" ? "nfse-erro" : ""}`}>{n.pdf_origem === "oficial" ? "PDF oficial do Portal" : n.pdf_origem === "local" ? "PDF provisório (Portal não devolveu o oficial)" : "PDF gerado"}</span>}
                       {n.questor_ok && <span className="obs nfse-ok">Número gravado no Questor</span>}
                     </td>
                     <td>
