@@ -163,9 +163,12 @@ export async function syncTareffaToSupabase(
 
   // ---------- 5. Substituir atividades dos processos tocados ----------
   const touchedProcessoIds = new Set<number>();
+  // Só substitui as atividades quando o Tareffa devolve alguma. Processo que volta SEM atividades
+  // (resposta incompleta da API ou atividade apagada lá) não pode apagar o que já está no Núcleo —
+  // foi o que zerou o processo #1241 em 11/11/2026.
   for (const ind of indicators) {
     const id = procIdByExternal.get(ind.id);
-    if (id) touchedProcessoIds.add(id);
+    if (id && (ind.activities?.length ?? 0) > 0) touchedProcessoIds.add(id);
   }
   const procIdsArr = Array.from(touchedProcessoIds);
 
