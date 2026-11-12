@@ -177,6 +177,8 @@ export default function EmissaoNfse() {
   const marcar = (id: number, a: Andamento) => setAndamento((m) => ({ ...m, [id]: a }));
   const [faixa, setFaixa] = useState({ rps_inicio: "", rps_fim: "", data_inicio: "", data_fim: "" });
   const [dataManual, setDataManual] = useState("");
+  /** Faixa de RPS da última busca: a lista mostra só ela, até o usuário pedir todas. */
+  const [faixaLista, setFaixaLista] = useState<{ de: number; ate: number } | null>(null);
   const decisao = useRef<((d: "repetir" | "manual" | "parar") => void) | null>(null);
   const parar = useRef(false);
 
@@ -189,12 +191,12 @@ export default function EmissaoNfse() {
   }, [empresa]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const visiveis = useMemo(() => notas.filter((n) =>
+  const visiveis = useMemo(() => notas.filter((n) => !faixaLista || (n.rps_numero >= faixaLista.de && n.rps_numero <= faixaLista.ate)).filter((n) =>
     filtro === "todas" ? true
       : filtro === "abertas" ? ["pendente", "erro", "emitindo"].includes(n.status)
       : filtro === "emitidas" ? ["emitida", "manual"].includes(n.status)
       : filtro === "sem-pdf" ? n.status === "emitida" && (!n.pdf_ok || (!n.zen_documento_id && cfg.zen))
-      : n.status === filtro), [notas, filtro, cfg.zen]);
+      : n.status === filtro), [notas, filtro, cfg.zen, faixaLista]);
 
   const emitiveis = visiveis.filter((n) => ["pendente", "erro"].includes(n.status) && n.problemas.length === 0);
   const contagem = (f: (n: Nota) => boolean) => notas.filter(f).length;
@@ -222,8 +224,18 @@ export default function EmissaoNfse() {
     const j = await r.json().catch(() => ({}));
     setOcupado(false);
     if (!r.ok) { setMsg({ ok: false, texto: j.error ?? "Falha ao buscar no Questor." }); return; }
-    setMsg({ ok: true, texto: `${j.gravadas} RPS vieram do Questor${j.comProblema ? `, ${j.comProblema} com problema` : ""}.` });
+    const de = Number(faixa.rps_inicio) || 0, ate = Number(faixa.rps_fim) || de;
+    if (de) { setFaixaLista({ de, ate: Math.max(de, ate) }); setFiltro("todas"); }
+    setSel(new Set());
+    setMsg({ ok: true, texto: `${j.gravadas} RPS vieram do Questor${j.comProblema ? `, ${j.comProblema} com problema` : ""}${j.jaEmitidas ? `; ${j.jaEmitidas} já emitida(s), mantida(s) como estão` : ""}.` });
     carregar();
+  }
+
+  async function ignorarSelecionadas() {
+    if (sel.size === 0 || !window.confirm(`Tirar ${sel.size} RPS da lista de emissão? Elas vão para "Ignoradas" e dá para voltar depois.`)) return;
+    setOcupado(true);
+    for (const id of sel) await acao(id, "ignorar");
+    setOcupado(false); setSel(new Set()); carregar();
   }
 
   /** Para o lote e pergunta o que fazer (como o app Python). */
@@ -379,10 +391,17 @@ export default function EmissaoNfse() {
             <button className="btn primary" disabled={ocupado || sel.size === 0 || !cfg.credenciais || !cfg.pTotTribSN} onClick={emitirSelecionadas}>
               2. Emitir selecionadas ({sel.size})
             </button>
+            <button className="btn" disabled={ocupado || sel.size === 0} onClick={ignorarSelecionadas}>Ignorar selecionadas</button>
             <button className="btn" disabled={ocupado} onClick={baixarPdfs}>Refazer PDF/Zen pendentes</button>
           </div>
         </div>
 
+        {faixaLista && (
+          <div className="banner">
+            Mostrando só as RPS <strong>{faixaLista.de}</strong>{faixaLista.ate !== faixaLista.de ? <> a <strong>{faixaLista.ate}</strong></> : null} da última busca.{" "}
+            <button className="btn" onClick={() => { setFaixaLista(null); setFiltro("abertas"); setSel(new Set()); }}>Ver todas</button>
+          </div>
+        )}
         <div className="table-wrap" style={{ boxShadow: "none" }}>
           <table className="grid nfse-tabela">
             <thead>
