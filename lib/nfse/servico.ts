@@ -87,6 +87,57 @@ export async function importar(linhas: LinhaBruta[], origem: "csv" | "questor", 
   };
 }
 
+/** Notas avulsas (digitadas na tela) ficam numa série à parte, para não disputar número com as RPS do Questor. */
+export const SERIE_AVULSA = "AV";
+/** Série da DPS das avulsas: a seguinte à da empresa (1 -> 2). */
+const serieDpsAvulsa = (serieEmpresa: string) => String((Number(serieEmpresa) || 1) + 1);
+
+export interface DadosAvulsa {
+  documento?: string; nome?: string; email?: string; cep?: string; tipo_logradouro?: string; logradouro?: string;
+  numero?: string; complemento?: string; bairro?: string; municipio?: string; uf?: string;
+  valor?: number | string; data?: string; descricao?: string; observacao?: string;
+}
+
+/** Cria uma nota avulsa (consumidor final / manual). Entra na lista como pendente, para conferir e emitir. */
+export async function criarAvulsa(codigoempresa: number, d: DadosAvulsa, email: string): Promise<{ id: number; numero: number }> {
+  const sb = db();
+  const doc = String(d.documento ?? "").replace(/\D/g, "");
+  if (doc.length !== 0 && doc.length !== 11 && doc.length !== 14) throw new Error("CPF com 11 dígitos, CNPJ com 14, ou deixe em branco (consumidor final).");
+  const nome = String(d.nome ?? "").trim();
+  if (doc && !nome) throw new Error("Informe o nome do tomador.");
+  const bruto = String(d.valor ?? "").trim();
+  const valor = Number(bruto.includes(",") ? bruto.replace(/\./g, "").replace(",", ".") : bruto);
+  if (!(valor > 0)) throw new Error("Informe o valor da nota.");
+  const data = String(d.data ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data > hojeBR()) throw new Error("Data de prestação inválida (não pode ser futura).");
+  const descricao = String(d.descricao ?? "").trim();
+  if (!descricao) throw new Error("Descreva o serviço.");
+  const cep = String(d.cep ?? "").replace(/\D/g, "");
+  if (doc.length === 14 && (cep.length !== 8 || !String(d.logradouro ?? "").trim() || !String(d.bairro ?? "").trim())) {
+    throw new Error("Tomador com CNPJ precisa de CEP, logradouro e bairro.");
+  }
+  const tomador = {
+    cpf_cnpj: doc, razao_social: nome || "CONSUMIDOR FINAL", tipo_pessoa: doc.length === 14 ? "J" : "F",
+    inscricao_municipal: "", email: String(d.email ?? "").trim(), tipo_logradouro: String(d.tipo_logradouro ?? "").trim(),
+    logradouro: String(d.logradouro ?? "").trim(), numero: String(d.numero ?? "").trim() || "S/N",
+    complemento: String(d.complemento ?? "").trim(), bairro: String(d.bairro ?? "").trim(),
+    municipio: String(d.municipio ?? "").trim().toUpperCase(), uf: String(d.uf ?? "").trim().toUpperCase(), cep,
+  };
+  for (let tentativa = 0; tentativa < 4; tentativa++) {
+    const { data: ult } = await sb.from("nfse_notas").select("rps_numero").eq("codigoempresa", codigoempresa)
+      .eq("rps_serie", SERIE_AVULSA).order("rps_numero", { ascending: false }).limit(1);
+    const numero = (ult?.[0]?.rps_numero ?? 0) + 1;
+    const { data: nova, error } = await sb.from("nfse_notas").insert({
+      codigoempresa, rps_serie: SERIE_AVULSA, rps_numero: numero, origem: "avulsa", data_prestacao: data,
+      valor: Math.round(valor * 100) / 100, descricao, codigo_servico: "", observacao: String(d.observacao ?? "").trim() || null,
+      tomador, problemas: [], status: "pendente", importado_por: email,
+    }).select("id").single();
+    if (!error && nova) return { id: nova.id, numero };
+    if (!/duplicate|unique/i.test(error?.message ?? "")) throw new Error(error?.message ?? "Falha ao criar a nota.");
+  }
+  throw new Error("Não consegui reservar o número da nota avulsa. Tente de novo.");
+}
+
 export async function listar(filtro: { empresa?: number; status?: string; de?: number; ate?: number }) {
   let q = db().from("nfse_notas").select("*").eq("codigoempresa", filtro.empresa ?? 725).order("rps_numero", { ascending: false }).limit(500);
   if (filtro.status) q = q.eq("status", filtro.status);
@@ -121,6 +172,7 @@ export async function emitirNota(id: number, email: string): Promise<ResultadoEm
   try { emp = await carregarEmpresa(l.codigoempresa); }
   catch (e) { return { ok: false, aguardar: false, erro: e instanceof Error ? e.message : "Empresa sem configuração." }; }
   const nota = await paraNac(l);
+  if (l.rps_serie === SERIE_AVULSA) nota.serie = serieDpsAvulsa(emp.cfg.serie);
   const prob = validarNac(nota, hojeBR(), emp.cfg.cnpj);
   if (prob.length) return { ok: false, aguardar: false, erro: prob.join("; ") };
 
@@ -167,6 +219,7 @@ export async function verificarNota(id: number): Promise<{ status: "ok" | "erro"
   try {
     const { empresa, cfg, cert: c } = await carregarEmpresa(l.codigoempresa);
     const nota = await paraNac(l);
+    if (l.rps_serie === SERIE_AVULSA) nota.serie = serieDpsAvulsa(cfg.serie);
     const prob = [...(l.problemas ?? []), ...validarNac(nota, hojeBR(), cfg.cnpj)];
     const falta = problemasConfig(cfg);
     if (falta.length) prob.push(`Configuração da ${empresa.nome} incompleta: ${falta.join(", ")}`);
@@ -218,7 +271,7 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
 
   // Número da NFS-e de volta no RPS do Questor (só em produção; não trava o resto).
   // A rota de gravação do Questor só cobre o escritório da PHD Contábil (725).
-  if (l.ambiente === 1 && l.codigoempresa === 725 && l.numero_nota && !l.questor_ok) {
+  if (l.ambiente === 1 && l.codigoempresa === 725 && l.rps_serie !== SERIE_AVULSA && l.numero_nota && !l.questor_ok) {
     try {
       const r = await gravarNfseNoQuestor(l.rps_serie, l.rps_numero, {
         usuario: "nucleo-financeiro", numero_nfse: l.numero_nota, serie_nfse: "nacional",
@@ -235,6 +288,7 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
   if (l.zen_documento_id) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok, já estava no Zen.` };
   if (l.ambiente !== 1) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok (teste — não vai para o Zen).` };
   if (!hasQuestorZenToken()) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok. Zen não configurado.` };
+  if (!l.tomador.cpf_cnpj) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok (consumidor final, sem cliente no Zen).` };
   try {
     const cliente = await consultarCliente(l.tomador.cpf_cnpj);
     const arquivo = await uploadArquivo(nomePdf(numero, l.tomador.razao_social), bytes);

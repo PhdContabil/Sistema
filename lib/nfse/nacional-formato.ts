@@ -45,6 +45,8 @@ export interface TomadorNac {
 
 export interface NotaNac {
   nDPS: number;
+  /** Série da DPS desta nota (avulsas usam série própria). Padrão: a da empresa. */
+  serie?: string;
   dCompet: string;          // YYYY-MM-DD
   valor: number;
   descricao: string;
@@ -92,9 +94,10 @@ export function validarNac(n: NotaNac, hoje: string, cnpjPrestador: string = PHD
   const p: string[] = [];
   const t = n.tomador;
   const doc = dig(t.cpf_cnpj);
-  if (doc.length !== 11 && doc.length !== 14) p.push("CPF/CNPJ do tomador inválido");
+  // Sem documento = consumidor final não identificado: a DPS sai sem <toma>.
+  if (doc.length !== 0 && doc.length !== 11 && doc.length !== 14) p.push("CPF/CNPJ do tomador inválido");
   if (doc === cnpjPrestador) p.push("Tomador igual ao prestador");
-  if (!t.razao_social.trim()) p.push("Nome do tomador vazio");
+  if (doc.length > 0 && !t.razao_social.trim()) p.push("Nome do tomador vazio");
   if (doc.length === 14) {
     if (dig(t.cep).length !== 8) p.push("CEP do tomador inválido");
     if (dig(t.ibge).length !== 7) p.push("Código IBGE do município do tomador não encontrado");
@@ -110,7 +113,8 @@ export function validarNac(n: NotaNac, hoje: string, cnpjPrestador: string = PHD
 
 /** DPS 1.01 numa linha só (sem espaços entre tags, para não mudar o digest). */
 export function montarDps(n: NotaNac, c: ConfigNacional, dhEmi: string): { id: string; xml: string } {
-  const id = idDps(c, n.nDPS);
+  const serie = n.serie ?? c.serie;
+  const id = idDps({ ...c, serie }, n.nDPS);
   const t = n.tomador;
   const doc = dig(t.cpf_cnpj);
   const lgr = [t.tipo_logradouro, t.logradouro].filter(Boolean).join(" ");
@@ -125,10 +129,10 @@ export function montarDps(n: NotaNac, c: ConfigNacional, dhEmi: string): { id: s
 
   const xml = `<DPS xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infDPS Id="${id}">`
     + `<tpAmb>${c.ambiente}</tpAmb><dhEmi>${dhEmi}</dhEmi><verAplic>${txt(c.verAplic, 20)}</verAplic>`
-    + `<serie>${Number(c.serie)}</serie><nDPS>${n.nDPS}</nDPS><dCompet>${n.dCompet}</dCompet>`
+    + `<serie>${Number(serie)}</serie><nDPS>${n.nDPS}</nDPS><dCompet>${n.dCompet}</dCompet>`
     + `<tpEmit>1</tpEmit><cLocEmi>${c.cLocEmi}</cLocEmi>`
     + `<prest><CNPJ>${c.cnpj}</CNPJ>${c.im ? `<IM>${c.im}</IM>` : ""}<regTrib><opSimpNac>${c.opSimpNac}</opSimpNac>${c.opSimpNac === 3 ? "<regApTribSN>1</regApTribSN>" : ""}<regEspTrib>0</regEspTrib></regTrib></prest>`
-    + `<toma>${tomaDoc}${im}<xNome>${txt(t.razao_social, 300)}</xNome>${end}${email}</toma>`
+    + (doc ? `<toma>${tomaDoc}${im}<xNome>${txt(t.razao_social, 300)}</xNome>${end}${email}</toma>` : "")
     + `<serv><locPrest><cLocPrestacao>${c.cLocEmi}</cLocPrestacao></locPrest>`
     + `<cServ><cTribNac>${c.cTribNac}</cTribNac><xDescServ>${txt(n.descricao, 2000)}</xDescServ>${dig(c.cNBS).length === 9 ? `<cNBS>${dig(c.cNBS)}</cNBS>` : ""}</cServ>${info}</serv>`
     + `<valores><vServPrest><vServ>${n.valor.toFixed(2)}</vServ></vServPrest>`

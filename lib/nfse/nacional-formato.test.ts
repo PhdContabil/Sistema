@@ -50,3 +50,15 @@ test("regime por empresa: não optante usa indTotTrib e não manda regApTribSN",
   assert.deepEqual(problemasConfig(cfg), []);
   assert.equal(problemasConfig({ ...cfg, cLocEmi: "", pTotTribSN: 0 }).length, 2);
 });
+
+test("nota avulsa: série própria e consumidor final sem documento (sem <toma>)", () => {
+  const semDoc = { ...nota, serie: "2", nDPS: 1, tomador: { ...nota.tomador, cpf_cnpj: "", razao_social: "", cep: "", ibge: "", logradouro: "", bairro: "" } };
+  assert.deepEqual(validarNac(semDoc, "2026-11-10"), []);
+  const { id, xml } = montarDps(semDoc, cfg, "2026-11-10T10:00:00-03:00");
+  assert.ok(id.endsWith("00002" + "000000000000001"));
+  assert.match(xml, /<serie>2<\/serie><nDPS>1<\/nDPS>/);
+  assert.doesNotMatch(xml, /<toma>/);
+  const cpf = { ...semDoc, tomador: { ...semDoc.tomador, cpf_cnpj: "52998224725", razao_social: "Fulano" } };
+  assert.deepEqual(validarNac(cpf, "2026-11-10"), []);
+  assert.match(montarDps(cpf, cfg, "2026-11-10T10:00:00-03:00").xml, /<toma><CPF>52998224725<\/CPF><xNome>Fulano<\/xNome><email>a@b.com<\/email><\/toma>/);
+});

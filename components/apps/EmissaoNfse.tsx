@@ -57,6 +57,75 @@ interface Empresa {
   cert_enviado_por: string | null; cert_enviado_em: string | null; falta: string[]; certOk: boolean;
 }
 
+/** Nota digitada na tela: tomador com CPF, CNPJ ou sem documento (consumidor final). */
+function FormAvulsa({ empresa, onCriada, onErro }: { empresa: number; onCriada: (t: string) => void; onErro: (t: string) => void }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const [tipo, setTipo] = useState<"sem" | "cpf" | "cnpj">("sem");
+  const [f, setF] = useState({ documento: "", nome: "", email: "", cep: "", logradouro: "", numero: "", complemento: "", bairro: "", municipio: "", uf: "", valor: "", data: hoje, descricao: "", observacao: "" });
+  const [salvando, setSalvando] = useState(false);
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
+
+  async function buscarCep(cep: string) {
+    const d = cep.replace(/\D/g, "");
+    if (d.length !== 8) return;
+    try {
+      const j = await fetch(`https://viacep.com.br/ws/${d}/json/`).then((r) => r.json());
+      if (j && !j.erro) setF((x) => ({ ...x, logradouro: x.logradouro || j.logradouro || "", bairro: x.bairro || j.bairro || "", municipio: j.localidade || x.municipio, uf: j.uf || x.uf }));
+    } catch { /* preenche à mão */ }
+  }
+
+  async function criar(e: React.FormEvent) {
+    e.preventDefault();
+    setSalvando(true);
+    const r = await fetch("/api/financeiro/nfse", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: "avulsa", empresa, avulsa: { ...f, documento: tipo === "sem" ? "" : f.documento, nome: tipo === "sem" ? "" : f.nome } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    setSalvando(false);
+    if (!r.ok) onErro(j.error ?? "Falha ao criar a nota."); else onCriada(`Nota avulsa AV-${j.numero} criada. Ela está na lista "A emitir": confira, marque e emita.`);
+  }
+
+  return (
+    <form className="nfse-avulsa" onSubmit={criar}>
+      <div className="linha-add">
+        <label className="campo-inline"><span>Tomador</span>
+          <select className="search" value={tipo} onChange={(e) => setTipo(e.target.value as "sem" | "cpf" | "cnpj")}>
+            <option value="sem">Consumidor final (sem documento)</option>
+            <option value="cpf">Pessoa física (CPF)</option>
+            <option value="cnpj">Empresa (CNPJ)</option>
+          </select>
+        </label>
+        {tipo !== "sem" && <>
+          <label className="campo-inline"><span>{tipo === "cpf" ? "CPF" : "CNPJ"}</span><input className="search" style={{ width: 170 }} value={f.documento} onChange={set("documento")} required /></label>
+          <label className="campo-inline" style={{ flex: 1 }}><span>Nome / razão social</span><input className="search" style={{ width: "100%" }} value={f.nome} onChange={set("nome")} required /></label>
+          <label className="campo-inline"><span>E-mail (opcional)</span><input className="search" type="email" style={{ width: 220 }} value={f.email} onChange={set("email")} /></label>
+        </>}
+      </div>
+      {tipo !== "sem" && (
+        <div className="linha-add">
+          <label className="campo-inline"><span>CEP{tipo === "cnpj" ? "" : " (opcional)"}</span><input className="search" style={{ width: 110 }} value={f.cep} onChange={set("cep")} onBlur={(e) => buscarCep(e.target.value)} required={tipo === "cnpj"} /></label>
+          <label className="campo-inline" style={{ flex: 1 }}><span>Logradouro</span><input className="search" style={{ width: "100%" }} value={f.logradouro} onChange={set("logradouro")} required={tipo === "cnpj"} /></label>
+          <label className="campo-inline"><span>Número</span><input className="search" style={{ width: 80 }} value={f.numero} onChange={set("numero")} /></label>
+          <label className="campo-inline"><span>Complemento</span><input className="search" style={{ width: 120 }} value={f.complemento} onChange={set("complemento")} /></label>
+          <label className="campo-inline"><span>Bairro</span><input className="search" style={{ width: 160 }} value={f.bairro} onChange={set("bairro")} required={tipo === "cnpj"} /></label>
+          <label className="campo-inline"><span>Município / UF</span><input className="search" style={{ width: 190 }} value={f.municipio ? `${f.municipio}${f.uf ? ` / ${f.uf}` : ""}` : ""} readOnly placeholder="pelo CEP" /></label>
+        </div>
+      )}
+      <div className="linha-add">
+        <label className="campo-inline"><span>Valor (R$)</span><input className="search" style={{ width: 130 }} inputMode="decimal" placeholder="0,00" value={f.valor} onChange={set("valor")} required /></label>
+        <label className="campo-inline"><span>Data de prestação / competência</span><input className="search" type="date" max={hoje} value={f.data} onChange={set("data")} required /></label>
+      </div>
+      <label className="campo"><span>Descrição do serviço</span><textarea rows={3} value={f.descricao} onChange={set("descricao")} required maxLength={2000} /></label>
+      <label className="campo"><span>Observações na nota (opcional)</span><input className="search" style={{ width: "100%" }} value={f.observacao} onChange={set("observacao")} /></label>
+      <div className="fp-acoes">
+        <button className="btn primary" type="submit" disabled={salvando || !empresa}>{salvando ? "Criando…" : "Criar nota avulsa"}</button>
+        <span className="sub-info">A nota não é enviada agora: entra na lista como pendente, com numeração própria (AV), para você conferir e emitir.</span>
+      </div>
+    </form>
+  );
+}
+
 /** Dados fiscais e certificado A1 da empresa. O certificado só sobe: nunca é mostrado de volta. */
 function ConfigEmpresa({ emp, onSalvo, onErro }: { emp: Empresa; onSalvo: (t: string) => void; onErro: (t: string) => void }) {
   const [f, setF] = useState({
@@ -164,6 +233,7 @@ export default function EmissaoNfse() {
   });
   const [zen, setZen] = useState(true);
   const [abrirCfg, setAbrirCfg] = useState(false);
+  const [abrirAvulsa, setAbrirAvulsa] = useState(false);
   const emp = empresas.find((e) => e.codigoempresa === empresa) ?? null;
   // Mantém os nomes usados no resto da tela.
   const cfg = { credenciais: !!emp?.certOk, pTotTribSN: !!emp && emp.falta.length === 0, ambiente: emp?.ambiente === "producao" ? 1 : 2, zen };
@@ -379,6 +449,14 @@ export default function EmissaoNfse() {
 
       <section className="bloco-edit" style={{ marginTop: 16 }}>
         <div className="nfse-barra">
+          <h3 style={{ margin: 0 }}>Nota avulsa / consumidor final</h3>
+          <button className="btn" onClick={() => setAbrirAvulsa((v) => !v)}>{abrirAvulsa ? "Fechar" : "Nova nota avulsa"}</button>
+        </div>
+        {abrirAvulsa && <FormAvulsa empresa={empresa} onCriada={(t) => { setMsg({ ok: true, texto: t }); setAbrirAvulsa(false); setFaixaLista(null); setFiltro("abertas"); carregar(); }} onErro={(t) => setMsg({ ok: false, texto: t })} />}
+      </section>
+
+      <section className="bloco-edit" style={{ marginTop: 16 }}>
+        <div className="nfse-barra">
           <div className="nfse-filtros">
             {[["abertas", `A emitir (${contagem((n) => ["pendente", "erro", "emitindo"].includes(n.status))})`],
               ["sem-pdf", `Sem PDF/Zen (${contagem((n) => n.status === "emitida" && (!n.pdf_ok || (!n.zen_documento_id && cfg.zen)))})`],
@@ -460,7 +538,7 @@ export default function EmissaoNfse() {
                       ) : <span className={`badge ${cls}`}>{rot}</span>}
                     </td>
                     <td className="nfse-hist">
-                      <span className="obs">Sincronizada {dataHora(n.criado_em)} ({n.origem === "questor" ? "Questor" : "CSV"})</span>
+                      <span className="obs">Sincronizada {dataHora(n.criado_em)} ({n.origem === "questor" ? "Questor" : n.origem === "avulsa" ? "avulsa" : "CSV"})</span>
                       {n.emitido_em && <span className="obs">{n.status === "manual" ? "Manual" : "Enviada ao Portal Nacional"} {dataHora(n.emitido_em)}{n.emitido_por ? ` por ${n.emitido_por.split("@")[0]}` : ""}</span>}
                       {n.pdf_ok && <span className="obs">PDF baixado</span>}
                       {n.questor_ok && <span className="obs nfse-ok">Número gravado no Questor</span>}

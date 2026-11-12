@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { exigirFinanceiro } from "./_auth";
-import { importar, listar } from "@/lib/nfse/servico";
+import { importar, listar, criarAvulsa, type DadosAvulsa } from "@/lib/nfse/servico";
 import { lerCsv } from "@/lib/nfse/formato";
 import { listarEmpresas, paraConfig } from "@/lib/nfse/empresas";
 import { problemasConfig } from "@/lib/nfse/nacional-formato";
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const email = await exigirFinanceiro();
   if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Financeiro." }, { status: 403 });
-  let b: { acao?: string; texto?: string; arquivo?: string; data_inicio?: string; data_fim?: string; rps_inicio?: number; rps_fim?: number; data_manual?: string; empresa?: number };
+  let b: { acao?: string; texto?: string; arquivo?: string; data_inicio?: string; data_fim?: string; rps_inicio?: number; rps_fim?: number; data_manual?: string; empresa?: number; avulsa?: DadosAvulsa };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
   const empresa = Number(b.empresa) || 725;
   try {
@@ -40,6 +40,7 @@ export async function POST(req: Request) {
       if (linhas.length === 0) return NextResponse.json({ error: "O arquivo não tem linhas." }, { status: 400 });
       return NextResponse.json(await importar(linhas, "csv", b.arquivo ?? null, email, b.data_manual, empresa));
     }
+    if (b.acao === "avulsa") return NextResponse.json({ ok: true, ...(await criarAvulsa(empresa, b.avulsa ?? {}, email)) });
     if (b.acao === "questor") {
       const r = await getRpsNfse({ data_inicio: b.data_inicio, data_fim: b.data_fim, rps_inicio: b.rps_inicio, rps_fim: b.rps_fim, codigoempresa: empresa });
       return NextResponse.json(await importar(r.dados ?? [], "questor", null, email, b.data_manual, empresa));

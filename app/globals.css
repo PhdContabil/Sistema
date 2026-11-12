@@ -2493,3 +2493,4 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .nfse-config h4 { margin: 0 0 8px; font-size: 13px; }
 .nfse-config .linha-add { flex-wrap: wrap; margin-bottom: 10px; }
 @media (max-width: 900px) { .nfse-config-grid { grid-template-columns: 1fr; } }
+.nfse-avulsa { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; } .nfse-avulsa .linha-add { flex-wrap: wrap; }
