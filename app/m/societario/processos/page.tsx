@@ -6,6 +6,7 @@ import { listTiposAtivos } from "@/lib/societario/tiposProcesso";
 import { ProcessosFilter } from "./ProcessosFilter";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { isAdmin } from "@/lib/societario/options";
+import { lerEtapas, rotuloEtapa } from "@/lib/societario/etapaProcesso";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,11 @@ interface PageProps {
 }
 
 export default async function ProcessosPage({ searchParams }: PageProps) {
-  const [snap, tipos, user] = await Promise.all([
+  const [snap, tipos, user, etapas] = await Promise.all([
     loadAll(),
     listTiposAtivos(),
     getCurrentUser(),
+    lerEtapas(),
   ]);
   const admin = isAdmin(user?.email);
   const q = (searchParams.q || "").toLowerCase();
@@ -161,6 +163,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
                   <th className="px-4 py-2.5">Processo</th>
                   <th className="px-4 py-2.5">Responsável</th>
                   <th className="px-4 py-2.5">Status</th>
+                  <th className="px-4 py-2.5">Etapa</th>
                   <th className="px-4 py-2.5">Início</th>
                   <th className="px-4 py-2.5">Atualizado</th>
                 </tr>
@@ -185,6 +188,9 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
                     </td>
                     <td className="px-4 py-2.5">
                       <StatusPill status={p.status} />
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[180px]">
+                      {rotuloEtapa(etapas[String(p.id)]) || "—"}
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {formatDate(p.started_in)}

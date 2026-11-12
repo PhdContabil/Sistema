@@ -11,6 +11,8 @@ import { listTipos } from "@/lib/societario/tiposProcesso";
 import { listarModelos } from "@/lib/societario/tipoAtividades";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { isAdmin } from "@/lib/societario/options";
+import { lerEtapas, rotuloEtapa } from "@/lib/societario/etapaProcesso";
+import { EtapaProcesso } from "@/components/societario/EtapaProcesso";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
   if (!processo) notFound();
 
   const isLocal = processo.source === "local";
+  const etapa = (await lerEtapas())[String(processo.id)];
   const admin = isAdmin(user?.email);
   const [servTareffa, tiposProc, modelosProc] = await Promise.all([
     servicosDoProcesso(processo.id).catch(() => []),
@@ -112,6 +115,8 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
           <Field label="Próxima atividade" value={processo.nextActivity} />
         )}
       </section>
+
+      <EtapaProcesso id={Number(processo.id)} texto={etapa?.texto ?? ""} rotulo={rotuloEtapa(etapa)} />
 
       {/CANCELA/i.test(processo.process) && (
         <section className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between gap-3">
