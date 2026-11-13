@@ -43,6 +43,6 @@ export function emailCobranca(ps: ProcessoPainel[], responsavel: string, hoje: s
 <p>Olá, ${esc(nome)}!</p>
 <p>${recado ? esc(recado).replace(/\n/g, "<br>") : "Passando para lembrar das pendências abaixo, que estão atrasadas ou perto de vencer. Pode me dar um retorno sobre o andamento?"}</p>
 ${blocos}
-<p style="color:#64748b;font-size:12px;margin-top:18px">Cobrança enviada por ${esc(cobradoPor)} em ${dataBR(hoje)}, pelo Painel Gerencial do Núcleo. Responda diretamente a ${esc(cobradoPor)}.</p></div>`,
+<p style="color:#64748b;font-size:12px;margin-top:18px">Pedido enviado por ${esc(cobradoPor)} em ${dataBR(hoje)}, pelo Painel Gerencial do Núcleo. Responda diretamente a ${esc(cobradoPor)}.</p></div>`,
   };
 }

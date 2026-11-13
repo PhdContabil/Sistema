@@ -1,6 +1,6 @@
 "use client";
 // Painel Gerencial do Paralegal — só desenha o que a página calculou no servidor.
-// Ações: filtrar, paginar, baixar planilha, enviar por e-mail e cobrar o responsável.
+// Ações: filtrar, paginar, baixar planilha/PDF, enviar por e-mail e pedir retorno ao responsável.
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   dataBR, filtrarProcessos, processosParaCsv, ROTULO_ALERTA,
@@ -42,6 +42,12 @@ export default function PainelGerencial({ hoje, processos, resumo, responsaveis,
   const visiveis = lista.slice((atual - 1) * POR_PAGINA, atual * POR_PAGINA);
   useEffect(() => { setPagina(1); setAberto(null); }, [alerta, resp, st, busca]);
 
+  async function baixarPdf() {
+    const { gerarPdfPainel } = await import("./painel-pdf");
+    const partes = [alerta !== "todos" ? ROTULO_ALERTA[alerta] : "", resp, st, busca ? `"${busca}"` : ""].filter(Boolean);
+    gerarPdfPainel(lista, resumo, hoje, partes.join(" | "));
+  }
+
   function baixar() {
     const blob = new Blob([processosParaCsv(lista)], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -66,6 +72,7 @@ export default function PainelGerencial({ hoje, processos, resumo, responsaveis,
         <div className="pg-nota">Atualizado em {dataBR(hoje)}. Atrasos de mais de 30 dias ficam como “atraso antigo” e não entram nos alertas. {resumo.faltam} atividades ainda faltam no total.</div>
         <div className="pg-acoes">
           <button className="btn" onClick={baixar} disabled={lista.length === 0}>Baixar planilha</button>
+          <button className="btn" onClick={baixarPdf} disabled={lista.length === 0}>Baixar PDF</button>
           <button className="btn primary" onClick={() => setEnvio({ tipo: "relatorio" })} disabled={lista.length === 0}>Enviar por e-mail</button>
         </div>
       </div>
@@ -91,7 +98,7 @@ export default function PainelGerencial({ hoje, processos, resumo, responsaveis,
                   <td className={r.atrasado ? "pg-ruim" : ""}>{r.atrasado}</td><td>{r.vence2d}</td><td>{r.vence7d}</td>
                   <td>
                     {r.atrasado + r.vence2d + r.vence7d > 0 && (
-                      <button className="btn pg-mini" onClick={(e) => { e.stopPropagation(); setEnvio({ tipo: "cobrar", responsavel: r.responsavel }); }}>Cobrar</button>
+                      <button className="btn pg-mini" onClick={(e) => { e.stopPropagation(); setEnvio({ tipo: "cobrar", responsavel: r.responsavel }); }}>Pedir retorno</button>
                     )}
                   </td>
                 </tr>
@@ -141,7 +148,7 @@ export default function PainelGerencial({ hoje, processos, resumo, responsaveis,
                     <td>
                       <span className={`pg-tag ${p.alerta}`}>{ROTULO_ALERTA[p.alerta]}</span>
                       {COBRAVEL.includes(p.alerta) && (
-                        <button className="btn pg-mini" onClick={(e) => { e.stopPropagation(); setEnvio({ tipo: "cobrar", responsavel: p.responsavel, processoId: p.id, nome: p.nome }); }}>Cobrar</button>
+                        <button className="btn pg-mini" onClick={(e) => { e.stopPropagation(); setEnvio({ tipo: "cobrar", responsavel: p.responsavel, processoId: p.id, nome: p.nome }); }}>Pedir retorno</button>
                       )}
                     </td>
                   </tr>
@@ -203,14 +210,14 @@ function EnvioEmail({ envio, filtros, total, emails, meuEmail, onFechar }: {
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.erro || "Não foi possível enviar.");
       setEstado("ok");
-      setMsg(cobrar ? `Cobrança enviada (${j.processos} processo${j.processos === 1 ? "" : "s"}).` : `Relatório enviado com ${j.processos} processos.`);
+      setMsg(cobrar ? `Pedido de retorno enviado (${j.processos} processo${j.processos === 1 ? "" : "s"}).` : `Relatório enviado com ${j.processos} processos.`);
     } catch (e) { setEstado("erro"); setMsg(e instanceof Error ? e.message : "Erro ao enviar."); }
   }
 
   return (
     <div className="pg-fundo" onClick={onFechar}>
       <div className="pg-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <h3>{cobrar ? `Cobrar ${envio.responsavel}` : "Enviar relatório por e-mail"}</h3>
+        <h3>{cobrar ? `Pedir retorno a ${envio.responsavel}` : "Enviar relatório por e-mail"}</h3>
         <p className="pg-peq">
           {cobrar
             ? envio.processoId ? `Vai listar as pendências de ${envio.nome}.` : "Vai listar os processos atrasados ou que vencem em até 7 dias."
