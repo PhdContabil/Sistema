@@ -4,6 +4,7 @@ import { loadProcesso } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { AtividadesTable } from "./AtividadesTable";
+import { VoltarProcessos } from "../LembrarFiltros";
 import { StatusEditavel } from "@/components/societario/StatusEditavel";
 import { updateStatusAction, deleteAction, updateActivityAction, updateActivityObsAction, criarServicosTareffaAction, comunicarCancelamentoAction } from "./actions";
 import { ServicosTareffa } from "@/components/societario/ServicosTareffa";
@@ -43,12 +44,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link
-          href="/m/societario/processos"
-          className="text-sm text-brand-700 hover:underline"
-        >
-          ← Voltar para processos
-        </Link>
+        <VoltarProcessos className="text-sm text-brand-700 hover:underline" />
         <div className="flex gap-3">
           {isLocal && (
             <Link

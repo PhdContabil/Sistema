@@ -1,7 +1,8 @@
 "use client";
 // Guarda os filtros da lista de processos no navegador: ao abrir um processo e voltar
 // (ou entrar de novo pelo menu), a lista volta filtrada. Só some ao clicar em Limpar.
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const CHAVE = "soc-processos-filtros";
@@ -22,4 +23,11 @@ export function LembrarFiltros() {
   }, [qs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
+}
+
+/** "← Voltar para processos" já com os filtros guardados (sem piscar a lista inteira). */
+export function VoltarProcessos({ className }: { className?: string }) {
+  const [href, setHref] = useState("/m/societario/processos");
+  useEffect(() => { const q = ler(); if (q) setHref(`/m/societario/processos?${q}`); }, []);
+  return <Link href={href} className={className}>← Voltar para processos</Link>;
 }
