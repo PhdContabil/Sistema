@@ -72,6 +72,11 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  // Migração para o Núcleo (13/11/2026): o Societário do Tareffa não é mais a fonte. A sincronização
+  // fica desligada; para religar numa emergência: SOCIETARIO_SYNC_TAREFFA=on (sobrescreve edições do Núcleo!).
+  if (process.env.SOCIETARIO_SYNC_TAREFFA !== "on") {
+    return NextResponse.json({ ok: true, desligado: true, fetched: 0, inserted: 0, updated: 0, activities: 0, mensagem: "Sincronização com o Tareffa desligada: o Societário agora é só no Núcleo." });
+  }
   const { searchParams } = new URL(req.url);
   const windowsParam = Number(searchParams.get("windows") || "2");
   const modeParam = searchParams.get("mode") === "started" ? "started" : "updated";

@@ -79,7 +79,20 @@ function rowToProcesso(
   };
 }
 
-export async function sbListProcessos(): Promise<UnifiedProcesso[]> {
+/** Um processo só, com as atividades dele (tela do processo). */
+export async function sbGetProcesso(id: number): Promise<UnifiedProcesso | null> {
+  const sb = supabaseAdmin();
+  const [{ data: p, error: e1 }, { data: acts, error: e2 }] = await Promise.all([
+    sb.from("processos").select("*").eq("id", id).maybeSingle(),
+    sb.from("atividades").select("*").eq("processo_id", id).order("id", { ascending: true }),
+  ]);
+  if (e1) throw new Error(`Supabase processo: ${e1.message}`);
+  if (e2) throw new Error(`Supabase atividades: ${e2.message}`);
+  if (!p) return null;
+  return rowToProcesso(p as ProcessoRow, (acts ?? []) as AtividadeRow[]);
+}
+
+export async function sbListProcessos(semAtividades = false): Promise<UnifiedProcesso[]> {
   const sb = supabaseAdmin();
   // Pagina processos (Supabase limita a 1000 por query)
   const procs: ProcessoRow[] = [];
@@ -98,6 +111,8 @@ export async function sbListProcessos(): Promise<UnifiedProcesso[]> {
     offP += PAGE_P;
   }
   if (procs.length === 0) return [];
+  // Lista de processos não usa as atividades: evita ler ~10 mil linhas a cada abertura.
+  if (semAtividades) return (procs as ProcessoRow[]).map((p) => rowToProcesso(p, []));
 
   // Carrega TODAS as atividades paginando (Supabase limita a 1000 por query)
   const actsByProcesso = new Map<number, AtividadeRow[]>();

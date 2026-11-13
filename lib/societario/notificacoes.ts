@@ -49,7 +49,7 @@ const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 /** E-mail de um responsável pelo nome (ex.: "JULIA HELENA") — cadastro de Usuários do Societário. */
 async function emailDe(nome: string | null | undefined): Promise<string | null> {
   const alvo = norm(nome);
-  if (!alvo || alvo === "STANDBY") return null;
+  if (!alvo || alvo === "EM STANDBY") return null; // parceiro sem login: não recebe aviso
   const us = (await listUsuarios().catch(() => [])).filter((u) => u.active);
   const partes = alvo.split(" ");
   const u = us.find((x) => norm(x.name) === alvo)

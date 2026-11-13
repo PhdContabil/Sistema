@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { loadAll, weekKey } from "@/lib/societario/dataSource";
+import { loadLista, weekKey } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { listTiposAtivos } from "@/lib/societario/tiposProcesso";
@@ -26,7 +26,7 @@ interface PageProps {
 
 export default async function ProcessosPage({ searchParams }: PageProps) {
   const [snap, tipos, user, etapas] = await Promise.all([
-    loadAll(),
+    loadLista(),
     listTiposAtivos(),
     getCurrentUser(),
     lerEtapas(),

@@ -17,10 +17,7 @@ export default async function EditarProcessoPage({ params }: PageProps) {
   const [snap, tipos] = await Promise.all([loadAll(), listTiposAtivos()]);
   const processo = snap.processos.find((p) => p.id === id);
   if (!processo) notFound();
-  if (processo.source !== "local") {
-    // Só processos locais podem ser editados
-    redirect(`/m/societario/processos/${id}`);
-  }
+  // Desde a migração (13/11/2026) todos os processos são editáveis no Núcleo, inclusive os que vieram do Tareffa.
 
   return (
     <div className="space-y-6">
