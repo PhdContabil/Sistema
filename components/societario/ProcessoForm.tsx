@@ -122,7 +122,7 @@ export function ProcessoForm({
         situacao: a.situation || "",
       }));
     }
-    const m = modelos[initial?.process || ""];
+    const m = modelos[""];
     if (m && m.length) return atividadesDoModelo(m, new Date().toISOString().slice(0, 10));
     return [{ ...ATIVIDADE_VAZIA }];
   });
