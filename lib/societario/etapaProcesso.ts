@@ -9,10 +9,14 @@ const ARQ = "societario-etapa-processo.json";
 export interface EtapaProcesso { texto: string; em: string; por: string | null }
 
 export async function lerEtapas(): Promise<Record<string, EtapaProcesso>> {
+  // Lê por URL assinada com cache-buster e no-store: o download() padrão podia vir do cache (CDN/Next)
+  // e a Etapa salva só aparecia 10-20 s depois.
   try {
-    const { data, error } = await supabaseAdmin().storage.from(BUCKET).download(ARQ);
-    if (error || !data) return {};
-    return JSON.parse(await data.text()) as Record<string, EtapaProcesso>;
+    const { data: u, error } = await supabaseAdmin().storage.from(BUCKET).createSignedUrl(ARQ, 60);
+    if (error || !u?.signedUrl) return {};
+    const r = await fetch(`${u.signedUrl}&t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) return {};
+    return (await r.json()) as Record<string, EtapaProcesso>;
   } catch { return {}; }
 }
 
