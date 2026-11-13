@@ -2532,3 +2532,16 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .pg-tag.vence_7d { background: #fdf6d3; color: #8a6d00; border-color: #ecdc8c; }
 .pg-tag.sem_pendencia { background: #e3f5ea; color: #1d7a3f; border-color: #a9dcbb; }
 @media (max-width: 900px) { .pg-cards { grid-template-columns: repeat(2, 1fr); } }
+.pg-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.pg-topo .pg-nota { margin: 0; flex: 1 1 360px; }
+.pg-acoes { display: flex; gap: 8px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.pg-mini { padding: 3px 10px; font-size: 12px; margin-left: 8px; }
+.pg-pag { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.pg-ok { color: var(--ok); font-weight: 600; font-size: 13px; }
+.pg-fundo { position: fixed; inset: 0; background: rgba(8, 13, 26, .55); display: grid; place-items: center; z-index: 50; padding: 16px; }
+.pg-modal { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-forte); padding: 20px 22px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
+.pg-modal h3 { margin: 0; font-size: 17px; }
+.pg-modal label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.pg-modal input, .pg-modal textarea { border: 1px solid var(--border); background: var(--surface2); color: var(--text); border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 14px; }
+.pg-modal-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }

@@ -221,3 +221,58 @@ export function porStatus(ps: ProcessoPainel[]): { status: string; total: number
   for (const p of ps) m.set(p.status, (m.get(p.status) || 0) + 1);
   return [...m.entries()].map(([status, total]) => ({ status, total })).sort((a, b) => b.total - a.total);
 }
+
+// ---------- filtro, ordem, planilha e e-mail do responsável ----------
+
+export const ORDEM_ALERTA: Alerta[] = ["atrasado", "vence_2d", "vence_7d", "em_dia", "sem_pendencia", "backlog", "sem_checklist"];
+export const ROTULO_ALERTA: Record<Alerta, string> = {
+  atrasado: "Atrasado", vence_2d: "Vence em até 2 dias", vence_7d: "Vence em até 7 dias",
+  em_dia: "Em dia", backlog: "Atraso antigo", sem_pendencia: "Pronto para concluir", sem_checklist: "Sem checklist",
+};
+
+export interface Filtros { alerta?: Alerta | "todos" | ""; responsavel?: string; status?: string; busca?: string }
+
+/** Mesmo filtro e mesma ordem na tela, na planilha e no e-mail. */
+export function filtrarProcessos(ps: ProcessoPainel[], f: Filtros): ProcessoPainel[] {
+  const q = chave(f.busca || "");
+  return ps
+    .filter((p) =>
+      (!f.alerta || f.alerta === "todos" || p.alerta === f.alerta) &&
+      (!f.responsavel || p.responsavel === f.responsavel) &&
+      (!f.status || p.status === f.status) &&
+      (!q || chave(p.nome).includes(q)))
+    .sort((a, b) => ORDEM_ALERTA.indexOf(a.alerta) - ORDEM_ALERTA.indexOf(b.alerta) || b.falta - a.falta || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+export function dataBR(d: string | null): string {
+  return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "";
+}
+
+/** Planilha que o Excel abre direto: separador ";", BOM UTF-8, aspas quando preciso. */
+export function processosParaCsv(ps: ProcessoPainel[]): string {
+  const cel = (v: string | number) => {
+    const s = String(v ?? "");
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const cab = ["Empresa", "Responsável", "Status", "Onde está (anotação)", "Etapa atual", "Prazo da etapa", "Feitas", "Faltam", "Atrasadas", "Vencem em 2 dias", "Vencem em 7 dias", "Atraso antigo", "Alerta"];
+  const linhas = ps.map((p) => [p.nome, p.responsavel, p.status, p.etapaManual, p.etapaAtual, dataBR(p.etapaPrazo), p.feitas, p.falta, p.atrasadas, p.vence2d, p.vence7d, p.backlog, ROTULO_ALERTA[p.alerta]]);
+  return "﻿" + [cab, ...linhas].map((l) => l.map(cel).join(";")).join("\r\n") + "\r\n";
+}
+
+/** Acha o e-mail de quem aparece como responsável (nomes parecidos: Rafael/Rhafael, com ou sem sobrenome do meio). */
+export function acharEmail(responsavel: string, pessoas: { nome: string; email: string | null }[]): string | null {
+  const alvo = chave(responsavel.replace(/Rhafael/i, "Rafael"));
+  if (!alvo || alvo === "sem responsavel") return null;
+  const norm = (n: string) => chave(n.replace(/Rhafael/i, "Rafael"));
+  const com = pessoas.filter((p) => p.email);
+  const exato = com.find((p) => norm(p.nome) === alvo);
+  if (exato) return exato.email!.toLowerCase();
+  const toks = alvo.split(" ");
+  const parecidos = com.filter((p) => { const t = norm(p.nome).split(" "); return toks.every((x) => t.includes(x)) || (t.length > 1 && t.every((x) => toks.includes(x))); });
+  return parecidos.length === 1 ? parecidos[0].email!.toLowerCase() : null;
+}
+
+/** Processos que valem uma cobrança: atrasado ou vencendo em até 7 dias. */
+export function paraCobrar(ps: ProcessoPainel[], responsavel: string, processoId?: number): ProcessoPainel[] {
+  return ps.filter((p) => p.responsavel === responsavel && (processoId ? p.id === processoId : ["atrasado", "vence_2d", "vence_7d"].includes(p.alerta)));
+}
