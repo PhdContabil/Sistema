@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadAll } from "@/lib/societario/dataSource";
+import { loadProcesso } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { AtividadesTable } from "./AtividadesTable";
@@ -23,18 +23,19 @@ interface PageProps {
 export default async function ProcessoDetailPage({ params }: PageProps) {
   const id = Number(params.id);
   if (!Number.isFinite(id)) notFound();
-  const [snap, user] = await Promise.all([loadAll(), getCurrentUser()]);
-  const processo = snap.processos.find((p) => p.id === id);
-  if (!processo) notFound();
-
-  const isLocal = true; // migração 13/11/2026: processos vindos do Tareffa também podem ser editados/excluídos
-  const etapa = (await lerEtapas())[String(processo.id)];
-  const admin = isAdmin(user?.email);
-  const [servTareffa, tiposProc, modelosProc] = await Promise.all([
-    servicosDoProcesso(processo.id).catch(() => []),
+  const [processo, user, etapas, servTareffa, tiposProc, modelosProc] = await Promise.all([
+    loadProcesso(id),
+    getCurrentUser(),
+    lerEtapas(),
+    servicosDoProcesso(id).catch(() => []),
     listTipos().catch(() => []),
     listarModelos().catch(() => ({} as Record<string, { servicoTareffa?: { id: number } }[]>)),
   ]);
+  if (!processo) notFound();
+
+  const isLocal = true; // migração 13/11/2026: processos vindos do Tareffa também podem ser editados/excluídos
+  const etapa = etapas[String(processo.id)];
+  const admin = isAdmin(user?.email);
   const tipoProc = tiposProc.find((t) => t.name === processo.process);
   const previstosTareffa = tipoProc ? (modelosProc[String(tipoProc.id)] ?? []).filter((m) => m.servicoTareffa?.id).length : 0;
 

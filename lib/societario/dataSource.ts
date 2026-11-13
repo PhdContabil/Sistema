@@ -20,6 +20,7 @@ import {
   sbCreateProcesso,
   sbDeleteProcesso,
   sbListProcessos,
+  sbGetProcesso,
   sbUpdateActivitySituation,
   sbUpdateProcesso,
 } from "./supabase-store";
@@ -342,6 +343,38 @@ function applyOverrides(
 function invalidateSupabaseCache() {
   sbCache = null;
   sbCacheUntil = 0;
+  sbListaCache = null;
+  sbListaUntil = 0;
+}
+let sbListaCache: UnifiedProcesso[] | null = null;
+let sbListaUntil = 0;
+
+/** Lista de processos SEM atividades (tela Processos): bem mais leve que o loadAll. */
+export async function loadLista(): Promise<DataSnapshot> {
+  if (!isSupabaseConfigured()) return loadAll();
+  let processos: UnifiedProcesso[] = [];
+  let apiError: string | null = null;
+  try {
+    const now = Date.now();
+    if (sbCache && now < sbCacheUntil) processos = sbCache;
+    else if (sbListaCache && now < sbListaUntil) processos = sbListaCache;
+    else {
+      const { normalizarTipo } = await import("./aliasTipos");
+      sbListaCache = (await sbListProcessos(true)).map((p) => normalizarTipo(p));
+      sbListaUntil = now + SB_TTL;
+      processos = sbListaCache;
+    }
+  } catch (e) { apiError = e instanceof Error ? e.message : String(e); }
+  return { processos, loadedAt: new Date().toISOString(), apiOk: false, apiError, csvOk: false, csvRows: 0, storage: "supabase" };
+}
+
+/** Um processo com as atividades (tela do processo): uma consulta pequena em vez de carregar tudo. */
+export async function loadProcesso(id: number): Promise<UnifiedProcesso | null> {
+  if (!isSupabaseConfigured()) return (await loadAll()).processos.find((p) => p.id === id) ?? null;
+  const p = await sbGetProcesso(id);
+  if (!p) return null;
+  const { normalizarTipo } = await import("./aliasTipos");
+  return normalizarTipo(p);
 }
 
 async function loadFromSupabase(): Promise<UnifiedProcesso[]> {
