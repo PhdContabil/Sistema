@@ -110,7 +110,8 @@ export function ProcessoForm({
   }, [inicio]); // troca de tipo é tratada em trocarTipo
 
   const [atividades, setAtividades] = useState<Atividade[]>(() => {
-    if (initial && initial.activities.length > 0) {
+    if (initial) {
+      // Edição: mostra exatamente as atividades do processo (nunca troca pelo modelo do tipo).
       return initial.activities.map((a) => ({
         id: a.id,
         nome: a.name,
