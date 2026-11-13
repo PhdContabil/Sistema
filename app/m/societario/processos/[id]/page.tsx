@@ -27,7 +27,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
   const processo = snap.processos.find((p) => p.id === id);
   if (!processo) notFound();
 
-  const isLocal = processo.source === "local";
+  const isLocal = true; // migração 13/11/2026: processos vindos do Tareffa também podem ser editados/excluídos
   const etapa = (await lerEtapas())[String(processo.id)];
   const admin = isAdmin(user?.email);
   const [servTareffa, tiposProc, modelosProc] = await Promise.all([

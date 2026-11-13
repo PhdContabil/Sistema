@@ -49,7 +49,6 @@ export default async function DashboardPage() {
             Visão geral de todos os processos societários.
           </p>
         </div>
-        <SyncButton windows={2} />
       </header>
 
       {snap.apiError && (

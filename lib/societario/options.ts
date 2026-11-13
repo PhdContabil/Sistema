@@ -82,7 +82,7 @@ export const RESPONSAVEIS = [
   "FLAVIA CAVALCANTE",
   "JULIA HELENA",
   "RAFAEL NUNES",
-  "STANDBY",
+  "EM STANDBY",
 ] as const;
 
 export type Responsavel = (typeof RESPONSAVEIS)[number];
@@ -107,7 +107,8 @@ export function canonicalResponsavel(
   for (const r of RESPONSAVEIS) {
     if (normName(r) === n) return r;
   }
-  if (n.includes("STANDBY")) return "STANDBY";
+  // Parceiro sem login (pedido da Flávia, 13/11/2026): recebe o que estava em STANDBY e o da Beatriz (ex-funcionária).
+  if (n.includes("STANDBY") || n.includes("BEATRIZ")) return "EM STANDBY";
   return null;
 }
 

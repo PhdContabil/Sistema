@@ -48,7 +48,7 @@ export default async function SocietarioLayout({
   return (
     <SocietarioShell admin={admin} userEmail={user.email ?? ""} roleLabel={roleLabel} versao={APP_VERSION}>
       {children}
-      <AutoSync />
+      {/* AutoSync desligado: Societário 100% no Núcleo desde 13/11/2026 */}
     </SocietarioShell>
   );
 }
