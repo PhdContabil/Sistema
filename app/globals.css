@@ -2494,3 +2494,41 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .nfse-config .linha-add { flex-wrap: wrap; margin-bottom: 10px; }
 @media (max-width: 900px) { .nfse-config-grid { grid-template-columns: 1fr; } }
 .nfse-avulsa { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; } .nfse-avulsa .linha-add { flex-wrap: wrap; }
+
+/* ---- Paralegal · Painel Gerencial ---- */
+.pg-nota { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+.pg-erro { padding: 16px; border: 1px solid var(--div); border-radius: 12px; color: var(--div); background: var(--surface); }
+.pg-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 22px; }
+.pg-card { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); cursor: pointer; color: var(--text); display: flex; flex-direction: column; gap: 4px; }
+.pg-card.on { border-color: var(--accent); background: var(--accent-soft); }
+.pg-k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.pg-v { font-size: 28px; font-weight: 700; }
+.pg-card.atrasado .pg-v { color: var(--div); }
+.pg-card.vence_2d .pg-v { color: #d97706; }
+.pg-card.vence_7d .pg-v { color: #b08900; }
+.pg-card.sem_pendencia .pg-v { color: var(--ok); }
+.pg-bloco { margin-bottom: 26px; }
+.pg-bloco h2 { font-size: 16px; margin: 0 0 10px; }
+.pg-cont { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 6px; }
+.pg-filtros { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pg-filtros input, .pg-filtros select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 8px 12px; font-size: 14px; }
+.pg-tabela-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.pg-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pg-tabela th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.pg-tabela td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.pg-tabela tr.clicavel { cursor: pointer; }
+.pg-tabela tr.clicavel:hover td { background: var(--row-alt); }
+.pg-tabela.interna th { background: transparent; }
+.pg-det td { background: var(--surface2); }
+.pg-vazio { text-align: center; color: var(--muted); padding: 24px !important; }
+.pg-ruim { color: var(--div); font-weight: 700; }
+.pg-peq { font-size: 11px; color: var(--muted); }
+.pg-manual { font-size: 12px; font-weight: 600; color: var(--accent); }
+.pg-barra { width: 120px; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-bottom: 4px; }
+.pg-barra i { display: block; height: 100%; background: var(--ok); }
+.pg-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+.pg-tag.atrasado { background: #fde8e8; color: #b91c1c; border-color: #f5b5b5; }
+.pg-tag.vence_2d { background: #fff0dc; color: #b45309; border-color: #f3cf9b; }
+.pg-tag.vence_7d { background: #fdf6d3; color: #8a6d00; border-color: #ecdc8c; }
+.pg-tag.sem_pendencia { background: #e3f5ea; color: #1d7a3f; border-color: #a9dcbb; }
+@media (max-width: 900px) { .pg-cards { grid-template-columns: repeat(2, 1fr); } }

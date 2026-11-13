@@ -86,6 +86,7 @@ export const MODULES: ModuleDef[] = [
       { name: "Certidões", desc: "Emissão e monitoramento de regularidade." },
       { name: "Processos", desc: "Acompanhamento de andamentos e diligências." },
       { name: "Prazos", desc: "Agenda de vencimentos e alertas." },
+      { name: "Painel Gerencial", desc: "Onde está cada processo, o que falta e os prazos perto de vencer — direto do Societário.", href: "/m/paralegal/painel-gerencial", apenasTI: true },
       { name: "Procurações", desc: "Controle de mandatos e vigências." },
       { name: "Documentos", desc: "Repositório digital por cliente." },
       { name: "Robô Zen", desc: "Varre contratos no SharePoint e cadastra no Questor Zen (Edoc).", href: "/m/paralegal/robo-zen" },
