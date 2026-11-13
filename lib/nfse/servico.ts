@@ -352,7 +352,7 @@ export async function pdfDaNota(id: number): Promise<{ nome: string; bytes: Buff
  * Agendador (pg_cron a cada 10 min): tenta de novo PDF oficial, Zen e Questor
  * das notas emitidas que ainda não fecharam. Para antes do tempo da função.
  */
-export async function processarPendentesPdf(limite = 12, orcamentoMs = 45_000) {
+export async function processarPendentesPdf(limite = 40, orcamentoMs = 45_000) {
   const inicio = Date.now();
   const { data } = await db().from("nfse_notas")
     .select("id,zen_documento_id,pdf_ok,pdf_origem,questor_ok,rps_serie,codigoempresa,tomador")
