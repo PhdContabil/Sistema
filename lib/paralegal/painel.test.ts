@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test lib/paralegal/painel.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { montarPainel, nomeResponsavel, categoriaPrazo, resumir, porResponsavel } from "./painel.ts";
+import { montarPainel, nomeResponsavel, categoriaPrazo, resumir, porResponsavel, filtrarProcessos, processosParaCsv, acharEmail, paraCobrar } from "./painel.ts";
 
 const HOJE = "2026-11-12";
 const at = (id: number, order: string, p: Partial<{ situation: string | null; closed_in: string | null; deadline_in: string | null; responsible: string | null }> = {}) => ({
@@ -59,4 +59,22 @@ test("alertas: atraso, pronto para concluir, sem atividades", () => {
   const r = resumir(ps);
   assert.equal(r.atrasados, 1); assert.equal(r.prontos, 1); assert.equal(r.semChecklist, 1); assert.equal(r.faltam, 2);
   assert.equal(porResponsavel(ps)[0].responsavel, "Flavia Cavalcante");
+});
+
+test("filtro, planilha, e-mail do responsável e cobrança", () => {
+  const ps = montarPainel([
+    { id: 1, name: "ACME; \"LTDA\"", status: "ACOMPANHAMENTO", activities: [at(1, "01", { deadline_in: "2026-11-10", responsible: "RAFAEL SANTOS" })] },
+    { id: 2, name: "Beta", status: "ACOMPANHAMENTO", activities: [at(1, "01", { deadline_in: "2026-11-30" })] },
+  ], {}, HOJE);
+  assert.deepEqual(filtrarProcessos(ps, { alerta: "atrasado" }).map((p) => p.id), [1]);
+  assert.deepEqual(filtrarProcessos(ps, { busca: "beta" }).map((p) => p.id), [2]);
+  const csv = processosParaCsv(ps);
+  assert.ok(csv.startsWith("\uFEFFEmpresa;"));
+  assert.ok(csv.includes('"ACME; ""LTDA"""'));
+  const pessoas = [{ nome: "Rafael Santos", email: "Rafael@phdcontabil.com.br" }, { nome: "Flavia Cavalcante Souza", email: "flavia@phdcontabil.com.br" }, { nome: "Sem Email", email: null }];
+  assert.equal(acharEmail("Rhafael Santos", pessoas), "rafael@phdcontabil.com.br");
+  assert.equal(acharEmail("Flavia Cavalcante", pessoas), "flavia@phdcontabil.com.br");
+  assert.equal(acharEmail("Sem responsável", pessoas), null);
+  assert.deepEqual(paraCobrar(ps, "Rhafael Santos").map((p) => p.id), [1]);
+  assert.deepEqual(paraCobrar(ps, "Flavia Cavalcante").map((p) => p.id), []);
 });

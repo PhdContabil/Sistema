@@ -6,9 +6,8 @@ import PainelGerencial from "@/components/apps/paralegal/PainelGerencial";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 import { getModule } from "@/lib/modules";
-import { sbListProcessos } from "@/lib/societario/supabase-store";
-import { lerEtapas, rotuloEtapa } from "@/lib/societario/etapaProcesso";
-import { hojeSP, montarPainel, porResponsavel, porStatus, resumir } from "@/lib/paralegal/painel";
+import { carregarPainel } from "@/lib/paralegal/painel-dados";
+import { porResponsavel, porStatus, resumir } from "@/lib/paralegal/painel";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +22,8 @@ export default async function Page() {
     dados = <AcessoNegado moduloNome="Painel Gerencial" />;
   } else {
     try {
-      const [procs, etapas] = await Promise.all([sbListProcessos(), lerEtapas()]);
-      const manuais: Record<string, string> = {};
-      for (const [id, e] of Object.entries(etapas)) manuais[id] = rotuloEtapa(e);
-      const hoje = hojeSP();
-      const lista = montarPainel(procs, manuais, hoje);
-      dados = <PainelGerencial hoje={hoje} processos={lista} resumo={resumir(lista)} responsaveis={porResponsavel(lista)} status={porStatus(lista)} />;
+      const { hoje, lista, emails } = await carregarPainel();
+      dados = <PainelGerencial hoje={hoje} processos={lista} resumo={resumir(lista)} responsaveis={porResponsavel(lista)} status={porStatus(lista)} emails={emails} meuEmail={user?.email?.toLowerCase() || ""} />;
     } catch (e) {
       dados = <div className="pg-erro">Não foi possível carregar os processos agora: {e instanceof Error ? e.message : "erro desconhecido"}.</div>;
     }
