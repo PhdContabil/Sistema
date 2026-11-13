@@ -257,11 +257,8 @@ export async function baixarEPublicar(id: number, opts: { aceitarProvisorio?: bo
   const sb = db();
   const l = await obter(id);
   await sb.from("nfse_notas").update({ pdf_tentativas: ((l as LinhaNfse & { pdf_tentativas?: number }).pdf_tentativas ?? 0) + 1, pdf_ultima_tentativa: new Date().toISOString() }).eq("id", id);
-  // Depois de NFSE_PDF_ESPERA_HORAS (padrão 6) sem o PDF oficial do Portal, o Zen
-  // recebe o PDF do Núcleo, para a nota não ficar fora do Edoc indefinidamente.
-  const espera = Number(process.env.NFSE_PDF_ESPERA_HORAS ?? 6) * 3600_000;
-  const venceuEspera = !!l.emitido_em && Date.now() - new Date(l.emitido_em).getTime() > espera;
-  const aceitaProvisorio = opts.aceitarProvisorio || venceuEspera;
+  // Regra: para o Zen (cliente) só vai o PDF OFICIAL do Portal Nacional. Sem exceção.
+  void opts;
   if (l.status !== "emitida") return { status: "erro", mensagem: "Só há PDF para notas emitidas pelo Núcleo (as manuais ficam no Portal Nacional)." };
   if (!l.chave_acesso) return { status: "erro", mensagem: "A nota não tem chave de acesso." };
 
@@ -293,7 +290,7 @@ export async function baixarEPublicar(id: number, opts: { aceitarProvisorio?: bo
   }
 
   // Para o Zen só vai a nota oficial do Portal; se ela não veio, fica pendente para tentar de novo.
-  if (origem !== "oficial" && !l.zen_documento_id && l.ambiente === 1 && !aceitaProvisorio) {
+  if (origem !== "oficial" && !l.zen_documento_id && l.ambiente === 1) {
     return { status: "pendente", mensagem: `NFS-e ${l.numero_nota ?? l.rps_numero}: emitida; o Portal ainda não devolveu o PDF oficial. O sistema tenta de novo sozinho a cada 10 minutos.` };
   }
   if (l.zen_documento_id) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok, já estava no Zen.` };
