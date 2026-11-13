@@ -46,3 +46,27 @@ ${blocos}
 <p style="color:#64748b;font-size:12px;margin-top:18px">Pedido enviado por ${esc(cobradoPor)} em ${dataBR(hoje)}, pelo Painel Gerencial do Núcleo. Responda diretamente a ${esc(cobradoPor)}.</p></div>`,
   };
 }
+
+/** Alerta diário da gestão: só o que está atrasado (até 30 dias) ou vence em até 7 dias. */
+export function emailAlertaDiario(todos: ProcessoPainel[], hoje: string) {
+  const r = resumir(todos);
+  const foco = todos.filter((p) => ["atrasado", "vence_2d", "vence_7d"].includes(p.alerta))
+    .sort((a, b) => ORDEM.indexOf(a.alerta) - ORDEM.indexOf(b.alerta) || b.atrasadas - a.atrasadas || a.nome.localeCompare(b.nome, "pt-BR"));
+  const assunto = r.atrasados + r.vence2d > 0
+    ? `Paralegal: ${r.atrasados} atrasado(s) e ${r.vence2d} vencendo em 2 dias — ${dataBR(hoje)}`
+    : `Paralegal: sem atrasos nem vencimentos em 2 dias — ${dataBR(hoje)}`;
+  const corpo = foco.length
+    ? `${tabela(foco.slice(0, LIMITE))}${foco.length > LIMITE ? `<p style="color:#64748b">Mostrando os ${LIMITE} primeiros de ${foco.length}.</p>` : ""}`
+    : `<p style="color:#1d7a3f"><b>Nada atrasado nem vencendo nos próximos 7 dias.</b></p>`;
+  return {
+    assunto,
+    html: `<div style="font-family:Segoe UI,Arial,sans-serif;color:#0f172a;max-width:900px">
+<h2 style="margin:0 0 4px">Alerta diário do Paralegal</h2>
+<p style="color:#64748b;margin:0 0 14px">${dataBR(hoje)} · enviado automaticamente pelo Núcleo</p>
+<p><b>${r.ativos}</b> processos ativos · <b style="color:#b91c1c">${r.atrasados}</b> atrasados · <b style="color:#b45309">${r.vence2d}</b> vencem em 2 dias · <b style="color:#8a6d00">${r.vence7d}</b> vencem em 7 dias · <b style="color:#1d7a3f">${r.prontos}</b> prontos para concluir</p>
+${corpo}
+<p style="color:#64748b;font-size:12px;margin-top:18px">Atrasos com mais de 30 dias ficam como "atraso antigo" e não entram neste alerta. Detalhes e filtros no Painel Gerencial do Núcleo (Paralegal).</p></div>`,
+  };
+}
+
+const ORDEM: Alerta[] = ["atrasado", "vence_2d", "vence_7d"];
