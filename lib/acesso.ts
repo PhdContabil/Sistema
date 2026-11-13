@@ -136,14 +136,14 @@ function nomeAppPorHref(moduloId: string, href: string): string | undefined {
   return getModule(moduloId)?.apps.find((a) => a.href === href)?.name;
 }
 
-/** Dentro de Tecnologia e Inovação: só T.I./Diretoria vê tudo, o resto só o sistema de Tickets — exceto override individual. */
+/** Dentro de Tecnologia e Inovação: só T.I./Diretoria vê tudo, o resto só Tickets e Dúvidas Frequentes — exceto override individual. */
 export function podeAcessarAppTecnologia(nivel: NivelAcesso, href: string | undefined): boolean {
   const appNome = href ? nomeAppPorHref("tecnologia", href) : undefined;
   const override = appNome ? nivel.overridesApps["tecnologia"]?.[appNome] : undefined;
   if (override === "bloqueado") return false;
   if (override === "liberado") return true;
   if (nivel.acessoTotal) return true;
-  return !!href && href.startsWith("/m/tecnologia/tickets");
+  return !!href && (href.startsWith("/m/tecnologia/tickets") || href.startsWith("/m/tecnologia/duvidas"));
 }
 
 /**
