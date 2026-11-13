@@ -35,6 +35,13 @@ export default function DuvidasFrequentes({ duvidas, cor }: { duvidas: Duvida[];
                 <div style={{ lineHeight: 1.45 }}>
                   <div>{p.texto}</div>
                   {p.detalhe && <div style={{ fontSize: 13, opacity: 0.7 }}>{p.detalhe}</div>}
+                  {p.imagem && (
+                    <a href={p.imagem} target="_blank" rel="noopener noreferrer" title="Abrir em tamanho real">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.imagem} alt={p.texto} loading="lazy"
+                        style={{ display: "block", marginTop: 8, maxWidth: "100%", maxHeight: 360, borderRadius: 8, border: "1px solid rgba(127,127,127,.3)" }} />
+                    </a>
+                  )}
                 </div>
               </li>
             ))}
@@ -44,9 +51,6 @@ export default function DuvidasFrequentes({ duvidas, cor }: { duvidas: Duvida[];
               {d.link.rotulo} ↗
             </a>
           )}
-          <p style={{ marginTop: 18, padding: "10px 12px", borderRadius: 8, background: "rgba(127,127,127,.1)" }}>
-            <b>Não resolveu?</b> {d.quandoChamar} <a href="/m/tecnologia/tickets" style={{ color: cor, fontWeight: 600 }}>Abrir ticket ›</a>
-          </p>
         </div>
       </div>
     );
