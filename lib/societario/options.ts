@@ -78,9 +78,10 @@ export function canManageTipos(email: string | null | undefined): boolean {
 // Apenas os listados aqui aparecem nos filtros e rankings.
 export const RESPONSAVEIS = [
   "SARA",
-  "RHAFAEL SANTOS",
-  "FLAVIA CAVALCANTE",
-  "JULIA HELENA",
+  "Rhafael Santos",
+  "RAFAEL SANTOS",
+  "Flavia Cavalcante",
+  "Júlia Helena",
   "RAFAEL NUNES",
   "EM STANDBY",
 ] as const;
@@ -101,9 +102,8 @@ export function canonicalResponsavel(
 ): Responsavel | null {
   if (!s) return null;
   let n = normName(s);
-  // Grafias que chegam do Tareffa: "Rafael Santos" (sem h) é o RHAFAEL SANTOS;
-  // o outro Rafael é o RAFAEL NUNES.
-  if (n === "RAFAEL SANTOS" || n === "RHAFAEL") n = "RHAFAEL SANTOS";
+  // RHAFAEL SANTOS e RAFAEL SANTOS são pessoas diferentes (Pedro, 13/11/2026). Só "Rhafael" sozinho vira o Rhafael Santos.
+  if (n === "RHAFAEL") n = "RHAFAEL SANTOS";
   for (const r of RESPONSAVEIS) {
     if (normName(r) === n) return r;
   }
