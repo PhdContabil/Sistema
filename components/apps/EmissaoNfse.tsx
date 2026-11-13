@@ -29,8 +29,6 @@ const ROTULO: Record<string, [string, string]> = {
   pendente: ["Pendente", "badge-soft"], emitindo: ["Emitindo…", "sit-observar"], emitida: ["Emitida", "sit-ok"],
   erro: ["Erro", "sit-critico"], manual: ["Manual", "sit-observar"], ignorada: ["Ignorada", "badge-soft"],
 };
-const INTERVALO_MS = 2000;           // pausa curta entre notas
-const ESPERA_SEQUENCIA_MAX = 600_000; // 10 min esperando liberar a sequência
 
 const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dataBR = (iso: string) => iso.split("-").reverse().join("/");
@@ -244,12 +242,17 @@ export default function EmissaoNfse() {
   const [progresso, setProgresso] = useState<string | null>(null);
   const [pausa, setPausa] = useState<{ nota: Nota; erro: string } | null>(null);
   const [andamento, setAndamento] = useState<Record<number, Andamento>>({});
-  const marcar = (id: number, a: Andamento) => setAndamento((m) => ({ ...m, [id]: a }));
+  const marcar = (id: number, a: Andamento) => { andamentoRef.current = { ...andamentoRef.current, [id]: a }; setAndamento((m) => ({ ...m, [id]: a })); };
   const [faixa, setFaixa] = useState({ rps_inicio: "", rps_fim: "", data_inicio: "", data_fim: "" });
   const [dataManual, setDataManual] = useState("");
   /** Faixa de RPS da última busca: a lista mostra só ela, até o usuário pedir todas. */
   const [faixaLista, setFaixaLista] = useState<{ de: number; ate: number } | null>(null);
-  const decisao = useRef<((d: "repetir" | "manual" | "parar") => void) | null>(null);
+  const decisao = useRef<((d: "repetir" | "pular" | "manual" | "parar") => void) | null>(null);
+  const pularErros = useRef(false);
+  const [pularAuto, setPularAuto] = useState(false);
+  const [paralelo, setParalelo] = useState(5);
+  const [barra, setBarra] = useState<{ feitas: number; total: number; ok: number; erro: number; puladas: number; manual: number; etapa: string } | null>(null);
+  const andamentoRef = useRef<Record<number, Andamento>>({});
   const parar = useRef(false);
 
   const carregar = useCallback(async () => {
@@ -310,45 +313,80 @@ export default function EmissaoNfse() {
 
   /** Para o lote e pergunta o que fazer (como o app Python). */
   function perguntar(nota: Nota, erro: string) {
-    return new Promise<"repetir" | "manual" | "parar">((resolve) => {
+    return new Promise<"repetir" | "pular" | "manual" | "parar">((resolve) => {
       setPausa({ nota, erro });
       decisao.current = (d) => { setPausa(null); decisao.current = null; resolve(d); };
     });
   }
 
+  /**
+   * Envia as marcadas ao Portal Nacional. A Sefin recebe uma DPS por chamada
+   * (não existe lote na API), então o "lote" aqui são várias chamadas ao mesmo
+   * tempo — `paralelo` de cada vez. No Padrão Nacional não há sequência a
+   * respeitar (o nDPS só precisa ser único), então pular uma nota com erro não
+   * atrapalha as outras: ela fica "com erro" para arrumar e emitir depois.
+   */
   async function emitirSelecionadas() {
     const fila = notas.filter((n) => sel.has(n.id)).sort((a, b) => a.rps_numero - b.rps_numero);
     if (fila.length === 0) return;
-    if (!window.confirm(`Emitir ${fila.length} nota(s) da ${emp?.nome ?? "empresa"} no Portal Nacional${cfg.ambiente === 1 ? " (PRODUÇÃO)" : " (TESTE - produção restrita)"}, da RPS ${fila[0].rps_numero} à ${fila[fila.length - 1].rps_numero}?\n\nIsso gera NFS-e de verdade.`)) return;
+    if (!window.confirm(`Emitir ${fila.length} nota(s) da ${emp?.nome ?? "empresa"} no Portal Nacional${cfg.ambiente === 1 ? " (PRODUÇÃO)" : " (TESTE - produção restrita)"}, ${paralelo} de cada vez?\n\nIsso gera NFS-e de verdade.`)) return;
     setOcupado(true); setMsg(null); parar.current = false;
     setAndamento(Object.fromEntries(fila.map((n) => [n.id, { estado: "fila" } as Andamento])));
-    let feitas = 0;
-    for (let i = 0; i < fila.length && !parar.current; i++) {
-      const n = fila[i];
-      const inicio = Date.now();
-      let tentativa = 0;
+    const cont = { ok: 0, erro: 0, puladas: 0, manual: 0 };
+    const total = fila.length;
+    let proximo = 0, feitasTotal = 0;
+    let portao: Promise<void> | null = null; // fecha enquanto o usuário decide um erro
+    const atualizar = () => setBarra({ feitas: feitasTotal, total, ...cont, etapa: "Enviando ao Portal Nacional" });
+    atualizar();
+
+    const trabalhador = async () => {
       for (;;) {
-        setProgresso(`Enviando RPS ${n.rps_numero} (${i + 1} de ${fila.length})${tentativa ? ` — tentativa ${tentativa}` : ""}…`);
-        marcar(n.id, tentativa ? { estado: "aguardando", texto: `tentativa ${tentativa}` } : { estado: "enviando" });
-        const r = await acao(n.id, "emitir");
-        if (r.ok) { feitas++; marcar(n.id, { estado: "ok", texto: [r.numero ? `NFS-e ${r.numero}` : "", r.pdf].filter(Boolean).join(" · ") }); break; }
-        if (r.aguardar && Date.now() - inicio < ESPERA_SEQUENCIA_MAX && !parar.current) {
-          tentativa++;
-          await esperar(Math.min(5000 * tentativa, 60000));
-          continue;
+        if (portao) await portao;
+        if (parar.current || proximo >= total) return;
+        const n = fila[proximo++];
+        for (;;) {
+          marcar(n.id, { estado: "enviando" });
+          const r = await acao(n.id, "emitir");
+          if (r.ok) { cont.ok++; marcar(n.id, { estado: "ok", texto: r.numero ? `NFS-e ${r.numero}` : undefined }); break; }
+          const erro = r.erro ?? r.error ?? "Falha.";
+          marcar(n.id, { estado: "erro", texto: erro });
+          if (pularErros.current) { cont.puladas++; break; }
+          let abrir!: () => void;
+          const meu = new Promise<void>((res) => { abrir = res; });
+          portao = meu;
+          const d = await perguntar(n, erro);
+          portao = null; abrir();
+          if (d === "repetir") continue;
+          if (d === "pular") { cont.puladas++; break; }
+          if (d === "manual") { await acao(n.id, "manual"); cont.manual++; marcar(n.id, { estado: "pulada" }); break; }
+          parar.current = true; break;
         }
-        marcar(n.id, { estado: "erro", texto: r.erro ?? r.error });
-        const d = await perguntar(n, r.erro ?? r.error ?? "Falha.");
-        if (d === "repetir") { tentativa = 0; continue; }
-        if (d === "manual") { await acao(n.id, "manual"); marcar(n.id, { estado: "pulada" }); break; }
-        parar.current = true; break;
+        feitasTotal++; atualizar();
       }
-      await carregar();
-      if (i < fila.length - 1 && !parar.current) await esperar(INTERVALO_MS);
-    }
-    setProgresso(null); setOcupado(false); setSel(new Set());
+    };
+    await Promise.all(Array.from({ length: Math.min(paralelo, total) }, trabalhador));
+    await carregar();
+
+    // Em seguida, PDF oficial + Zen + Questor das que acabaram de sair (o que não fechar, o agendador retoma a cada 10 min).
+    const emitidas = fila.filter((n) => andamentoRef.current[n.id]?.estado === "ok");
+    let pdfOk = 0, pdfPend = 0, k = 0;
+    const tPdf = async () => {
+      while (k < emitidas.length) {
+        const n = emitidas[k++];
+        const r = await acao(n.id, "pdf");
+        if (r.status === "ok") pdfOk++; else pdfPend++;
+        setBarra({ feitas: pdfOk + pdfPend, total: emitidas.length, ok: pdfOk, erro: 0, puladas: pdfPend, manual: 0, etapa: "PDF oficial e Zen" });
+      }
+    };
+    if (emitidas.length) await Promise.all(Array.from({ length: Math.min(3, emitidas.length) }, tPdf));
+
+    setBarra(null); setOcupado(false); setSel(new Set());
     setAndamento((m) => Object.fromEntries(Object.entries(m).filter(([, a]) => a.estado !== "fila")));
-    setMsg({ ok: true, texto: `${feitas} nota(s) emitida(s). O PDF e o Zen já foram feitos em cada nota; o que falhou aparece em "Sem PDF/Zen".` });
+    setMsg({
+      ok: cont.erro === 0 && cont.puladas === 0,
+      texto: `${cont.ok} nota(s) emitida(s)${cont.puladas ? `, ${cont.puladas} com erro (ficaram na lista para arrumar)` : ""}${cont.manual ? `, ${cont.manual} marcada(s) manual` : ""}${parar.current ? " — lote interrompido" : ""}. `
+        + (emitidas.length ? `PDF/Zen: ${pdfOk} ok${pdfPend ? `, ${pdfPend} aguardando o PDF oficial do Portal (o sistema tenta sozinho a cada 10 min)` : ""}.` : ""),
+    });
     carregar();
   }
 
@@ -406,14 +444,27 @@ export default function EmissaoNfse() {
       )}
       {!cfg.zen && <div className="banner">Token do Zen não configurado: os PDFs não serão publicados no Edoc.</div>}
       {msg && <div className={`banner ${msg.ok ? "" : "error"}`}>{msg.texto}</div>}
-      {progresso && <div className="banner">{progresso} <button className="btn" onClick={() => { parar.current = true; }}>Parar depois desta</button></div>}
+      {progresso && <div className="banner">{progresso}</div>}
+      {barra && (
+        <div className="nfse-progresso">
+          <div className="nfse-progresso-topo">
+            <strong>{barra.etapa}: {barra.feitas} de {barra.total} ({Math.round((barra.feitas / Math.max(1, barra.total)) * 100)}%)</strong>
+            <span className="sub-info">
+              {barra.ok} ok{barra.puladas ? ` · ${barra.puladas} ${barra.etapa.startsWith("PDF") ? "aguardando" : "com erro"}` : ""}{barra.manual ? ` · ${barra.manual} manual` : ""}
+            </span>
+            {barra.etapa.startsWith("Enviando") && <button className="btn" onClick={() => { parar.current = true; }}>Parar</button>}
+          </div>
+          <div className="nfse-progresso-trilho"><div className="nfse-progresso-barra" style={{ width: `${(barra.feitas / Math.max(1, barra.total)) * 100}%` }} /></div>
+        </div>
+      )}
 
       {pausa && (
         <div className="banner error nfse-pausa">
-          <strong>O lote parou na RPS {pausa.nota.rps_numero} ({pausa.nota.tomador.razao_social}).</strong>
+          <strong>Erro na RPS {pausa.nota.rps_numero} ({pausa.nota.tomador.razao_social}). O envio das próximas está esperando você decidir.</strong>
           <div style={{ margin: "6px 0" }}>{pausa.erro}</div>
           <div className="fp-acoes">
-            <button className="btn primary" onClick={() => decisao.current?.("repetir")}>Corrigi, tentar de novo</button>
+            <button className="btn primary" onClick={() => decisao.current?.("pular")}>Pular esta e seguir (arrumo depois)</button>
+            <button className="btn" onClick={() => decisao.current?.("repetir")}>Corrigi, tentar de novo</button>
             <button className="btn" onClick={() => decisao.current?.("manual")}>Emiti no portal: marcar manual e seguir</button>
             <button className="btn" onClick={() => decisao.current?.("parar")}>Parar o lote</button>
           </div>
@@ -466,6 +517,16 @@ export default function EmissaoNfse() {
             ))}
           </div>
           <div className="fp-acoes">
+            <label className="nfse-opcao" title="Quantas notas vão ao Portal ao mesmo tempo">
+              Simultâneas
+              <select className="search" value={paralelo} disabled={ocupado} onChange={(e) => setParalelo(Number(e.target.value))}>
+                {[1, 3, 5, 10].map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </label>
+            <label className="nfse-opcao" title="Nota com erro fica na lista para arrumar; o envio segue com as outras">
+              <input type="checkbox" checked={pularAuto} disabled={ocupado} onChange={(e) => { setPularAuto(e.target.checked); pularErros.current = e.target.checked; }} />
+              Pular as com erro
+            </label>
             <button className="btn primary" disabled={ocupado || sel.size === 0 || !cfg.credenciais || !cfg.pTotTribSN} onClick={emitirSelecionadas}>
               2. Emitir selecionadas ({sel.size})
             </button>
@@ -480,8 +541,12 @@ export default function EmissaoNfse() {
             <button className="btn" onClick={() => { setFaixaLista(null); setFiltro("abertas"); setSel(new Set()); }}>Ver todas</button>
           </div>
         )}
-        <div className="table-wrap" style={{ boxShadow: "none" }}>
+        <div className="table-wrap nfse-tabela-wrap" style={{ boxShadow: "none" }}>
           <table className="grid nfse-tabela">
+            <colgroup>
+              <col style={{ width: 34 }} /><col style={{ width: 80 }} /><col style={{ width: 128 }} /><col />
+              <col style={{ width: 96 }} /><col style={{ width: 120 }} /><col style={{ width: 175 }} /><col style={{ width: 120 }} /><col style={{ width: 118 }} />
+            </colgroup>
             <thead>
               <tr>
                 <th className="c-res">

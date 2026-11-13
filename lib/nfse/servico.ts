@@ -195,8 +195,9 @@ export async function emitirNota(id: number, email: string): Promise<ResultadoEm
       data_emissao: r.dhProc, nfse_xml: r.nfseXml, valor_liquido: r.vLiq ? Number(r.vLiq) : null,
       ambiente: emp.cfg.ambiente, emitido_por: email, emitido_em: new Date().toISOString(), atualizado_em: new Date().toISOString(),
     }).eq("id", id);
-    const pos = await baixarEPublicar(id).catch((e) => ({ status: "erro" as const, mensagem: e instanceof Error ? e.message : "falha" }));
-    return { ok: true, protocolo: r.chave, numero: r.nNFSe, pdf: pos.mensagem };
+    // PDF/Zen/Questor ficam para depois (tela ao fim do lote e agendador a cada 10 min):
+    // a emissão volta rápido e o lote anda.
+    return { ok: true, protocolo: r.chave, numero: r.nNFSe, pdf: "PDF e Zen em seguida" };
   } catch (e) {
     const msg = e instanceof NacionalError || e instanceof Error ? e.message : "Falha ao emitir.";
     await sb.from("nfse_notas").update({ status: "erro", erro: msg, atualizado_em: new Date().toISOString() }).eq("id", id);
@@ -252,9 +253,15 @@ function nomePdf(numeroNota: string, razao: string) {
  * Gera o DANFSe a partir do XML da NFS-e, publica no Zen e grava o número no
  * Questor. Pode rodar de novo: o que já foi feito não se repete.
  */
-export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pendente" | "erro"; mensagem: string }> {
+export async function baixarEPublicar(id: number, opts: { aceitarProvisorio?: boolean } = {}): Promise<{ status: "ok" | "pendente" | "erro"; mensagem: string }> {
   const sb = db();
   const l = await obter(id);
+  await sb.from("nfse_notas").update({ pdf_tentativas: ((l as LinhaNfse & { pdf_tentativas?: number }).pdf_tentativas ?? 0) + 1, pdf_ultima_tentativa: new Date().toISOString() }).eq("id", id);
+  // Depois de NFSE_PDF_ESPERA_HORAS (padrão 6) sem o PDF oficial do Portal, o Zen
+  // recebe o PDF do Núcleo, para a nota não ficar fora do Edoc indefinidamente.
+  const espera = Number(process.env.NFSE_PDF_ESPERA_HORAS ?? 6) * 3600_000;
+  const venceuEspera = !!l.emitido_em && Date.now() - new Date(l.emitido_em).getTime() > espera;
+  const aceitaProvisorio = opts.aceitarProvisorio || venceuEspera;
   if (l.status !== "emitida") return { status: "erro", mensagem: "Só há PDF para notas emitidas pelo Núcleo (as manuais ficam no Portal Nacional)." };
   if (!l.chave_acesso) return { status: "erro", mensagem: "A nota não tem chave de acesso." };
 
@@ -286,8 +293,8 @@ export async function baixarEPublicar(id: number): Promise<{ status: "ok" | "pen
   }
 
   // Para o Zen só vai a nota oficial do Portal; se ela não veio, fica pendente para tentar de novo.
-  if (origem !== "oficial" && !l.zen_documento_id && l.ambiente === 1) {
-    return { status: "pendente", mensagem: `NFS-e ${l.numero_nota ?? l.rps_numero}: emitida, mas o Portal ainda não devolveu o PDF oficial. Use "Refazer PDF/Zen pendentes" em alguns minutos.` };
+  if (origem !== "oficial" && !l.zen_documento_id && l.ambiente === 1 && !aceitaProvisorio) {
+    return { status: "pendente", mensagem: `NFS-e ${l.numero_nota ?? l.rps_numero}: emitida; o Portal ainda não devolveu o PDF oficial. O sistema tenta de novo sozinho a cada 10 minutos.` };
   }
   if (l.zen_documento_id) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok, já estava no Zen.` };
   if (l.ambiente !== 1) return { status: "ok", mensagem: `NFS-e ${numero}: PDF ok (teste — não vai para o Zen).` };
@@ -339,4 +346,28 @@ export async function pdfDaNota(id: number): Promise<{ nome: string; bytes: Buff
   const xml = l.nfse_xml ?? (await consultarNfse(l.chave_acesso, (l.ambiente === 1 ? 1 : 2), (await carregarEmpresa(l.codigoempresa)).cert));
   if (!xml) throw new Error("XML da NFS-e ainda indisponível.");
   return { nome: nomePdf(l.numero_nota ?? String(l.rps_numero), l.tomador.razao_social), bytes: (await pdfOficialOuLocal(l, xml)).bytes };
+}
+
+/**
+ * Agendador (pg_cron a cada 10 min): tenta de novo PDF oficial, Zen e Questor
+ * das notas emitidas que ainda não fecharam. Para antes do tempo da função.
+ */
+export async function processarPendentesPdf(limite = 12, orcamentoMs = 45_000) {
+  const inicio = Date.now();
+  const { data } = await db().from("nfse_notas")
+    .select("id,zen_documento_id,pdf_ok,pdf_origem,questor_ok,rps_serie,codigoempresa,tomador")
+    .eq("status", "emitida").eq("ambiente", 1)
+    .order("pdf_ultima_tentativa", { ascending: true, nullsFirst: true }).limit(200);
+  const pend = (data ?? []).filter((n) =>
+    !n.pdf_ok || (!n.zen_documento_id && (n.tomador as { cpf_cnpj?: string })?.cpf_cnpj)
+    || (!n.questor_ok && n.codigoempresa === 725 && n.rps_serie !== SERIE_AVULSA)).slice(0, limite);
+  const res = { tentadas: 0, ok: 0, pendentes: 0, erros: 0, restantes: 0 };
+  for (const n of pend) {
+    if (Date.now() - inicio > orcamentoMs) break;
+    res.tentadas++;
+    const r = await baixarEPublicar(n.id).catch(() => ({ status: "erro" as const, mensagem: "" }));
+    if (r.status === "ok") res.ok++; else if (r.status === "pendente") res.pendentes++; else res.erros++;
+  }
+  res.restantes = pend.length - res.tentadas;
+  return res;
 }

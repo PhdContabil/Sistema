@@ -2545,3 +2545,20 @@ tr.fpg-alerta td { background: color-mix(in srgb, #dc2626 7%, transparent); }
 .pg-modal label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .pg-modal input, .pg-modal textarea { border: 1px solid var(--border); background: var(--surface2); color: var(--text); border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 14px; }
 .pg-modal-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* NFS-e: barra de progresso do envio e tabela sem rolagem lateral */
+.nfse-progresso { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; background: var(--surface); }
+.nfse-progresso-topo { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px; }
+.nfse-progresso-topo .btn { margin-left: auto; }
+.nfse-progresso-trilho { height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); overflow: hidden; }
+.nfse-progresso-barra { height: 100%; background: #16a34a; transition: width .3s ease; }
+.nfse-opcao { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.nfse-opcao select { padding: 3px 6px; }
+.nfse-tabela-wrap { overflow-x: visible !important; }
+.nfse-tabela { table-layout: fixed; width: 100% !important; min-width: 0 !important; }
+.nfse-tabela th, .nfse-tabela td { white-space: normal !important; overflow-wrap: anywhere; word-break: normal; padding-left: 6px; padding-right: 6px; }
+.nfse-tabela td .obs { overflow-wrap: anywhere; }
+.nfse-tabela .nfse-data { width: 100% !important; min-width: 0; }
+.nfse-tabela .nfse-acoes { white-space: normal !important; }
+.nfse-tabela .nfse-acoes .btn { margin: 2px; }
+.nfse-tabela .nfse-hist { min-width: 0 !important; }
