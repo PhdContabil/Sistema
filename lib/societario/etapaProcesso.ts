@@ -22,7 +22,7 @@ export async function salvarEtapa(processoId: number, texto: string, por: string
   if (!t) delete mapa[String(processoId)];
   else mapa[String(processoId)] = { texto: t, em: new Date().toISOString(), por };
   const { error } = await supabaseAdmin().storage.from(BUCKET).upload(
-    ARQ, new Blob([JSON.stringify(mapa)], { type: "application/json" }), { upsert: true, contentType: "application/json" });
+    ARQ, new Blob([JSON.stringify(mapa)], { type: "application/json" }), { upsert: true, contentType: "application/json", cacheControl: "0" });
   if (error) throw new Error(error.message);
   return mapa[String(processoId)] ?? null;
 }
