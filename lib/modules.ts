@@ -121,6 +121,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Chamados, inventário, acessos e as ferramentas que sustentam o escritório.",
     apps: [
       { name: "Tickets", desc: "Chamados de cada setor, do backlog à finalização.", href: "/m/tecnologia/tickets" },
+      { name: "Dúvidas Frequentes", desc: "Respostas rápidas para as dúvidas mais comuns de T.I.", href: "/m/tecnologia/duvidas" },
       { name: "Usuários por setor", desc: "Setor de cada pessoa — define o acesso aos módulos do Núcleo.", href: "/m/tecnologia/usuarios" },
       { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados.", href: "/m/tecnologia/inventario" },
       { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis, quem tem acesso e controle da API Questor.", href: "/m/tecnologia/catalogo" },

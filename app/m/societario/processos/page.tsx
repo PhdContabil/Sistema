@@ -4,6 +4,8 @@ import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { listTiposAtivos } from "@/lib/societario/tiposProcesso";
 import { ProcessosFilter } from "./ProcessosFilter";
+import { LembrarFiltros } from "./LembrarFiltros";
+import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/societario/supabase-server";
 import { isAdmin } from "@/lib/societario/options";
 import { lerEtapas, rotuloEtapa } from "@/lib/societario/etapaProcesso";
@@ -123,7 +125,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
             if (de && f.key !== "de") newParams.set("de", de);
             if (ate && f.key !== "ate") newParams.set("ate", ate);
             const href = `/m/societario/processos${
-              newParams.toString() ? "?" + newParams.toString() : ""
+              newParams.toString() ? "?" + newParams.toString() : "?limpar=1"
             }`;
             return (
               <Link
@@ -136,7 +138,7 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
             );
           })}
           <Link
-            href="/m/societario/processos"
+            href="/m/societario/processos?limpar=1"
             className="text-xs text-gray-500 hover:text-gray-900 underline"
           >
             limpar tudo
@@ -144,7 +146,9 @@ export default async function ProcessosPage({ searchParams }: PageProps) {
         </div>
       )}
 
+      <Suspense fallback={null}><LembrarFiltros /></Suspense>
       <ProcessosFilter
+        key={[q, tipo, status, responsavel, de, ate].join("~")}
         tipos={tipos.map((t) => t.name)}
         initial={{ q, tipo, status, responsavel, de, ate }}
       />

@@ -211,21 +211,42 @@ export async function sbUpdateProcesso(
   if (error) throw new Error(`Update processo: ${error.message}`);
 
   if (patch.activities) {
-    // Apaga as antigas e recria
-    await sb.from("atividades").delete().eq("processo_id", id);
-    if (patch.activities.length > 0) {
-      const acts = patch.activities.map((a) => ({
-        processo_id: id,
-        name: a.name,
-        responsible: a.responsible,
-        situation: a.situation,
-        ordering: a.order,
-        deadline_in: a.deadline_in,
-        closed_in: a.closed_in,
-        updated_in: a.updated_in,
+    // Atualiza no lugar (não apaga e recria): mantém id, external_id e a data de encerramento,
+    // e a tela não fica sem atividades no meio do salvamento.
+    const encerra = (sit: string | null | undefined) => /CONCLU|N[AÃ]O SE APLICA|CANCEL/i.test(sit || "");
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { data: atuaisRaw, error: e0 } = await sb
+      .from("atividades").select("id, situation, closed_in").eq("processo_id", id);
+    if (e0) throw new Error(`Ler atividades: ${e0.message}`);
+    const atuais = new Map((atuaisRaw ?? []).map((a: { id: number; situation: string | null; closed_in: string | null }) => [a.id, a]));
+    const novos: SocietalActivity[] = [];
+    const manter = new Set<number>();
+    for (const a of patch.activities) {
+      const velho = atuais.get(a.id);
+      if (!velho) { novos.push(a); continue; }
+      manter.add(a.id);
+      const mudouSit = (velho.situation || "") !== (a.situation || "");
+      const closed_in = encerra(a.situation) ? (mudouSit ? hoje : velho.closed_in ?? hoje) : null;
+      const upd: Record<string, unknown> = {
+        name: a.name, responsible: a.responsible, situation: a.situation, ordering: a.order,
+        deadline_in: a.deadline_in, closed_in, co_responsible: a.co_responsible || null, obs: a.obs || null,
+      };
+      if (mudouSit) upd.updated_in = new Date().toISOString();
+      const { error: e1 } = await sb.from("atividades").update(upd).eq("id", a.id);
+      if (e1) throw new Error(`Update atividade: ${e1.message}`);
+    }
+    const remover = Array.from(atuais.keys()).filter((k) => !manter.has(k));
+    if (novos.length > 0) {
+      const acts = novos.map((a) => ({
+        processo_id: id, name: a.name, responsible: a.responsible, situation: a.situation, ordering: a.order,
+        deadline_in: a.deadline_in, closed_in: encerra(a.situation) ? hoje : null, updated_in: new Date().toISOString(),
       }));
-      const e2 = await inserirAtividades(sb, acts, patch.activities);
+      const e2 = await inserirAtividades(sb, acts, novos);
       if (e2) throw new Error(`Insert atividades: ${e2}`);
+    }
+    if (remover.length > 0) {
+      const { error: e3 } = await sb.from("atividades").delete().in("id", remover);
+      if (e3) throw new Error(`Remover atividades: ${e3.message}`);
     }
   }
 }

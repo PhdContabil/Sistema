@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   deleteLocalProcesso,
+  updateLocalProcesso,
   updateActivitySituation,
   updateActivityObs,
 } from "@/lib/societario/dataSource";
@@ -49,4 +50,16 @@ export async function updateActivityAction(
   );
   revalidatePath(`/m/societario/processos/${processoId}`);
   revalidatePath("/m/societario/processos");
+}
+
+/** Troca só o status do processo (direto na tela do processo). */
+export async function updateStatusAction(processoId: number, closedAtual: string | null, status: string): Promise<void> {
+  const { STATUS_PROCESSO } = await import("@/lib/societario/options");
+  if (!(STATUS_PROCESSO as readonly string[]).includes(status)) throw new Error("Status inválido");
+  const encerra = /CONCLU|CANCEL/i.test(status);
+  const closed_in = encerra ? (closedAtual || new Date().toISOString().slice(0, 10)) : null;
+  await updateLocalProcesso(processoId, { status, closed_in });
+  revalidatePath(`/m/societario/processos/${processoId}`);
+  revalidatePath("/m/societario/processos");
+  revalidatePath("/m/societario");
 }

@@ -42,8 +42,8 @@ export async function updateProcessoAction(
     valueRaw && !Number.isNaN(Number(valueRaw)) ? Number(valueRaw) : null;
 
   // Para avisar só quem PASSOU a ser corresponsável.
-  const { loadAll } = await import("@/lib/societario/dataSource");
-  const antes = (await loadAll().catch(() => null))?.processos.find((p) => p.id === id)?.activities ?? [];
+  const { loadProcesso } = await import("@/lib/societario/dataSource");
+  const antes = (await loadProcesso(id).catch(() => null))?.activities ?? [];
 
   await updateLocalProcesso(id, {
     name,

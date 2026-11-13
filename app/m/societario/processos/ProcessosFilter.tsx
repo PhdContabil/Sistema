@@ -35,7 +35,7 @@ export function ProcessosFilter({ tipos, initial }: Props) {
     if (de) params.set("de", de);
     if (ate) params.set("ate", ate);
     const qs = params.toString();
-    router.push(`/m/societario/processos${qs ? "?" + qs : ""}`);
+    router.push(`/m/societario/processos${qs ? "?" + qs : "?limpar=1"}`);
   }
 
   function onClear() {
@@ -45,7 +45,7 @@ export function ProcessosFilter({ tipos, initial }: Props) {
     setResponsavel("");
     setDe("");
     setAte("");
-    router.push("/m/societario/processos");
+    router.push("/m/societario/processos?limpar=1");
   }
 
   // Atalhos de período comuns

@@ -4,7 +4,9 @@ import { loadProcesso } from "@/lib/societario/dataSource";
 import { StatusPill } from "@/components/societario/StatusPill";
 import { formatDate } from "@/lib/societario/tareffa";
 import { AtividadesTable } from "./AtividadesTable";
-import { deleteAction, updateActivityAction, updateActivityObsAction, criarServicosTareffaAction, comunicarCancelamentoAction } from "./actions";
+import { VoltarProcessos } from "../LembrarFiltros";
+import { StatusEditavel } from "@/components/societario/StatusEditavel";
+import { updateStatusAction, deleteAction, updateActivityAction, updateActivityObsAction, criarServicosTareffaAction, comunicarCancelamentoAction } from "./actions";
 import { ServicosTareffa } from "@/components/societario/ServicosTareffa";
 import { servicosDoProcesso } from "@/lib/societario/tareffaServicos";
 import { listTipos } from "@/lib/societario/tiposProcesso";
@@ -42,12 +44,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link
-          href="/m/societario/processos"
-          className="text-sm text-brand-700 hover:underline"
-        >
-          ← Voltar para processos
-        </Link>
+        <VoltarProcessos className="text-sm text-brand-700 hover:underline" />
         <div className="flex gap-3">
           {isLocal && (
             <Link
@@ -85,7 +82,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
         <Field label="Processo" value={processo.tag ? `${processo.process} · ${processo.tag}` : processo.process} />
         <Field
           label="Status"
-          value={<StatusPill status={processo.status} />}
+          value={<StatusEditavel status={processo.status || ""} salvar={updateStatusAction.bind(null, processo.id, processo.closed_in ?? null)} />}
         />
         <Field label="Responsável" value={processo.bearer || "—"} />
         <Field label="Início" value={formatDate(processo.started_in)} />

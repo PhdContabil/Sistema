@@ -287,6 +287,7 @@ function chaveIcone(nomeApp: string): keyof typeof APP_ICONS {
   if (n.includes("balanço")) return "predio";
   if (n.includes("plano de contas")) return "lista";
   if (n.includes("tickets")) return "ticket";
+  if (n.includes("dúvidas")) return "mensagem";
   if (n.includes("inventário")) return "servidor";
   if (n.includes("catálogo")) return "grade";
   if (n.includes("conhecimento")) return "ajuda";
