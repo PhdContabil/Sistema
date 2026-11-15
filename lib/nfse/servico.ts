@@ -349,7 +349,7 @@ export async function pdfDaNota(id: number): Promise<{ nome: string; bytes: Buff
  * Agendador (pg_cron a cada 10 min): tenta de novo PDF oficial, Zen e Questor
  * das notas emitidas que ainda não fecharam. Para antes do tempo da função.
  */
-export async function processarPendentesPdf(limite = 40, orcamentoMs = 45_000) {
+export async function processarPendentesPdf(limite = 40, orcamentoMs = 35_000) {
   const inicio = Date.now();
   const { data } = await db().from("nfse_notas")
     .select("id,zen_documento_id,pdf_ok,pdf_origem,questor_ok,rps_serie,codigoempresa,tomador")
@@ -360,9 +360,14 @@ export async function processarPendentesPdf(limite = 40, orcamentoMs = 45_000) {
     || (!n.questor_ok && n.codigoempresa === 725 && n.rps_serie !== SERIE_AVULSA)).slice(0, limite);
   const res = { tentadas: 0, ok: 0, pendentes: 0, erros: 0, restantes: 0 };
   for (const n of pend) {
-    if (Date.now() - inicio > orcamentoMs) break;
+    // Para com folga antes dos 60 s da função (houve 504 com uma nota lenta no fim da rodada).
+    const restante = orcamentoMs - (Date.now() - inicio);
+    if (restante < 8_000) break;
     res.tentadas++;
-    const r = await baixarEPublicar(n.id).catch(() => ({ status: "erro" as const, mensagem: "" }));
+    const r = await Promise.race([
+      baixarEPublicar(n.id).catch(() => ({ status: "erro" as const, mensagem: "" })),
+      new Promise<{ status: "pendente"; mensagem: string }>((ok) => setTimeout(() => ok({ status: "pendente", mensagem: "tempo da rodada" }), restante)),
+    ]);
     if (r.status === "ok") res.ok++; else if (r.status === "pendente") res.pendentes++; else res.erros++;
   }
   res.restantes = pend.length - res.tentadas;
