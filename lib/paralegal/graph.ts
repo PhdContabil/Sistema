@@ -112,7 +112,9 @@ export async function listarItensDesde<F = Record<string, unknown>>(nomeLista: s
   const listaId = await obterListaId(nomeLista);
   const itens: ItemLista<F>[] = [];
   let url: string | null =
-    `${GRAPH}/sites/${SITE_ID}/lists/${listaId}/items?$expand=fields&$top=500&$filter=fields/ID gt ${Math.floor(desdeId)}`;
+    // "fields/ID gt N" não funciona (o SharePoint trata ID como texto: erro 400). Filtra pelos
+    // criados nos últimos 60 dias (rápido) e corta pelo ID aqui.
+    `${GRAPH}/sites/${SITE_ID}/lists/${listaId}/items?$expand=fields&$top=500&$filter=fields/Created ge '${new Date(Date.now() - 60 * 864e5).toISOString()}'`;
   while (url) {
     const p: { value?: ItemLista<F>[]; "@odata.nextLink"?: string } = await chamar(url, {
       headers: { Prefer: "HonorNonIndexedQueriesWarningMayFailRandomly" },
@@ -120,7 +122,7 @@ export async function listarItensDesde<F = Record<string, unknown>>(nomeLista: s
     itens.push(...(p.value ?? []));
     url = p["@odata.nextLink"] ?? null;
   }
-  return itens;
+  return itens.filter((i) => Number(i.id) > desdeId);
 }
 
 export async function obterItem<F = Record<string, unknown>>(nomeLista: string, itemId: string): Promise<ItemLista<F>> {
