@@ -266,6 +266,14 @@ function FormOS({ os, mei, servicos, fechar, baixarPdf, email }: { os: OS | null
           let rc: Awaited<ReturnType<typeof fixo>> = FIXOS.includes(cod)
             ? await fixo(diaFixo)
             : await api("POST", "/cadastro/servico-variavel", { corpo: { codigocliente: cobrado, codigoservicoescrit: cod, dataservvar: o.datainicio, qtdadeservvar: 1, valorunitservvar: valor, observservvar: `${questor} - ${String(o.razao).slice(0, 40)}`, codigoescrit: 1, codigousuario: 19 }, idempotencia: `osmei-${gravada.nos}-var-${cod}` });
+          // O Questor recusa o mesmo serviço fixo no mesmo cliente com a MESMA data de início (vários MEIs do
+          // mesmo salão começando no mesmo dia). Como o Access: tenta o próximo dia livre.
+          for (let t = 0; FIXOS.includes(cod) && rc.status === 409 && t < 20; t++) {
+            const d = new Date(`${diaFixo}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1);
+            diaFixo = d.toISOString().slice(0, 10);
+            rc = await fixo(diaFixo);
+          }
+          if (FIXOS.includes(cod) && diaFixo !== String(o.datainicio) && rc.status < 300) out.push(`Início da mensalidade ajustado para ${diaFixo.split("-").reverse().join("/")} (a data ${String(o.datainicio).split("-").reverse().join("/")} já estava usada por outro MEI nesse cliente).`);
           const x = resumoGravacao(rc);
           out.push(`Cobrança serviço ${i + 1} (${cod}, ${FIXOS.includes(cod) ? "fixo mensal" : "variável"}, ${brl(valor)}, cliente ${cobrado}): ${x.ok ? x.texto : mensagemErro(rc)}`);
         }
