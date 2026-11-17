@@ -1,10 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/societario/cron/keepalive", "schedule": "0 4 * * *" },
-    { "path": "/api/pessoas/cron/avisos-bem-estar", "schedule": "0 11 * * *" },
-    { "path": "/api/fiscal/dare-sp/cron", "schedule": "0 10 * * *" },
-    { "path": "/api/paralegal/painel/cron", "schedule": "38 10 * * 1-5" }
+    {
+      "path": "/api/societario/cron/keepalive",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/pessoas/cron/avisos-bem-estar",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/fiscal/dare-sp/cron",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/paralegal/painel/cron",
+      "schedule": "38 10 * * 1-5"
+    },
+    {
+      "path": "/api/fiscal/dctfweb/cron",
+      "schedule": "0 11 * * *"
+    }
   ],
   "functions": {
     "app/api/paralegal/robo-zen/**/route.ts": {
