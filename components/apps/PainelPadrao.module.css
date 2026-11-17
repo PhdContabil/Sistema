@@ -1,4 +1,4 @@
-/* Fiscal · Situação Fiscal — layout próprio, usando os tokens de cor do Núcleo
+/* Layout padrão dos painéis do Núcleo (Situação Fiscal, Procurações…), usando os tokens de cor do Núcleo
    (funciona nos temas claro e escuro). */
 
 .wrap { display: flex; flex-direction: column; gap: 16px; }
