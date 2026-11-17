@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { formatCNPJ } from "@/lib/conciliacao";
-import s from "./SituacaoFiscal.module.css";
+import s from "./PainelPadrao.module.css";
 
 type Situacao = "regular" | "com_restricao" | "irregular" | "indefinida" | "erro";
 type Chave = Situacao | "nunca";

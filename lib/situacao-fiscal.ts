@@ -5,28 +5,18 @@
 // Receita é PAGA e gera relatório novo: só acontece por clique, uma empresa
 // por requisição (o lote é um laço no navegador, com progresso e parar).
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getEmpresas, hasApiKey } from "./questor";
 import {
   autenticar, consumir, dadosDe, participante, textoMensagens,
-  type CredenciaisSerpro, type Participante, type TokensSerpro,
+  type Participante, type TokensSerpro,
 } from "./serpro/integra-contador";
 import { classificarRelatorio, REGRA_VERSAO, type Classificacao, type Situacao } from "./situacao-fiscal-pdf";
+import { carregarCredenciais, db, registrarChamada, soDigitos } from "./serpro/servidor";
 
 export { REGRA_VERSAO };
 export type { Situacao };
 
-function db(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Banco não configurado (SUPABASE_SERVICE_ROLE_KEY).");
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: (e, i) => fetch(e, { ...i, cache: "no-store" }) },
-  });
-}
-
-export const soDigitos = (s: string | null | undefined) => String(s ?? "").replace(/\D/g, "");
+export { soDigitos };
 
 /** Colunas da listagem — sem o PDF, que é pesado. */
 const COLUNAS = "cnpj, razao_social, situacao, pendencias, resumo, mensagem, consultado_em, "
@@ -115,16 +105,6 @@ export async function obterPdf(cnpj: string): Promise<string | null> {
   return data?.pdf_base64 ?? null;
 }
 
-async function carregarCredenciais(): Promise<CredenciaisSerpro> {
-  const { data, error } = await db().from("credenciais_serpro")
-    .select("consumer_key, consumer_secret, pfx_base64, pfx_senha, contratante_cnpj").eq("id", 1).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data?.consumer_key || !data.pfx_base64 || !data.contratante_cnpj) {
-    throw new Error("Credenciais SERPRO não configuradas (certificado A1, consumer key/secret e CNPJ do escritório).");
-  }
-  return data as CredenciaisSerpro;
-}
-
 const ESPERA_MAX_MS = 12_000;
 const TENTATIVAS = 4;
 const dorme = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
@@ -193,14 +173,10 @@ export async function consultarEmpresa(cnpjRaw: string, razaoSocial: string | nu
     Object.assign(registro, camposExtras(r), { pdf_base64: r.pdf_base64, regra_versao: REGRA_VERSAO });
   }
 
-  const sb = db();
-  const { error } = await sb.from("situacao_fiscal").upsert(registro, { onConflict: "cnpj" });
+  const { error } = await db().from("situacao_fiscal").upsert(registro, { onConflict: "cnpj" });
   if (error) throw new Error(error.message);
-  // Rastro da chamada paga (quem, quando, resultado). Melhor-esforço: não derruba a consulta.
-  await sb.from("notificacoes_log").insert({
-    destino: cnpj, canal: "serpro-sitfis", assunto: "Consulta Situação Fiscal", sucesso: r.ok,
-    detalhe: { situacao: r.situacao, mensagem: r.mensagem, protocolo: r.protocolo, por: porEmail },
-  }).then(() => undefined, () => undefined);
+  await registrarChamada("serpro-sitfis", "Consulta Situação Fiscal", cnpj, r.ok,
+    { situacao: r.situacao, mensagem: r.mensagem, protocolo: r.protocolo, por: porEmail });
 
   return { ok: r.ok, cnpj, situacao: r.situacao, mensagem: r.mensagem };
 }
