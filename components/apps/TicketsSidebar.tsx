@@ -21,7 +21,7 @@ const ITEM_OFF =
   "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white";
 
 export default function TicketsSidebar({
-  resumo, souAdmin, souAdminGeral, meuSetor,
+  resumo, souAdmin, souAdminGeral, meuSetor, verSprint = false,
 }: {
   resumo: Record<string, number>;
   souAdmin: boolean;
@@ -29,6 +29,8 @@ export default function TicketsSidebar({
   souAdminGeral: boolean;
   /** Setor cadastrado da pessoa em ticket_users — o que ela enxerga quando não é admin. */
   meuSetor: string | null;
+  /** Sprint só para T.I. e Diretoria. */
+  verSprint?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -62,6 +64,7 @@ export default function TicketsSidebar({
           </Link>
         ))}
 
+        {verSprint && (<>
         <div className="px-3 pt-4 pb-1.5 text-[11px] uppercase tracking-widest text-slate-400 dark:text-slate-500">
           Planejamento
         </div>
@@ -72,6 +75,7 @@ export default function TicketsSidebar({
           <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-500" />
           <span className="flex-1 truncate">Sprint</span>
         </Link>
+        </>)}
 
         {souAdmin && (
           <>

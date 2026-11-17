@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { listarSprints, criarSprint, ehData } from "@/lib/sprints";
-import { exigirTI } from "./_auth";
+import { exigirTI, podeVerSprint } from "./_auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const email = await exigirTI();
+  const email = await podeVerSprint();
   if (!email) return NextResponse.json({ error: "Sem acesso." }, { status: 403 });
   return NextResponse.json({ sprints: await listarSprints() });
 }

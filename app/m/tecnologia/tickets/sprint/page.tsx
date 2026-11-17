@@ -6,6 +6,8 @@ import {
   ehAdminNav, ehAdminGeral, ehDaTI, obterSetorUsuario, resumoPorSetor, listarPessoas,
 } from "@/lib/tickets";
 import { listarSprints, sprintPadrao, podeDefinirEstimate } from "@/lib/sprints";
+import { ehDiretoria } from "@/lib/acesso";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,7 +30,10 @@ export default async function Page() {
 
   // Quem não é do TI não recebe nem a lista: a tela já avisa e não há dado
   // nenhum trafegando à toa.
-  if (souDoTI) {
+  // Sprint: só T.I. (edita) e Diretoria (vê). Os outros nem enxergam a tela.
+  const podeVer = souDoTI || ehDiretoria(meuEmail);
+  if (!podeVer) redirect("/m/tecnologia/tickets");
+  {
     try {
       const [s, p, pessoas] = await Promise.all([listarSprints(), sprintPadrao(), listarPessoas()]);
       sprints = s;
@@ -55,7 +60,7 @@ export default async function Page() {
           sprints={sprints}
           pessoasTI={pessoasTI}
           meuEmail={meuEmail}
-          souDoTI={souDoTI}
+          souDoTI={podeVer}
           podeEstimar={podeDefinirEstimate(meuEmail)}
           erroServidor={erro}
         />
