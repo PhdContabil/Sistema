@@ -1,35 +1,19 @@
+// Fiscal · DCTFWeb — obrigadas (Questor), situação na Receita, guia, recibo,
+// transmissão e a rotina automática. Mesma regra de acesso do resto do Fiscal.
 import Workspace from "@/components/Workspace";
+import AcessoNegado from "@/components/AcessoNegado";
 import Dctfweb from "@/components/apps/Dctfweb";
 import { getModule } from "@/lib/modules";
-import { getDctfwebObrigadas, hasApiKey } from "@/lib/questor";
-import { SAMPLE_DCTFWEB } from "@/lib/sample-fiscal";
-import type { DctfwebResponse } from "@/lib/fiscal";
+import { getCurrentUser } from "@/lib/societario/supabase-server";
+import { obterNivelAcesso, podeAcessarApp } from "@/lib/acesso";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { ano?: string; mes?: string; origem?: string };
-}) {
+export default async function Page() {
   const m = getModule("fiscal")!;
-
-  let resp: DctfwebResponse = SAMPLE_DCTFWEB;
-  let fonte: "api" | "exemplo" = "exemplo";
-  let erro: string | null = null;
-
-  if (hasApiKey()) {
-    try {
-      resp = await getDctfwebObrigadas({
-        ano: searchParams.ano ? Number(searchParams.ano) : undefined,
-        mes: searchParams.mes ? Number(searchParams.mes) : undefined,
-        origem: searchParams.origem || undefined,
-      });
-      fonte = "api";
-    } catch (e) {
-      erro = e instanceof Error ? e.message : "Falha ao consultar a API Questor.";
-    }
-  }
+  const user = await getCurrentUser().catch(() => null);
+  const nivel = await obterNivelAcesso(user?.email);
+  const liberado = podeAcessarApp(nivel, "fiscal", "DCTFWeb");
 
   return (
     <Workspace moduleId="fiscal" appName="DCTFWeb">
@@ -37,15 +21,10 @@ export default async function Page({
         <div className="app-ic mono" style={{ background: m.color }}>DW</div>
         <div>
           <h1>DCTFWeb</h1>
-          <div className="desc">Empresas obrigadas por competência e débito apurado.</div>
+          <div className="desc">Obrigadas por competência, situação na Receita, guia, recibo e transmissão via Integra Contador.</div>
         </div>
       </div>
-      <Dctfweb
-        resp={resp}
-        fonte={fonte}
-        erroServidor={erro}
-        filtros={{ ano: searchParams.ano ?? "", mes: searchParams.mes ?? "", origem: searchParams.origem ?? "" }}
-      />
+      {liberado ? <Dctfweb /> : <AcessoNegado moduloNome="DCTFWeb" />}
     </Workspace>
   );
 }

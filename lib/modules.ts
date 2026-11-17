@@ -24,7 +24,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Apuração de tributos, notas fiscais e obrigações acessórias.",
     apps: [
       { name: "Simples Nacional", desc: "Análise de limite, faturamento, projeção e estouro do Simples.", href: "/m/fiscal/simples" },
-      { name: "DCTFWeb", desc: "Empresas obrigadas por competência e débito apurado.", href: "/m/fiscal/dctfweb" },
+      { name: "DCTFWeb", desc: "Obrigadas, situação na Receita, guia, recibo e transmissão (manual ou automática).", href: "/m/fiscal/dctfweb" },
       { name: "Situação Fiscal", desc: "Relatório SITFIS da Receita: pendências, Simples/SIMEI e certidão.", href: "/m/fiscal/situacao-fiscal" },
       { name: "DARE SP", desc: "Guia de ICMS da Sefaz-SP, com multa, juros e envio ao Zen.", href: "/m/fiscal/dare-sp" },
       { name: "Notas Fiscais", desc: "Emissão, importação e escrituração de NF-e e NFS-e." },
@@ -124,6 +124,7 @@ export const MODULES: ModuleDef[] = [
       { name: "Dúvidas Frequentes", desc: "Respostas rápidas para as dúvidas mais comuns de T.I.", href: "/m/tecnologia/duvidas" },
       { name: "Usuários por setor", desc: "Setor de cada pessoa — define o acesso aos módulos do Núcleo.", href: "/m/tecnologia/usuarios" },
       { name: "Inventário de TI", desc: "Equipamentos, licenças e a quem estão alocados.", href: "/m/tecnologia/inventario" },
+      { name: "Integra Contador", desc: "Certificado A1 da PHD e credenciais do SERPRO (Situação Fiscal, Procurações, DCTFWeb).", href: "/m/tecnologia/integra-contador" },
       { name: "Catálogo de Sistemas", desc: "Sistemas em uso, responsáveis, quem tem acesso e controle da API Questor.", href: "/m/tecnologia/catalogo" },
       { name: "Base de Conhecimento", desc: "Tutoriais e procedimentos de TI para o time." },
     ],

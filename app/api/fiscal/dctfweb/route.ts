@@ -1,31 +1,58 @@
+// Fiscal · DCTFWeb
+//   GET  ?competencia=AAAA-MM                    -> competências salvas + declarações da competência (só banco)
+//   POST { acao: "sincronizar", competencia }    -> traz as obrigadas do Questor (sem custo)
+//   POST { acao: "consultar", id }               -> situação na Receita (SERPRO, cobrado)
+//   POST { acao: "transmitir", id }              -> assina e transmite UMA declaração (irreversível)
+//   POST { acao: "trava", id, valor }            -> liga/desliga "não transmitir"
 import { NextResponse } from "next/server";
-import { getDctfwebObrigadas, hasApiKey, QuestorError } from "@/lib/questor";
-import { SAMPLE_DCTFWEB } from "@/lib/sample-fiscal";
+import { unstable_noStore as noStore } from "next/cache";
+import { exigirFiscal } from "../dare-sp/_auth";
+import {
+  competenciasSalvas, consultar, definirTrava, listar, obterParametros, sincronizarObrigadas, transmitir,
+} from "@/lib/dctfweb";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const ano = searchParams.get("ano");
-  const mes = searchParams.get("mes");
-  const origem = searchParams.get("origem") ?? undefined;
-  const cnpj = searchParams.get("cnpj") ?? undefined;
+const falha = (e: unknown, padrao: string, status = 500) =>
+  NextResponse.json({ error: e instanceof Error ? e.message : padrao }, { status });
 
-  if (!hasApiKey()) {
-    return NextResponse.json({ ...SAMPLE_DCTFWEB, fonte: "exemplo" });
-  }
-
+export async function GET(req: Request) {
+  noStore();
+  if (!(await exigirFiscal())) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
   try {
-    const data = await getDctfwebObrigadas({
-      ano: ano ? Number(ano) : undefined,
-      mes: mes ? Number(mes) : undefined,
-      origem,
-      cnpj,
-    });
-    return NextResponse.json({ ...data, fonte: "api" });
-  } catch (err) {
-    const status = err instanceof QuestorError ? err.status : 500;
-    const message = err instanceof Error ? err.message : "Erro desconhecido";
-    return NextResponse.json({ error: message }, { status });
+    const competencias = await competenciasSalvas();
+    const pedida = new URL(req.url).searchParams.get("competencia");
+    const competencia = pedida || competencias[0] || null;
+    return NextResponse.json({ competencias, competencia, linhas: competencia ? await listar(competencia) : [] });
+  } catch (e) {
+    return falha(e, "Falha ao listar.");
+  }
+}
+
+export async function POST(req: Request) {
+  const email = await exigirFiscal();
+  if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
+  const b = (await req.json().catch(() => ({}))) as { acao?: string; id?: number; competencia?: string; valor?: boolean };
+  try {
+    switch (b.acao) {
+      case "sincronizar":
+        return NextResponse.json({ ok: true, ...(await sincronizarObrigadas(b.competencia ?? "")) });
+      case "consultar":
+        if (!b.id) return falha(null, "Informe a declaração.", 400);
+        return NextResponse.json(await consultar(Number(b.id)));
+      case "transmitir": {
+        if (!b.id) return falha(null, "Informe a declaração.", 400);
+        const p = await obterParametros();
+        return NextResponse.json(await transmitir(Number(b.id), { consultarAntes: p.consultar_antes, por: email }));
+      }
+      case "trava":
+        if (!b.id) return falha(null, "Informe a declaração.", 400);
+        return NextResponse.json(await definirTrava(Number(b.id), !!b.valor));
+      default:
+        return falha(null, "Ação inválida.", 400);
+    }
+  } catch (e) {
+    return falha(e, "Falha na operação.");
   }
 }
