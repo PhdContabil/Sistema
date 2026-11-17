@@ -170,14 +170,14 @@ export async function syncTareffaToSupabase(
     const id = procIdByExternal.get(ind.id);
     if (id && (ind.activities?.length ?? 0) > 0) touchedProcessoIds.add(id);
   }
-  const procIdsArr = Array.from(touchedProcessoIds);
-
-  for (let i = 0; i < procIdsArr.length; i += 200) {
-    const batch = procIdsArr.slice(i, i + 200);
-    const { error } = await sb
-      .from("atividades")
-      .delete()
-      .in("processo_id", batch);
+  // Atenção (17/11/2026): no modo "updated" o Tareffa devolve SÓ as atividades alteradas no período,
+  // não o processo inteiro. Antes apagávamos todas as atividades do processo e regravávamos só essas,
+  // e as outras sumiam (970 processos perderam ~14,5 mil atividades). Agora só são substituídas as
+  // atividades que vieram na resposta (pelo external_id); as demais ficam como estão.
+  const extsDevolvidos = indicators.filter((i) => procIdByExternal.has(i.id)).flatMap((i) => (i.activities || []).map((a) => a.id));
+  for (let i = 0; i < extsDevolvidos.length; i += 300) {
+    const batch = extsDevolvidos.slice(i, i + 300);
+    const { error } = await sb.from("atividades").delete().in("external_id", batch);
     if (error) errors.push(`delete atividades batch ${i}: ${error.message}`);
   }
 
