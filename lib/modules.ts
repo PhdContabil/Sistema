@@ -25,7 +25,7 @@ export const MODULES: ModuleDef[] = [
     apps: [
       { name: "Simples Nacional", desc: "Análise de limite, faturamento, projeção e estouro do Simples.", href: "/m/fiscal/simples" },
       { name: "DCTFWeb", desc: "Empresas obrigadas por competência e débito apurado.", href: "/m/fiscal/dctfweb" },
-      { name: "Apuração de Impostos", desc: "Cálculo de ICMS, PIS, COFINS e IPI por competência.", href: "/m/fiscal/apuracao-impostos" },
+      { name: "Situação Fiscal", desc: "Relatório SITFIS da Receita: pendências, Simples/SIMEI e certidão.", href: "/m/fiscal/situacao-fiscal" },
       { name: "DARE SP", desc: "Guia de ICMS da Sefaz-SP, com multa, juros e envio ao Zen.", href: "/m/fiscal/dare-sp" },
       { name: "Notas Fiscais", desc: "Emissão, importação e escrituração de NF-e e NFS-e." },
       { name: "SPED Fiscal", desc: "Geração, validação e transmissão dos arquivos." },
