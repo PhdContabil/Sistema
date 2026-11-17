@@ -3,13 +3,13 @@ import {
   obterSprint, atualizarSprint, excluirSprint,
   listarItens, listarCapacidade, listarFolgas, backlogDisponivel, ehData, ehEstado,
 } from "@/lib/sprints";
-import { exigirTI } from "../_auth";
+import { exigirTI, podeVerSprint } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
 /** Tudo que a tela precisa numa chamada só: sprint, itens, capacidade e backlog. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const email = await exigirTI();
+  const email = await podeVerSprint();
   if (!email) return NextResponse.json({ error: "Sem acesso." }, { status: 403 });
 
   const sprint = await obterSprint(params.id);
