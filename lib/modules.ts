@@ -57,6 +57,7 @@ export const MODULES: ModuleDef[] = [
     apps: [
       { name: "Folha de Pagamento", desc: "Cálculo de salários, encargos e benefícios.", href: "/m/trabalhista/folha-pagamento" },
       { name: "eSocial", desc: "Eventos, envios e retornos ao governo.", href: "/m/trabalhista/esocial" },
+      { name: "DCTFWeb", desc: "Compartilhada com o Fiscal: obrigadas, situação, guia, recibo e transmissão.", href: "/m/trabalhista/dctfweb" },
       { name: "Admissões", desc: "Registro e onboarding de novos colaboradores." },
       { name: "Férias e 13º", desc: "Programação, avisos e cálculos." },
       { name: "Rescisões", desc: "Cálculo de verbas e homologação." },
