@@ -3,6 +3,7 @@ import { hasWriteKey, lancarLucroDistribuido } from "@/lib/questor";
 import { prepararLancamento, ErroLucro } from "@/lib/lucros-distribuidos-servico";
 import { chaveLancamento, jaLancado, registrarLog } from "@/lib/lucros-distribuidos-log";
 import { notificarLucro } from "@/lib/notificar-lucro";
+import { criarTarefaDarfLucros } from "@/lib/tarefa-darf-lucros";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,12 @@ export async function POST(req: Request) {
       evento: "novo", competencia: e.competencia, codigoempresa: e.codigoempresa, nomeEmpresa: p.nomeEmpresa,
       nomeSocio: p.nomeSocio, codigosocio: e.codigosocio, rendimento: e.rendimento, imposto: e.imposto,
     }, email);
-    return NextResponse.json({ ok: true, repetido, chave: r.corpo.chave ?? null, avisos: r.corpo.avisos ?? [], notificacao });
+    // Com IRRF retido, abre a tarefa da guia no Tareffa para o fiscal da empresa. Só em lançamento novo.
+    const tarefaDarf = repetido || !(e.imposto > 0) ? null : await criarTarefaDarfLucros({
+      codigoempresa: e.codigoempresa, competencia: e.competencia, nomeEmpresa: p.nomeEmpresa, nomeSocio: p.nomeSocio,
+      codigosocio: e.codigosocio, rendimento: e.rendimento, baseIrrf: e.baseIrrf, imposto: e.imposto, lancadoPor: email,
+    });
+    return NextResponse.json({ ok: true, repetido, chave: r.corpo.chave ?? null, avisos: r.corpo.avisos ?? [], notificacao, tarefaDarf });
   } catch (e) {
     if (e instanceof ErroLucro) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[lucros-distribuidos/lancar]", e);

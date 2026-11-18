@@ -148,8 +148,10 @@ export default function LucrosDistribuidos({
   }
 
   /** Complemento da mensagem de sucesso quando o aviso no Teams falha (o lançamento já foi feito). */
-  const avisoTeams = (j: { notificacao?: string }) =>
-    j.notificacao === "falhou" ? " Atenção: o aviso no Teams não foi enviado." : "";
+  const avisoTeams = (j: { notificacao?: string; tarefaDarf?: { estado: string; mensagem: string } | null }) =>
+    (j.notificacao === "falhou" ? " Atenção: o aviso no Teams não foi enviado." : "") +
+    (j.tarefaDarf?.estado === "criada" ? ` ${j.tarefaDarf.mensagem}` : "") +
+    (j.tarefaDarf?.estado === "falhou" ? ` Atenção: a tarefa da guia DARF não foi criada no Tareffa (${j.tarefaDarf.mensagem}) — abra à mão.` : "");
 
   async function chamar(url: string, body: object) {
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
