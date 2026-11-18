@@ -8,7 +8,7 @@
 //   3. Manual (SICALC)       -> DARF por código de receita
 // Layout padrão (PainelPadrao.module.css).
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { formatCNPJ } from "@/lib/conciliacao";
 import { ROTULO_SERVICO, type Debito, type Servico } from "@/lib/recalculo-regras";
 import s from "./PainelPadrao.module.css";
@@ -48,7 +48,40 @@ function UltimaConsulta({ iso, compacta = false }: { iso: string | null | undefi
   );
 }
 
+/** Recarrega a tela depois de atualizar uma Situação Fiscal. */
+const Recarregar = createContext<() => Promise<void>>(async () => {});
+
+/** Botão que consulta uma nova Situação Fiscal da empresa (cobrado) e recarrega os débitos. */
+function AtualizarSF({ cnpj, nome, compacto = false }: { cnpj: string; nome?: string | null; compacto?: boolean }) {
+  const recarregar = useContext(Recarregar);
+  const [rodando, setRodando] = useState(false);
+  async function atualizar() {
+    if (!confirm(`Consultar nova Situação Fiscal de ${nome ?? formatCNPJ(cnpj)}?\n\nA chamada é cobrada pelo SERPRO e leva alguns segundos.`)) return;
+    setRodando(true);
+    try {
+      const r = await fetch("/api/fiscal/recalculos", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "atualizar_sf", cnpj, razao_social: nome ?? null }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(`Situação Fiscal não atualizada: ${j.error ?? `HTTP ${r.status}`}`); return; }
+      await recarregar();
+    } finally {
+      setRodando(false);
+    }
+  }
+  return compacto ? (
+    <button type="button" className={s.icone} disabled={rodando} onClick={atualizar}
+            title="Atualizar Situação Fiscal agora (cobrado)">{rodando ? "…" : Ico.atualizar}</button>
+  ) : (
+    <button type="button" className={s.botao} disabled={rodando} onClick={atualizar} title="Cobrado pelo SERPRO">
+      {rodando ? "Consultando…" : "Atualizar Situação Fiscal"}
+    </button>
+  );
+}
+
 const Ico: Record<string, ReactNode> = {
+  atualizar: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-2.6-6.4" /><path d="M21 3v6h-6" /></svg>,
   busca: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>,
   guia: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M9 14h6M9 18h4" /></svg>,
   editar: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>,
@@ -91,6 +124,7 @@ export default function Recalculos() {
   const abas: [Aba, string][] = [["abertos", "Débitos em aberto"], ["competencia", "Por competência"], ["manual", "Manual (SICALC)"]];
 
   return (
+    <Recarregar.Provider value={carregar}>
     <div className={s.wrap}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {abas.map(([k, rot]) => (
@@ -105,6 +139,7 @@ export default function Recalculos() {
       {dados && aba === "competencia" && <PorCompetencia carteira={dados.carteira} avisoCarteira={dados.avisoCarteira} consultas={dados.consultas} />}
       {dados && aba === "manual" && <Manual carteira={dados.carteira} avisoCarteira={dados.avisoCarteira} inicial={manualInicial} consultas={dados.consultas} />}
     </div>
+    </Recarregar.Provider>
   );
 }
 
@@ -251,7 +286,12 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
                       </div>
                     </div>
                   </td>
-                  <td><UltimaConsulta iso={e.consultado_em} compacta /></td>
+                  <td>
+                    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                      <UltimaConsulta iso={e.consultado_em} compacta />
+                      <AtualizarSF cnpj={e.cnpj} nome={e.razao_social} compacto />
+                    </span>
+                  </td>
                   <td>
                     <div>{d.receita}</div>
                     {d.situacao && <div className={s.dataSub}>{d.situacao.toLowerCase()}</div>}
@@ -313,6 +353,7 @@ function SeletorEmpresa({ carteira, valor, onChange, consultas }: { carteira: Ca
       {valor && (
         <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
           <UltimaConsulta iso={consultas[valor]} />
+          <AtualizarSF cnpj={valor} nome={carteira.find((c) => c.cnpj === valor)?.nome} />
           <a className={s.dataSub} href="/m/fiscal/situacao-fiscal" target="_blank" rel="noreferrer">abrir Situação Fiscal ↗</a>
         </span>
       )}
