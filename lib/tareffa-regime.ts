@@ -17,6 +17,9 @@ const TTL_MS = 2 * 60 * 1000;
 export interface RegimeEmpresa {
   codigoempresa: number;
   tareffaId: number | null;
+  /** Id da empresa na contabilidade (o da URL /empresas/{id} do Tareffa): é o usado em .../links/equipes/responsaveis.
+   *  Difere de tareffaId (que é o "cliente" das tarefas). */
+  empresaContabilidadeId: number | null;
   codigoErp: string | null;
   razaoSocial: string | null;
   /** Texto do Tareffa, como está cadastrado ("Lucro Real"…). null = sem regime marcado. */
@@ -27,6 +30,7 @@ export interface RegimeEmpresa {
 
 interface RegistroTareffa {
   id?: number;
+  empresaContabilidade?: { id?: number } | null;
   razaoSocial?: string;
   codigoErp?: string;
   regimeTributario?: { id?: number; descricao?: string } | null;
@@ -80,6 +84,7 @@ export async function obterRegimeEmpresa(codigoempresa: number): Promise<RegimeE
     ? {
         codigoempresa,
         tareffaId: reg.id ?? null,
+        empresaContabilidadeId: reg.empresaContabilidade?.id ?? null,
         codigoErp: reg.codigoErp ?? null,
         razaoSocial: reg.razaoSocial ?? null,
         regimeDescricao: reg.regimeTributario?.descricao ?? null,

@@ -88,7 +88,8 @@ export async function criarTarefaDarfLucros(d: DadosTarefaDarf): Promise<Resulta
     const servico = await servicoDarf();
     if (!servico) return { estado: "falhou", mensagem: 'Serviço "Guia DARF Lucros ou Dividendos IRRF 1841" não encontrado (ou ambíguo) no Tareffa.' };
 
-    const { status: sr, json: jr } = await chamar(`/empresas/${emp.tareffaId}/links/equipes/responsaveis?description=`);
+    // Responsáveis ficam na empresa da contabilidade (id da URL /empresas/{id}); a tarefa usa o id do cliente.
+    const { status: sr, json: jr } = await chamar(`/empresas/${emp.empresaContabilidadeId ?? emp.tareffaId}/links/equipes/responsaveis?description=`);
     if (sr < 200 || sr >= 300) return { estado: "falhou", mensagem: `Não consegui ler os responsáveis da empresa no Tareffa (HTTP ${sr}).` };
     const fiscal = escolherResponsavelFiscal(((jr as { records?: RegistroResponsavel[] }).records ?? []));
     if (!fiscal) return { estado: "falhou", mensagem: "A empresa não tem responsável do Departamento Fiscal no Tareffa." };
