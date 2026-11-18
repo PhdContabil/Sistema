@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasWriteKey, lancarLucroDistribuido } from "@/lib/questor";
 import { prepararLancamento, ErroLucro } from "@/lib/lucros-distribuidos-servico";
-import { chaveLancamento, jaLancado, registrarLog } from "@/lib/lucros-distribuidos-log";
+import { chaveLancamento, comGeracao, geracaoLancamento, jaLancado, registrarLog } from "@/lib/lucros-distribuidos-log";
 import { notificarLucro } from "@/lib/notificar-lucro";
 import { criarTarefaDarfLucros } from "@/lib/tarefa-darf-lucros";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
@@ -22,9 +22,9 @@ export async function POST(req: Request) {
   try {
     const p = await prepararLancamento(corpo);
     const e = p.plano.entrada;
-    const chave = chaveLancamento(e);
+    const chaveBase = chaveLancamento(e);
 
-    const anterior = await jaLancado(chave).catch(() => null);
+    const anterior = await jaLancado(chaveBase).catch(() => null);
     if (anterior) {
       return NextResponse.json(
         { error: `Esta distribuição já foi lançada em ${new Date(anterior.criado_em).toLocaleString("pt-BR")} por ${anterior.responsavel}.` },
@@ -32,6 +32,8 @@ export async function POST(req: Request) {
       );
     }
 
+    // Geração: depois de uma exclusão, o mesmo lançamento precisa de chave nova no Questor.
+    const chave = comGeracao(chaveBase, await geracaoLancamento(chaveBase).catch(() => 0));
     const base = { operacao: "lancamento" as const, entrada: e, nomeEmpresa: p.nomeEmpresa, nomeSocio: p.nomeSocio, responsavel: email, chave };
     const r = await lancarLucroDistribuido(p.plano, { dryRun: false, idempotencyKey: chave, usuario: email });
     if (!r.ok) {
