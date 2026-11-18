@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { excluirLucroDistribuido, hasWriteKey } from "@/lib/questor";
 import { ErroLucro, resolverNomes } from "@/lib/lucros-distribuidos-servico";
-import { chaveExclusao, marcarExcluido, registrarLog } from "@/lib/lucros-distribuidos-log";
+import { chaveExclusao, comGeracao, geracaoExclusao, marcarExcluido, registrarLog } from "@/lib/lucros-distribuidos-log";
 import { ehData } from "@/lib/lucros-distribuidos";
 import { notificarLucro } from "@/lib/notificar-lucro";
 import { exigirContabil } from "../../informe-rendimentos/_auth";
@@ -33,7 +33,9 @@ export async function POST(req: Request) {
   try {
     // Nomes só para o log: sócio que já saiu da empresa não impede a exclusão.
     const nomes = await resolverNomes(codigoempresa, codigosocio).catch(() => ({ nomeEmpresa: null, nomeSocio: null }));
-    const chave = chaveExclusao(codigoempresa, chaveQ);
+    // O Questor reaproveita o número do lançamento: cada exclusão concluída avança a geração da chave.
+    const chaveBase = chaveExclusao(codigoempresa, chaveQ);
+    const chave = comGeracao(chaveBase, await geracaoExclusao(chaveBase).catch(() => 0));
     const r = await excluirLucroDistribuido({ codigoempresa, chave: chaveQ, codigosocio, dataAtual }, { idempotencyKey: chave, usuario: email });
     const entrada = {
       codigoempresa, codigosocio, competencia: /^\d{4}-\d{2}/.test(competencia) ? competencia.slice(0, 7) : dataAtual.slice(0, 7),

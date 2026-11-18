@@ -58,12 +58,42 @@ export function chaveExclusao(codigoempresa: number, chave: number): string {
   return `lucro:${codigoempresa}:excluir:${chave}`;
 }
 
-export async function jaLancado(chave: string): Promise<LinhaLogLucro | null> {
+/**
+ * Chave enviada ao Questor = chave base + geração. O Questor guarda a resposta de cada chave e,
+ * se ela se repete, devolve a resposta antiga ("repetido": true) SEM gravar nada. Como o Questor
+ * reaproveita o número do lançamento depois de uma exclusão, a mesma chave voltava e: um novo
+ * lançamento igual ao excluído não gravava, e uma nova exclusão do mesmo número não apagava.
+ * A geração conta quantas vezes aquela chave já foi "usada e concluída"; clique repetido
+ * (mesma geração) continua idempotente.
+ */
+export const comGeracao = (base: string, geracao: number) => `${base}:g${geracao}`;
+
+/** Quantas vezes essa chave base já foi usada em operação concluída (inclui chaves antigas, sem sufixo). */
+async function contarUsos(base: string, operacao: OperacaoLucro, status: "lancado" | "excluido"): Promise<number> {
+  const sb = db();
+  if (!sb) return 0;
+  const { count, error } = await sb
+    .from("lucros_distribuidos_log").select("id", { count: "exact", head: true })
+    .or(`idempotency_key.eq.${base},idempotency_key.like.${base}:g*`)
+    .eq("operacao", operacao).eq("status", status);
+  if (error) { console.error("[lucros-distribuidos/log]", error.message); return 0; }
+  return count ?? 0;
+}
+
+/** Geração do lançamento: quantos lançamentos com esta chave base já foram feitos e depois excluídos. */
+export const geracaoLancamento = (base: string) => contarUsos(base, "lancamento", "excluido");
+
+/** Geração da exclusão: quantas exclusões com esta chave base já foram concluídas. */
+export const geracaoExclusao = (base: string) => contarUsos(base, "exclusao", "lancado");
+
+/** Lançamento ainda ativo com esta chave base (qualquer geração). */
+export async function jaLancado(base: string): Promise<LinhaLogLucro | null> {
   const sb = db();
   if (!sb) return null;
   const { data } = await sb
     .from("lucros_distribuidos_log").select("*")
-    .eq("idempotency_key", chave).eq("operacao", "lancamento").eq("status", "lancado")
+    .or(`idempotency_key.eq.${base},idempotency_key.like.${base}:g*`)
+    .eq("operacao", "lancamento").eq("status", "lancado")
     .limit(1).maybeSingle();
   return (data as LinhaLogLucro | null) ?? null;
 }
