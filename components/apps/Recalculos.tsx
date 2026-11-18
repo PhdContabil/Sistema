@@ -8,7 +8,7 @@
 //   3. Manual (SICALC)       -> DARF por código de receita
 // Layout padrão (PainelPadrao.module.css).
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { formatCNPJ } from "@/lib/conciliacao";
 import { ROTULO_SERVICO, type Debito, type Servico } from "@/lib/recalculo-regras";
 import s from "./PainelPadrao.module.css";
@@ -178,6 +178,44 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
   }, [linhas, busca, filtro, antigas]);
   useEffect(() => { setPagina(0); }, [busca, filtro, antigas]);
 
+  // Modo de visualização: tabela (uma linha por débito) ou matriz (empresa > guia > débitos).
+  const [modo, setModo] = useState<"tabela" | "matriz">("tabela");
+  useEffect(() => { try { if (localStorage.getItem("recalc-modo") === "matriz") setModo("matriz"); } catch { /* sem storage */ } }, []);
+  const trocarModo = (m: "tabela" | "matriz") => { setModo(m); try { localStorage.setItem("recalc-modo", m); } catch { /* sem storage */ } };
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const alternar = (k: string) => setAbertos((a) => { const n = new Set(a); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+
+  const matriz = useMemo(() => {
+    const porEmpresa = new Map<string, { e: Empresa; itens: typeof filtradas }>();
+    for (const l of filtradas) {
+      const g = porEmpresa.get(l.e.cnpj) ?? { e: l.e, itens: [] };
+      g.itens.push(l);
+      porEmpresa.set(l.e.cnpj, g);
+    }
+    const soma = (ls: typeof filtradas, f: (d: Debito) => number) => ls.reduce((t, l) => t + (f(l.d) || 0), 0);
+    return [...porEmpresa.values()].map(({ e, itens }) => {
+      const porServico = new Map<Servico, typeof filtradas>();
+      for (const l of itens) porServico.set(l.d.servico, [...(porServico.get(l.d.servico) ?? []), l]);
+      return {
+        e, qtd: itens.length, principal: soma(itens, (d) => d.saldo_devedor), total: soma(itens, (d) => d.saldo_consolidado),
+        guias: [...porServico.entries()].map(([servico, ls]) => ({
+          servico, itens: ls, principal: soma(ls, (d) => d.saldo_devedor), total: soma(ls, (d) => d.saldo_consolidado),
+        })),
+      };
+    });
+  }, [filtradas]);
+
+  const acoesDebito = (key: string, e: Empresa, d: Debito) => (
+    <div className={s.acoes}>
+      <button className={s.icone} disabled={d.servico === "sem_guia" || gerando !== null}
+              title={d.servico === "sem_guia" ? "Multa lançada: a guia sai pela notificação no e-CAC" : "Gerar guia atualizada — cobrado"}
+              onClick={() => { setDataPgto(hojeIso()); setPedindo({ key, e, d }); }}>{gerando === key ? "…" : Ico.guia}</button>
+      {d.servico === "sicalc" && (
+        <button className={s.icone} title="Ajustar no recálculo manual" onClick={() => onManual(e.cnpj, d)}>{Ico.editar}</button>
+      )}
+    </div>
+  );
+
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const visiveis = filtradas.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
 
@@ -248,6 +286,11 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
           <label className={s.check} title="Débitos cujo relatório pode estar desatualizado">
             <input type="checkbox" checked={antigas} onChange={(e) => setAntigas(e.target.checked)} /> relatório com mais de 30 dias
           </label>
+          <span className={s.espaco} />
+          <div style={{ display: "flex", gap: 4 }} role="group" aria-label="Visualização">
+            <button type="button" className={`${s.toggle} ${modo === "tabela" ? s.on : ""}`} onClick={() => trocarModo("tabela")}>Tabela</button>
+            <button type="button" className={`${s.toggle} ${modo === "matriz" ? s.on : ""}`} onClick={() => trocarModo("matriz")}>Matriz</button>
+          </div>
         </div>
         {pedindo && (
           <div role="dialog" aria-modal="true" onClick={() => setPedindo(null)}
@@ -276,6 +319,101 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
           <span className={s.custo}>{Ico.moeda} cada guia gerada é cobrada pelo SERPRO · DCTFWeb só aceita data no mês corrente</span>
         </div>
 
+        {modo === "matriz" && (
+          <div className={s.tabelaWrap}>
+            <table className={s.tabela}>
+              <thead>
+                <tr>
+                  <th>Empresa / guia / débito</th>
+                  <th>Situação Fiscal</th>
+                  <th>Vencimento</th>
+                  <th style={{ textAlign: "right" }}>Principal</th>
+                  <th style={{ textAlign: "right" }}>Consolidado*</th>
+                  <th className={s.colAcoes}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matriz.length === 0 && (
+                  <tr><td className={s.vazio} colSpan={6}>{linhas.length ? "Nenhum débito com esses filtros." : "Nenhum débito exigível nas Situações Fiscais consultadas."}</td></tr>
+                )}
+                {matriz.map((m) => {
+                  const abE = abertos.has(m.e.cnpj);
+                  return (
+                    <Fragment key={m.e.cnpj}>
+                      <tr style={{ cursor: "pointer" }} onClick={() => alternar(m.e.cnpj)}>
+                        <td>
+                          <div className={s.empresa}>
+                            <span style={{ width: 18, fontWeight: 700 }}>{abE ? "−" : "+"}</span>
+                            <span className={s.avatar}>{iniciais(m.e.razao_social)}</span>
+                            <div>
+                              <div className={s.empresaNome}>{m.e.razao_social ?? "—"}</div>
+                              <div className={s.empresaSub}>{formatCNPJ(m.e.cnpj)} · {m.qtd} débito(s)</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td onClick={(ev) => ev.stopPropagation()}>
+                          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                            <UltimaConsulta iso={m.e.consultado_em} compacta />
+                            <AtualizarSF cnpj={m.e.cnpj} nome={m.e.razao_social} compacto />
+                          </span>
+                        </td>
+                        <td />
+                        <td style={{ textAlign: "right" }} className={s.data}>{brl(m.principal)}</td>
+                        <td style={{ textAlign: "right" }} className={s.data}><strong>{brl(m.total)}</strong></td>
+                        <td />
+                      </tr>
+                      {abE && m.guias.map((g) => {
+                        const kg = `${m.e.cnpj}|${g.servico}`;
+                        const abG = abertos.has(kg);
+                        return (
+                          <Fragment key={kg}>
+                            <tr style={{ cursor: "pointer" }} onClick={() => alternar(kg)}>
+                              <td style={{ paddingLeft: 44 }}>
+                                <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                                  <span style={{ width: 14, fontWeight: 700 }}>{abG ? "−" : "+"}</span>
+                                  <span className={s.pill} style={tom(TOM[g.servico])}><i />{ROTULO_SERVICO[g.servico]}</span>
+                                  <span className={s.dataSub}>{g.itens.length} débito(s)</span>
+                                </span>
+                              </td>
+                              <td /><td />
+                              <td style={{ textAlign: "right" }} className={s.data}>{brl(g.principal)}</td>
+                              <td style={{ textAlign: "right" }} className={s.data}>{brl(g.total)}</td>
+                              <td />
+                            </tr>
+                            {abG && g.itens.map(({ key, d }) => (
+                              <tr key={key}>
+                                <td style={{ paddingLeft: 88 }}>
+                                  <div>{d.receita} · <span className={s.data}>{d.periodo}</span></div>
+                                  {d.situacao && <div className={s.dataSub}>{d.situacao.toLowerCase()}</div>}
+                                </td>
+                                <td />
+                                <td className={s.data}>{dataBR(d.vencimento)}</td>
+                                <td style={{ textAlign: "right" }} className={s.data}>{brl(d.saldo_devedor)}</td>
+                                <td style={{ textAlign: "right" }} className={s.data}>{brl(d.saldo_consolidado)}</td>
+                                <td className={s.colAcoes}>{acoesDebito(key, m.e, d)}</td>
+                              </tr>
+                            ))}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {modo === "matriz" && (
+          <div className={s.rodape}>
+            <span>{matriz.length} empresa(s) · {filtradas.length.toLocaleString("pt-BR")} débito(s) · *valor na data do relatório</span>
+            <div className={s.paginas}>
+              <button className={s.botao} onClick={() => setAbertos(new Set(matriz.flatMap((m) => [m.e.cnpj, ...m.guias.map((g) => `${m.e.cnpj}|${g.servico}`)])))}>Expandir tudo</button>
+              <button className={s.botao} onClick={() => setAbertos(new Set())}>Recolher tudo</button>
+            </div>
+          </div>
+        )}
+
+        {modo === "tabela" && <>
         <div className={s.tabelaWrap}>
           <table className={s.tabela}>
             <thead>
@@ -321,16 +459,7 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
                   <td style={{ textAlign: "right" }} className={s.data}>{brl(d.saldo_devedor)}</td>
                   <td style={{ textAlign: "right" }} className={s.data}>{brl(d.saldo_consolidado)}</td>
                   <td><span className={s.pill} style={tom(TOM[d.servico])}><i />{ROTULO_SERVICO[d.servico]}</span></td>
-                  <td className={s.colAcoes}>
-                    <div className={s.acoes}>
-                      <button className={s.icone} disabled={d.servico === "sem_guia" || gerando !== null}
-                              title={d.servico === "sem_guia" ? "Multa lançada: a guia sai pela notificação no e-CAC" : "Gerar guia atualizada — cobrado"}
-                              onClick={() => { setDataPgto(hojeIso()); setPedindo({ key, e, d }); }}>{gerando === key ? "…" : Ico.guia}</button>
-                      {d.servico === "sicalc" && (
-                        <button className={s.icone} title="Ajustar no recálculo manual" onClick={() => onManual(e.cnpj, d)}>{Ico.editar}</button>
-                      )}
-                    </div>
-                  </td>
+                  <td className={s.colAcoes}>{acoesDebito(key, e, d)}</td>
                 </tr>
               ))}
             </tbody>
@@ -348,6 +477,7 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
             <button className={s.botao} disabled={pagina >= totalPaginas - 1} onClick={() => setPagina((p) => p + 1)}>Próxima ›</button>
           </div>
         </div>
+        </>}
       </div>
     </>
   );
