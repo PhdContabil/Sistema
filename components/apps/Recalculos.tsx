@@ -15,7 +15,7 @@ import s from "./PainelPadrao.module.css";
 
 interface Empresa { cnpj: string; razao_social: string | null; consultado_em: string | null; debitos: Debito[] }
 interface Carteira { cnpj: string; nome: string | null; codigo: number }
-interface Dados { empresas: Empresa[]; semLeitura: number; carteira: Carteira[]; avisoCarteira: string | null }
+interface Dados { empresas: Empresa[]; semLeitura: number; carteira: Carteira[]; avisoCarteira: string | null; consultas: Record<string, string> }
 interface Pedido {
   servico: Servico; periodo: string; dataPagamento: string;
   codigo?: string; extensao?: string; vencimento?: string; valor?: number; observacao?: string;
@@ -33,6 +33,20 @@ const hojeIso = () => new Date().toLocaleDateString("en-CA", { timeZone: "Americ
 const iniciais = (n: string | null) => (n ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 /** "AAAA-MM" (input month) -> "MM/AAAA" */
 const mesBR = (v: string) => (v ? `${v.slice(5, 7)}/${v.slice(0, 4)}` : "");
+
+/** Idade da última Situação Fiscal: verde até 7 dias, laranja até 30, vermelho depois. */
+function UltimaConsulta({ iso, compacta = false }: { iso: string | null | undefined; compacta?: boolean }) {
+  if (!iso) return <span className={s.pill} style={tom("#64748b")} title="Nenhuma Situação Fiscal consultada"><i />nunca consultada</span>;
+  const dias = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86_400_000));
+  const cor = dias <= 7 ? "#16a34a" : dias <= 30 ? "#d97706" : "#dc2626";
+  const quando = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `há ${dias} dias`;
+  const data = new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return (
+    <span className={s.pill} style={tom(cor)} title={`Última Situação Fiscal: ${data}`}>
+      <i />{compacta ? quando : `consultada ${quando} (${data.slice(0, 10)})`}
+    </span>
+  );
+}
 
 const Ico: Record<string, ReactNode> = {
   busca: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>,
@@ -88,8 +102,8 @@ export default function Recalculos() {
       {dados && aba === "abertos" && (
         <Abertos dados={dados} onManual={(cnpj, d) => { setManualInicial({ cnpj, d }); setAba("manual"); }} />
       )}
-      {dados && aba === "competencia" && <PorCompetencia carteira={dados.carteira} avisoCarteira={dados.avisoCarteira} />}
-      {dados && aba === "manual" && <Manual carteira={dados.carteira} avisoCarteira={dados.avisoCarteira} inicial={manualInicial} />}
+      {dados && aba === "competencia" && <PorCompetencia carteira={dados.carteira} avisoCarteira={dados.avisoCarteira} consultas={dados.consultas} />}
+      {dados && aba === "manual" && <Manual carteira={dados.carteira} avisoCarteira={dados.avisoCarteira} inicial={manualInicial} consultas={dados.consultas} />}
     </div>
   );
 }
@@ -99,6 +113,7 @@ export default function Recalculos() {
 function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d: Debito) => void }) {
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Servico | "">("");
+  const [antigas, setAntigas] = useState(false);
   const [dataPgto, setDataPgto] = useState(hojeIso());
   const [pagina, setPagina] = useState(0);
   const [gerando, setGerando] = useState<string | null>(null);
@@ -120,12 +135,13 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
     const q = busca.trim().toLowerCase();
     const qd = q.replace(/\D/g, "");
     return linhas.filter(({ e, d }) => {
+      if (antigas && e.consultado_em && Date.now() - Date.parse(e.consultado_em) <= 30 * 86_400_000) return false;
       if (filtro && (filtro === "das" ? !["das", "das_mei"].includes(d.servico) : d.servico !== filtro)) return false;
       if (!q) return true;
       return (e.razao_social ?? "").toLowerCase().includes(q) || (qd.length >= 3 && e.cnpj.includes(qd)) || d.receita.toLowerCase().includes(q);
     });
-  }, [linhas, busca, filtro]);
-  useEffect(() => { setPagina(0); }, [busca, filtro]);
+  }, [linhas, busca, filtro, antigas]);
+  useEffect(() => { setPagina(0); }, [busca, filtro, antigas]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const visiveis = filtradas.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
@@ -192,6 +208,9 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
             <option value="sicalc">DARF (SICALC)</option>
             <option value="sem_guia">Multas lançadas (sem guia aqui)</option>
           </select>
+          <label className={s.check} title="Débitos cujo relatório pode estar desatualizado">
+            <input type="checkbox" checked={antigas} onChange={(e) => setAntigas(e.target.checked)} /> relatório com mais de 30 dias
+          </label>
           <span className={s.espaco} />
           <label className={s.campo} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <span className={s.campoRotulo}>Pagamento em</span>
@@ -207,6 +226,7 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
             <thead>
               <tr>
                 <th>Empresa</th>
+                <th>Situação Fiscal</th>
                 <th>Tributo</th>
                 <th>Período</th>
                 <th>Vencimento</th>
@@ -218,7 +238,7 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
             </thead>
             <tbody>
               {visiveis.length === 0 && (
-                <tr><td className={s.vazio} colSpan={8}>{linhas.length ? "Nenhum débito com esses filtros." : "Nenhum débito exigível nas Situações Fiscais consultadas."}</td></tr>
+                <tr><td className={s.vazio} colSpan={9}>{linhas.length ? "Nenhum débito com esses filtros." : "Nenhum débito exigível nas Situações Fiscais consultadas."}</td></tr>
               )}
               {visiveis.map(({ key, e, d }) => (
                 <tr key={key}>
@@ -227,10 +247,11 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
                       <span className={s.avatar}>{iniciais(e.razao_social)}</span>
                       <div>
                         <div className={s.empresaNome}>{e.razao_social ?? "—"}</div>
-                        <div className={s.empresaSub}>{formatCNPJ(e.cnpj)} · relatório de {dataBR(e.consultado_em)}</div>
+                        <div className={s.empresaSub}>{formatCNPJ(e.cnpj)}</div>
                       </div>
                     </div>
                   </td>
+                  <td><UltimaConsulta iso={e.consultado_em} compacta /></td>
                   <td>
                     <div>{d.receita}</div>
                     {d.situacao && <div className={s.dataSub}>{d.situacao.toLowerCase()}</div>}
@@ -274,7 +295,7 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
 
 /* ---------- seletor de empresa (carteira Questor ou CNPJ digitado) ---------- */
 
-function SeletorEmpresa({ carteira, valor, onChange }: { carteira: Carteira[]; valor: string; onChange: (cnpj: string) => void }) {
+function SeletorEmpresa({ carteira, valor, onChange, consultas }: { carteira: Carteira[]; valor: string; onChange: (cnpj: string) => void; consultas: Record<string, string> }) {
   const [texto, setTexto] = useState(() => {
     const c = carteira.find((x) => x.cnpj === valor);
     return c ? `${c.nome ?? ""} — ${formatCNPJ(c.cnpj)}` : valor ? formatCNPJ(valor) : "";
@@ -289,6 +310,12 @@ function SeletorEmpresa({ carteira, valor, onChange }: { carteira: Carteira[]; v
                const achou = carteira.find((c) => e.target.value === `${c.nome ?? ""} — ${formatCNPJ(c.cnpj)}`);
                onChange(achou ? achou.cnpj : dig.length === 14 || dig.length === 11 ? dig : "");
              }} />
+      {valor && (
+        <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
+          <UltimaConsulta iso={consultas[valor]} />
+          <a className={s.dataSub} href="/m/fiscal/situacao-fiscal" target="_blank" rel="noreferrer">abrir Situação Fiscal ↗</a>
+        </span>
+      )}
       <datalist id="recalc-carteira">
         {carteira.map((c) => <option key={c.cnpj} value={`${c.nome ?? ""} — ${formatCNPJ(c.cnpj)}`}>{`cód. ${c.codigo}`}</option>)}
       </datalist>
@@ -308,7 +335,7 @@ function Resultado({ msg, onFechar }: { msg: { texto: string; ok: boolean } | nu
 
 /* ---------- 2. Por competência ---------- */
 
-function PorCompetencia({ carteira, avisoCarteira }: { carteira: Carteira[]; avisoCarteira: string | null }) {
+function PorCompetencia({ carteira, avisoCarteira, consultas }: { carteira: Carteira[]; avisoCarteira: string | null; consultas: Record<string, string> }) {
   const anterior = () => {
     const [a, m] = hojeIso().split("-").map(Number);
     const d = new Date(a, m - 2, 1);
@@ -340,7 +367,7 @@ function PorCompetencia({ carteira, avisoCarteira }: { carteira: Carteira[]; avi
       <div className={s.lateralCorpo} style={{ maxWidth: 760 }}>
         {avisoCarteira && <div className={s.aviso}>{avisoCarteira}</div>}
         <div className={s.grade2}>
-          <SeletorEmpresa carteira={carteira} valor={cnpj} onChange={setCnpj} />
+          <SeletorEmpresa carteira={carteira} valor={cnpj} onChange={setCnpj} consultas={consultas} />
           <label className={s.campo}>
             <span className={s.campoRotulo}>Guia</span>
             <select className={s.select} value={servico} onChange={(e) => setServico(e.target.value as Servico)}>
@@ -374,7 +401,7 @@ function PorCompetencia({ carteira, avisoCarteira }: { carteira: Carteira[]; avi
 
 /* ---------- 3. Manual (SICALC) ---------- */
 
-function Manual({ carteira, avisoCarteira, inicial }: { carteira: Carteira[]; avisoCarteira: string | null; inicial: { cnpj: string; d: Debito } | null }) {
+function Manual({ carteira, avisoCarteira, inicial, consultas }: { carteira: Carteira[]; avisoCarteira: string | null; inicial: { cnpj: string; d: Debito } | null; consultas: Record<string, string> }) {
   const d = inicial?.d;
   const mesInicial = d && /^\d{2}\/\d{4}$/.test(d.periodo) ? `${d.periodo.slice(3)}-${d.periodo.slice(0, 2)}` : "";
   const [cnpj, setCnpj] = useState(inicial?.cnpj ?? "");
@@ -417,7 +444,7 @@ function Manual({ carteira, avisoCarteira, inicial }: { carteira: Carteira[]; av
       <div className={s.lateralCorpo} style={{ maxWidth: 760 }}>
         {avisoCarteira && <div className={s.aviso}>{avisoCarteira}</div>}
         <div className={s.grade2}>
-          <SeletorEmpresa key={inicial?.cnpj ?? "manual"} carteira={carteira} valor={cnpj} onChange={setCnpj} />
+          <SeletorEmpresa key={inicial?.cnpj ?? "manual"} carteira={carteira} valor={cnpj} onChange={setCnpj} consultas={consultas} />
           <label className={s.campo}>
             <span className={s.campoRotulo}>Código de receita</span>
             <input className={s.select} value={codigo} placeholder="ex.: 8109-02" onChange={(e) => setCodigo(e.target.value)} />
