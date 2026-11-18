@@ -26,7 +26,13 @@ test("xmlDosDados decodifica base64", () => {
 
 test("situação pelas mensagens", () => {
   assert.equal(situacaoDasMensagens(200, [{ texto: "Declaração em andamento" }]), "em_andamento");
-  assert.equal(situacaoDasMensagens(200, []), "transmitida");
+  // 200 sozinho não prova transmissão (caso Fernando Santos 09/2026)
+  assert.equal(situacaoDasMensagens(200, []), "pendente");
+  assert.equal(situacaoDasMensagens(200, [], ""), "pendente");
+  assert.equal(situacaoDasMensagens(200, [], "{}"), "pendente");
+  assert.equal(situacaoDasMensagens(200, [{ codigo: "[Aviso-DCTFWEB-MG08]", texto: "Não foi encontrada declaração para o período" }], "{\"PDFByteArrayBase64\":\"JVBERi0xLjQ=\"}"), "pendente");
+  assert.equal(situacaoDasMensagens(200, [{ codigo: "[Sucesso-DCTFWEB]", texto: "Requisição efetuada com sucesso." }], "{\"PDFByteArrayBase64\":\"JVBERi0xLjQgZGVjbGFyYWNhbw==\"}"), "transmitida");
+  assert.equal(situacaoDasMensagens(200, [], "{\"PDFByteArrayBase64\":null}"), "pendente");
   assert.equal(situacaoDasMensagens(404, [{ texto: "não encontrada" }]), "pendente");
 });
 
