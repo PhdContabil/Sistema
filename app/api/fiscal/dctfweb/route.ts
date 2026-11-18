@@ -6,7 +6,7 @@
 //   POST { acao: "trava", id, valor }            -> liga/desliga "não transmitir"
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
-import { exigirFiscal } from "../dare-sp/_auth";
+import { exigirDctfweb } from "../dare-sp/_auth";
 import {
   competenciasSalvas, consultar, definirTrava, listar, obterParametros, sincronizarObrigadas, transmitir,
 } from "@/lib/dctfweb";
@@ -19,7 +19,7 @@ const falha = (e: unknown, padrao: string, status = 500) =>
 
 export async function GET(req: Request) {
   noStore();
-  if (!(await exigirFiscal())) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
+  if (!(await exigirDctfweb())) return NextResponse.json({ error: "Sem acesso à DCTFWeb (Fiscal ou Trabalhista)." }, { status: 403 });
   try {
     const competencias = await competenciasSalvas();
     const pedida = new URL(req.url).searchParams.get("competencia");
@@ -31,8 +31,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const email = await exigirFiscal();
-  if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
+  const email = await exigirDctfweb();
+  if (!email) return NextResponse.json({ error: "Sem acesso à DCTFWeb (Fiscal ou Trabalhista)." }, { status: 403 });
   const b = (await req.json().catch(() => ({}))) as { acao?: string; id?: number; competencia?: string; valor?: boolean };
   try {
     switch (b.acao) {

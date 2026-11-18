@@ -21,7 +21,7 @@ export default async function Page() {
         <div className="app-ic mono" style={{ background: m.color }}>DW</div>
         <div>
           <h1>DCTFWeb</h1>
-          <div className="desc">Obrigadas por competência, situação na Receita, guia, recibo e transmissão via Integra Contador.</div>
+          <div className="desc">Obrigadas por competência, situação na Receita, guia, recibo e transmissão via Integra Contador. Controle compartilhado com o Trabalhista.</div>
         </div>
       </div>
       {liberado ? <Dctfweb /> : <AcessoNegado moduloNome="DCTFWeb" />}

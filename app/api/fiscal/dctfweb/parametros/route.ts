@@ -1,14 +1,14 @@
 // Fiscal · DCTFWeb — parâmetros da transmissão automática + últimas execuções.
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
-import { exigirFiscal } from "../../dare-sp/_auth";
+import { exigirDctfweb } from "../../dare-sp/_auth";
 import { historicoRotina, obterParametros, salvarParametros } from "@/lib/dctfweb";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   noStore();
-  if (!(await exigirFiscal())) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
+  if (!(await exigirDctfweb())) return NextResponse.json({ error: "Sem acesso à DCTFWeb (Fiscal ou Trabalhista)." }, { status: 403 });
   try {
     const [parametros, historico] = await Promise.all([obterParametros(), historicoRotina()]);
     return NextResponse.json({ parametros, historico, cronConfigurado: !!process.env.CRON_SECRET });
@@ -18,8 +18,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const email = await exigirFiscal();
-  if (!email) return NextResponse.json({ error: "Sem acesso ao módulo Fiscal." }, { status: 403 });
+  const email = await exigirDctfweb();
+  if (!email) return NextResponse.json({ error: "Sem acesso à DCTFWeb (Fiscal ou Trabalhista)." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   try {
     return NextResponse.json({ ok: true, parametros: await salvarParametros(b, email) });
