@@ -143,7 +143,7 @@ export async function consultar(id: number, s?: Sessao) {
   const agora = new Date().toISOString();
   try {
     const rd = await pedir(sessao, l.cnpj, "Consultar", "CONSDECCOMPLETA33", periodo(l.competencia));
-    const situacao = situacaoDasMensagens(rd.httpStatus, rd.json?.mensagens as Mensagem[]);
+    const situacao = situacaoDasMensagens(rd.httpStatus, rd.json?.mensagens as Mensagem[], rd.json?.dados);
     let origem: string | null = null, valor_guia: number | null = null;
     try {
       const { xml } = await xmlDaDeclaracao(sessao, l);
@@ -181,7 +181,7 @@ export async function transmitir(id: number, opts: { consultarAntes?: boolean; p
   try {
     if (opts.consultarAntes) {
       const rd = await pedir(sessao, l.cnpj, "Consultar", "CONSDECCOMPLETA33", periodo(l.competencia));
-      if (situacaoDasMensagens(rd.httpStatus, rd.json?.mensagens as Mensagem[]) === "transmitida") {
+      if (situacaoDasMensagens(rd.httpStatus, rd.json?.mensagens as Mensagem[], rd.json?.dados) === "transmitida") {
         await atualizar(id, { situacao: "transmitida", tem_recibo: true, ultima_consulta: agora });
         return { ok: true, id, pulou: true, motivo: "já transmitida (consulta prévia)" };
       }
