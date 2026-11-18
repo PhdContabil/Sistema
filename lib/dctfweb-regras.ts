@@ -33,11 +33,32 @@ export function xmlDosDados(dados: unknown): string | null {
 }
 
 /** Situação a partir das mensagens do CONSDECCOMPLETA33. */
-export function situacaoDasMensagens(httpStatus: number, mensagens: Mensagem[] | null | undefined): SituacaoDctf {
+/**
+ * Situação a partir da consulta da declaração (CONSDECCOMPLETA33).
+ * Só é "transmitida" com PROVA: a Receita devolveu a declaração (dados com
+ * conteúdo) e nada diz que ela não existe. HTTP 200 sozinho NÃO basta — a
+ * Receita responde 200 com aviso "não foi encontrada declaração" quando não
+ * houve transmissão (era o erro que marcava empresa sem entrega como transmitida).
+ */
+export function situacaoDasMensagens(httpStatus: number, mensagens: Mensagem[] | null | undefined, dados?: unknown): SituacaoDctf {
   const msgs = (mensagens ?? []).map((m) => `${m.texto ?? ""} ${m.codigo ?? ""}`.toLowerCase()).join(" | ");
   if (/em andamento/.test(msgs)) return "em_andamento";
-  if ((httpStatus >= 200 && httpStatus < 300) || /recibo|transmitida|ativa/.test(msgs)) return "transmitida";
+  if (/n[aã]o\s+(foi\s+)?(encontrad|localizad|existe)|inexistente|nenhuma\s+declara|sem\s+declara/.test(msgs)) return "pendente";
+  if (httpStatus >= 200 && httpStatus < 300 && temConteudo(dados)) return "transmitida";
   return "pendente";
+}
+
+/** A Receita devolveu algo de fato (PDF/objeto/lista não vazios)? */
+export function temConteudo(dados: unknown): boolean {
+  if (dados == null) return false;
+  if (typeof dados === "string") {
+    const t = dados.trim();
+    if (!t || t === "{}" || t === "[]" || t === "null") return false;
+    try { return temConteudo(JSON.parse(t)); } catch { return t.length > 20; }
+  }
+  if (Array.isArray(dados)) return dados.some(temConteudo);
+  if (typeof dados === "object") return Object.values(dados as Record<string, unknown>).some((v) => v != null && v !== "" && (typeof v !== "object" || temConteudo(v)));
+  return true;
 }
 
 /** Transmissão OK = HTTP 2xx + mensagem de sucesso ([Sucesso-DCTFWEB]); não vem número de recibo. */
