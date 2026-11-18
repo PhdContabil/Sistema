@@ -26,3 +26,13 @@ export async function exigirDctfweb(): Promise<string | null> {
   if (!nivel) return null;
   return podeAcessarApp(nivel, "fiscal", "DCTFWeb") || podeAcessarApp(nivel, "trabalhista", "DCTFWeb") ? email : null;
 }
+
+/** Recálculos: compartilhado entre Fiscal e Trabalhista, como a DCTFWeb. */
+export async function exigirRecalculos(): Promise<string | null> {
+  const user = await getCurrentUser().catch(() => null);
+  const email = user?.email?.toLowerCase();
+  if (!email) return null;
+  const nivel = await obterNivelAcesso(email).catch(() => null);
+  if (!nivel) return null;
+  return podeAcessarApp(nivel, "fiscal", "Recálculos") || podeAcessarApp(nivel, "trabalhista", "Recálculos") ? email : null;
+}

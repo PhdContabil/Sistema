@@ -10,7 +10,8 @@ import {
   autenticar, consumir, dadosDe, participante, textoMensagens,
   type Participante, type TokensSerpro,
 } from "./serpro/integra-contador";
-import { classificarRelatorio, REGRA_VERSAO, type Classificacao, type Situacao } from "./situacao-fiscal-pdf";
+import { extrairDebitos } from "./recalculo-regras";
+import { classificarRelatorio, textoDoPdf, REGRA_VERSAO, type Classificacao, type Situacao } from "./situacao-fiscal-pdf";
 import { carregarCredenciais, db, registrarChamada, soDigitos } from "./serpro/servidor";
 
 export { REGRA_VERSAO };
@@ -170,7 +171,7 @@ export async function consultarEmpresa(cnpjRaw: string, razaoSocial: string | nu
   };
   if (razaoSocial) registro.razao_social = razaoSocial;
   if (r.ok) {
-    Object.assign(registro, camposExtras(r), { pdf_base64: r.pdf_base64, regra_versao: REGRA_VERSAO });
+    Object.assign(registro, camposExtras(r), { pdf_base64: r.pdf_base64, regra_versao: REGRA_VERSAO, debitos: debitosDoPdf(r.pdf_base64) });
   }
 
   const { error } = await db().from("situacao_fiscal").upsert(registro, { onConflict: "cnpj" });
@@ -179,6 +180,12 @@ export async function consultarEmpresa(cnpjRaw: string, razaoSocial: string | nu
     { situacao: r.situacao, mensagem: r.mensagem, protocolo: r.protocolo, por: porEmail });
 
   return { ok: r.ok, cnpj, situacao: r.situacao, mensagem: r.mensagem };
+}
+
+/** Débitos exigíveis do SIEF, usados pelo módulo Recálculos. */
+function debitosDoPdf(pdf: string | null | undefined) {
+  if (!pdf) return null;
+  try { return extrairDebitos(textoDoPdf(pdf)); } catch { return null; }
 }
 
 function camposExtras(c: Classificacao) {
@@ -206,7 +213,7 @@ export async function reclassificarBloco(limite = 25) {
   for (const l of data ?? []) {
     const c = classificarRelatorio(l.pdf_base64);
     const { error: e2 } = await sb.from("situacao_fiscal").update({
-      situacao: c.situacao, pendencias: c.pendencias, resumo: c.resumo, ...camposExtras(c),
+      situacao: c.situacao, pendencias: c.pendencias, resumo: c.resumo, ...camposExtras(c), debitos: debitosDoPdf(l.pdf_base64),
       regra_versao: REGRA_VERSAO, updated_at: new Date().toISOString(),
     }).eq("cnpj", l.cnpj);
     if (e2) throw new Error(e2.message);
