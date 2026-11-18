@@ -18,6 +18,13 @@ export interface EmpresaComDebitos {
 }
 
 /** Empresas com débito exigível na última Situação Fiscal consultada. */
+/** Data da última Situação Fiscal de cada empresa (cnpj -> ISO). */
+export async function ultimasConsultas(): Promise<Record<string, string>> {
+  const { data, error } = await db().from("situacao_fiscal").select("cnpj, consultado_em").not("consultado_em", "is", null);
+  if (error) throw new Error(error.message);
+  return Object.fromEntries(((data ?? []) as { cnpj: string; consultado_em: string }[]).map((r) => [r.cnpj, r.consultado_em]));
+}
+
 export async function debitosEmAberto(): Promise<{ empresas: EmpresaComDebitos[]; semLeitura: number }> {
   const { data, error } = await db().from("situacao_fiscal")
     .select("cnpj, razao_social, consultado_em, debitos").not("debitos", "is", null);

@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { exigirRecalculos } from "../dare-sp/_auth";
-import { debitosEmAberto, gerarGuia } from "@/lib/recalculo";
+import { debitosEmAberto, gerarGuia, ultimasConsultas } from "@/lib/recalculo";
 import { getEmpresas, hasApiKey } from "@/lib/questor";
 import { soDigitos } from "@/lib/serpro/servidor";
 
@@ -17,7 +17,7 @@ export async function GET() {
   noStore();
   if (!(await exigirRecalculos())) return NextResponse.json(SEM_ACESSO, { status: 403 });
   try {
-    const { empresas, semLeitura } = await debitosEmAberto();
+    const [{ empresas, semLeitura }, consultas] = await Promise.all([debitosEmAberto(), ultimasConsultas()]);
     let carteira: { cnpj: string; nome: string | null; codigo: number }[] = [];
     let avisoCarteira: string | null = null;
     if (hasApiKey()) {
@@ -32,7 +32,7 @@ export async function GET() {
     } else {
       avisoCarteira = "API Questor não configurada: digite o CNPJ.";
     }
-    return NextResponse.json({ empresas, semLeitura, carteira, avisoCarteira });
+    return NextResponse.json({ empresas, semLeitura, carteira, avisoCarteira, consultas });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Falha ao listar." }, { status: 500 });
   }
