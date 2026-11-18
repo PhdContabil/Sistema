@@ -181,9 +181,11 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const visiveis = filtradas.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
 
+  const [pedindo, setPedindo] = useState<{ key: string; e: Empresa; d: Debito } | null>(null);
+
   async function gerarDebito(key: string, e: Empresa, d: Debito) {
     const nome = e.razao_social ?? formatCNPJ(e.cnpj);
-    if (!confirm(`Gerar ${ROTULO_SERVICO[d.servico]} de ${nome}\n${d.receita} · ${d.periodo}\nPagamento em ${dataBR(dataPgto)}\n\nA chamada é cobrada pelo SERPRO.`)) return;
+    setPedindo(null);
     setGerando(key);
     setMsg(null);
     try {
@@ -246,12 +248,30 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
           <label className={s.check} title="Débitos cujo relatório pode estar desatualizado">
             <input type="checkbox" checked={antigas} onChange={(e) => setAntigas(e.target.checked)} /> relatório com mais de 30 dias
           </label>
-          <span className={s.espaco} />
-          <label className={s.campo} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <span className={s.campoRotulo}>Pagamento em</span>
-            <input type="date" className={s.select} value={dataPgto} min={hojeIso()} onChange={(e) => setDataPgto(e.target.value)} />
-          </label>
         </div>
+        {pedindo && (
+          <div role="dialog" aria-modal="true" onClick={() => setPedindo(null)}
+               style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+            <form onClick={(ev) => ev.stopPropagation()}
+                  onSubmit={(ev) => { ev.preventDefault(); if (dataPgto) gerarDebito(pedindo.key, pedindo.e, pedindo.d); }}
+                  style={{ background: "var(--surface, #fff)", color: "inherit", borderRadius: 12, padding: 20, width: "min(420px, 100%)", boxShadow: "0 20px 50px rgba(0,0,0,.25)", display: "flex", flexDirection: "column", gap: 12 }}>
+              <strong style={{ fontSize: 16 }}>Gerar {ROTULO_SERVICO[pedindo.d.servico]}</strong>
+              <div className={s.dataSub}>
+                {pedindo.e.razao_social ?? formatCNPJ(pedindo.e.cnpj)}<br />
+                {pedindo.d.receita} · {pedindo.d.periodo}
+              </div>
+              <label className={s.campo}>
+                <span className={s.campoRotulo}>Data de pagamento</span>
+                <input type="date" className={s.select} autoFocus required value={dataPgto} min={hojeIso()} onChange={(ev) => setDataPgto(ev.target.value)} />
+              </label>
+              <span className={s.custo}>{Ico.moeda} cobrado pelo SERPRO{pedindo.d.servico === "dctfweb" ? " · DCTFWeb: data no mês corrente" : ""}</span>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" className={s.botao} onClick={() => setPedindo(null)}>Cancelar</button>
+                <button type="submit" className={s.botao} style={{ background: "#2563eb", color: "#fff", borderColor: "#2563eb" }}>Gerar guia</button>
+              </div>
+            </form>
+          </div>
+        )}
         <div className={s.selecao}>
           <span className={s.custo}>{Ico.moeda} cada guia gerada é cobrada pelo SERPRO · DCTFWeb só aceita data no mês corrente</span>
         </div>
@@ -304,8 +324,8 @@ function Abertos({ dados, onManual }: { dados: Dados; onManual: (cnpj: string, d
                   <td className={s.colAcoes}>
                     <div className={s.acoes}>
                       <button className={s.icone} disabled={d.servico === "sem_guia" || gerando !== null}
-                              title={d.servico === "sem_guia" ? "Multa lançada: a guia sai pela notificação no e-CAC" : `Gerar guia para ${dataBR(dataPgto)} — cobrado`}
-                              onClick={() => gerarDebito(key, e, d)}>{gerando === key ? "…" : Ico.guia}</button>
+                              title={d.servico === "sem_guia" ? "Multa lançada: a guia sai pela notificação no e-CAC" : "Gerar guia atualizada — cobrado"}
+                              onClick={() => { setDataPgto(hojeIso()); setPedindo({ key, e, d }); }}>{gerando === key ? "…" : Ico.guia}</button>
                       {d.servico === "sicalc" && (
                         <button className={s.icone} title="Ajustar no recálculo manual" onClick={() => onManual(e.cnpj, d)}>{Ico.editar}</button>
                       )}
