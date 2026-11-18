@@ -13,7 +13,7 @@
 
 import zlib from "node:zlib";
 
-export const REGRA_VERSAO = 5;
+export const REGRA_VERSAO = 6; // 6: também grava os débitos do SIEF (Recálculos)
 
 export type Situacao = "regular" | "com_restricao" | "irregular" | "indefinida" | "erro";
 
