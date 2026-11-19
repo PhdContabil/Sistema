@@ -107,7 +107,7 @@ export default async function ProcessoDetailPage({ params }: PageProps) {
         />
         <Field label="Proposta" value={processo.proposal || "—"} />
         {processo.category && (
-          <Field label="Categoria" value={processo.category} />
+          <Field label="Categoria" value={<span className="whitespace-pre-line">{processo.category}</span>} />
         )}
         {processo.nextActivity && (
           <Field label="Próxima atividade" value={processo.nextActivity} />
