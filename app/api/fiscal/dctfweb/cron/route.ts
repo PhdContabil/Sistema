@@ -1,6 +1,11 @@
 // Fiscal · DCTFWeb — transmissão automática com encadeamento (fan-out).
 //
-// O Vercel Cron chama GET 1x/dia às 08:00 de Brasília (vercel.json). Só AGE
+// O Vercel Cron chama GET a cada 10 min (vercel.json). Só AGE no dia
+// configurado; a primeira chamada do dia abre a RODADA (lote_inicio, sincroniza
+// o Questor) e as seguintes RETOMAM a mesma rodada até não sobrar ninguém.
+// Assim a rodada termina mesmo se o encadeamento abaixo falhar (no app antigo
+// o elo seguinte levava 401 e só o 1º bloco era transmitido).
+// Legado: Só AGE
 // se hoje (Brasília) == dia configurado E a automação estiver LIGADA em
 // Parâmetros. Responde na hora e processa ~45 s em background (waitUntil);
 // se sobrar, chama a si mesma (POST, próximo elo). Trava por timestamp evita
@@ -65,6 +70,9 @@ async function encadear(base: string, elo: number, falhas: number): Promise<numb
   }
 }
 
+/** AAAA-MM-DD no fuso de Brasília. */
+const dataBrasilia = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
 async function executar(c: { continuar: boolean; elo: number; falhas: number; base: string }) {
   const { competenciaAnterior: comp, diaHoje } = agoraBrasilia();
   try {
@@ -78,8 +86,10 @@ async function executar(c: { continuar: boolean; elo: number; falhas: number; ba
     if (c.elo > MAX_ELOS) { await definirTravaLote(null); return; }
 
     await definirTravaLote(new Date().toISOString());
+    // Rodada de hoje já aberta? Retoma. Senão abre (marca o início e sincroniza).
+    const rodadaDeHoje = !!p.lote_inicio && dataBrasilia(new Date(p.lote_inicio)) === dataBrasilia(new Date());
     let inicio = p.lote_inicio ?? new Date().toISOString();
-    if (!c.continuar) {
+    if (!c.continuar && !rodadaDeHoje) {
       inicio = new Date().toISOString();
       await definirInicioLote(inicio);
       try { await sincronizarObrigadas(comp); }
@@ -87,7 +97,8 @@ async function executar(c: { continuar: boolean; elo: number; falhas: number; ba
     }
 
     const lote = await transmitirLote(comp, { budgetMs: ORCAMENTO_MS, inicio });
-    await registrarRotina(true, { competencia: comp, elo: c.elo, ...lote });
+    // a cada 10 min sem nada a fazer não suja o histórico
+    if (lote.processadas > 0) await registrarRotina(true, { competencia: comp, elo: c.elo, retomada: !c.continuar && rodadaDeHoje, ...lote });
 
     if (lote.restantes > 0 && lote.processadas > 0 && c.elo < MAX_ELOS) {
       const status = await encadear(c.base, c.elo + 1, 0);
