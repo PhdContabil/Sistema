@@ -15,7 +15,7 @@ import {
 import { assinarProcDctf } from "./serpro/assinatura-xml";
 import { carregarCredenciais, db, registrarChamada, soDigitos } from "./serpro/servidor";
 import {
-  ehJaTransmitida, motivoBloqueio, motivoSemGuia, origemDoXml, situacaoDasMensagens,
+  ehJaTransmitida, motivoBloqueioTransmissao, motivoSemGuia, origemDoXml, situacaoDasMensagens,
   transmissaoComSucesso, valorDoXml, xmlDosDados, type Mensagem, type SituacaoDctf,
 } from "./dctfweb-regras";
 
@@ -170,7 +170,7 @@ export async function consultar(id: number, s?: Sessao) {
  */
 export async function transmitir(id: number, opts: { consultarAntes?: boolean; por?: string; semMovimento?: boolean } = {}, s?: Sessao) {
   const l = await linha(id);
-  const bloqueio = opts.semMovimento ? (l.situacao === "transmitida" ? "já transmitida" : null) : motivoBloqueio(l);
+  const bloqueio = opts.semMovimento ? null : motivoBloqueioTransmissao(l);
   if (bloqueio) return { ok: false, id, pulou: true, motivo: bloqueio };
 
   const sessao = s ?? await abrirSessao();
@@ -231,12 +231,14 @@ export async function transmitir(id: number, opts: { consultarAntes?: boolean; p
 }
 
 /** Lote da competência, para a rotina automática: respeita orçamento de tempo e devolve o que falta. */
-export async function transmitirLote(competencia: string, opts: { consultarAntes: boolean; budgetMs: number }) {
-  const { data, error } = await db().from("dctfweb").select("id, situacao, nao_transmitir, debito")
-    .eq("competencia", validarCompetencia(competencia)).neq("situacao", "transmitida").neq("situacao", "erro")
-    .eq("nao_transmitir", false).limit(2000);
+export async function transmitirLote(competencia: string, opts: { budgetMs: number; inicio: string }) {
+  // Todas, inclusive as já transmitidas. Quem já passou NESTA rodada (ultima_consulta
+  // >= inicio, gravado em todo resultado, inclusive erro) não entra de novo.
+  const { data, error } = await db().from("dctfweb").select("id, situacao, nao_transmitir, debito, ultima_consulta")
+    .eq("competencia", validarCompetencia(competencia)).eq("nao_transmitir", false)
+    .or(`ultima_consulta.is.null,ultima_consulta.lt.${opts.inicio}`).limit(2000);
   if (error) throw new Error(error.message);
-  const elegiveis = (data ?? []).filter((l) => !motivoBloqueio(l as never));
+  const elegiveis = (data ?? []).filter((l) => !motivoBloqueioTransmissao(l as never));
   if (!elegiveis.length) return { processadas: 0, transmitidas: 0, pulou: 0, erros: 0, restantes: 0 };
 
   const s = await abrirSessao();
@@ -245,7 +247,7 @@ export async function transmitirLote(competencia: string, opts: { consultarAntes
   for (const l of elegiveis) {
     if (Date.now() - t0 > opts.budgetMs) break;
     processadas++;
-    const r = await transmitir(l.id as number, { consultarAntes: opts.consultarAntes, por: "rotina automática" }, s);
+    const r = await transmitir(l.id as number, { por: "rotina automática" }, s);
     if (r.ok && "transmitida" in r) transmitidas++;
     else if (r.ok) pulou++;
     else erros++;
@@ -318,13 +320,14 @@ export interface Parametros {
   auto_transmissao: boolean;
   consultar_antes: boolean;
   lote_ts: string | null;
+  lote_inicio?: string | null;
   updated_at: string | null;
   updated_by: string | null;
 }
 
 export async function obterParametros(): Promise<Parametros> {
   const { data, error } = await db().from("dctfweb_parametros")
-    .select("dia_transmissao, auto_transmissao, consultar_antes, lote_ts, updated_at, updated_by, ambiente_reinf").eq("id", 1).maybeSingle();
+    .select("dia_transmissao, auto_transmissao, consultar_antes, lote_ts, updated_at, updated_by, ambiente_reinf, lote_inicio").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
   return (data ?? { dia_transmissao: 25, auto_transmissao: false, consultar_antes: false, lote_ts: null, updated_at: null, updated_by: null }) as Parametros;
 }
@@ -338,6 +341,10 @@ export async function salvarParametros(p: { dia_transmissao: number; auto_transm
   }).eq("id", 1);
   if (error) throw new Error(error.message);
   return obterParametros();
+}
+
+export async function definirInicioLote(ts: string) {
+  await db().from("dctfweb_parametros").update({ lote_inicio: ts }).eq("id", 1);
 }
 
 export async function definirTravaLote(ts: string | null) {

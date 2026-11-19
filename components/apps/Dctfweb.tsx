@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { formatBRL, formatCNPJ } from "@/lib/conciliacao";
-import { divergente, motivoBloqueio, type SituacaoDctf } from "@/lib/dctfweb-regras";
+import { divergente, motivoBloqueio, motivoBloqueioTransmissao, type SituacaoDctf } from "@/lib/dctfweb-regras";
 import s from "./PainelPadrao.module.css";
 import SemMovimento from "./DctfwebSemMovimento";
 
@@ -195,12 +195,12 @@ function Declaracoes() {
 
   /** Laço no navegador: uma declaração por requisição; resposta não-JSON (timeout) conta como falha. */
   async function emLote(acao: "consultar" | "transmitir", alvos: Linha[]) {
-    const fila = acao === "transmitir" ? alvos.filter((l) => !motivoBloqueio(l)) : alvos;
+    const fila = acao === "transmitir" ? alvos.filter((l) => !motivoBloqueioTransmissao(l)) : alvos;
     const bloqueadas = alvos.length - fila.length;
-    if (!fila.length) { setMsg("Nenhuma das selecionadas pode ser transmitida (já transmitida, travada ou sem débito)."); return; }
+    if (!fila.length) { setMsg("Nenhuma pode ser transmitida (travada ou sem débito)."); return; }
     const quem = fila.length === 1 ? (fila[0].razao_social ?? formatCNPJ(fila[0].cnpj)) : `${fila.length} declarações`;
     const aviso = acao === "transmitir"
-      ? `TRANSMITIR ${quem} de ${compBR(competencia)} na Receita?\n\nA transmissão é IRREVERSÍVEL e cada chamada é cobrada pelo SERPRO.${bloqueadas ? `\n${bloqueadas} selecionada(s) ficam de fora (já transmitida, travada ou sem débito).` : ""}`
+      ? `TRANSMITIR ${quem} de ${compBR(competencia)} na Receita?\n\nA transmissão é IRREVERSÍVEL e cada chamada é cobrada pelo SERPRO.${fila.some((l) => l.situacao === "transmitida") ? `\n${fila.filter((l) => l.situacao === "transmitida").length} já constam como transmitidas e serão transmitidas de novo.` : ""}${bloqueadas ? `\n${bloqueadas} ficam de fora (travada ou sem débito).` : ""}`
       : `Consultar a situação de ${quem} na Receita?\n\nCada consulta é cobrada pelo SERPRO.`;
     if (!confirm(aviso)) return;
 
@@ -342,6 +342,10 @@ function Declaracoes() {
                   title="Traz do Questor quem deve entregar na competência (sem custo).">
             {Ico.sync} {sincronizando ? "Sincronizando…" : "Sincronizar obrigadas"}
           </button>
+          <button className={`${s.botao} ${s.primario}`} onClick={() => emLote("transmitir", linhas)} disabled={ocupado || !linhas.some((l) => !motivoBloqueioTransmissao(l))}
+                  title="Transmite todas as declarações da competência com débito e sem trava, inclusive as já transmitidas (cobrado, irreversível).">
+            {Ico.enviar} Transmitir todas ({linhas.filter((l) => !motivoBloqueioTransmissao(l)).length})
+          </button>
           <button className={s.botao} onClick={baixarCsv} disabled={!filtrados.length}>{Ico.csv} Exportar CSV</button>
         </div>
 
@@ -393,7 +397,7 @@ function Declaracoes() {
               {!carregando && visiveis.map((l) => {
                 const marcada = selecionados.has(l.id);
                 const rev = revisar(l);
-                const bloqueio = motivoBloqueio(l);
+                const bloqueio = motivoBloqueioTransmissao(l);
                 return (
                   <tr key={l.id} className={marcada ? s.marcada : undefined}>
                     <td className={s.colCheck}>
@@ -435,7 +439,7 @@ function Declaracoes() {
                                 onClick={() => documento(l, "recibo")}>{Ico.recibo}</button>
                         <button className={s.icone} title="Consultar situação na Receita — cobrado" disabled={ocupado}
                                 onClick={() => emLote("consultar", [l])}>{Ico.consultar}</button>
-                        <button className={s.icone} title={bloqueio ? `Não transmite: ${bloqueio}` : "Transmitir — irreversível e cobrado"}
+                        <button className={s.icone} title={bloqueio ? `Não transmite: ${bloqueio}` : l.situacao === "transmitida" ? "Transmitir de novo — irreversível e cobrado" : "Transmitir — irreversível e cobrado"}
                                 disabled={ocupado || !!bloqueio} onClick={() => emLote("transmitir", [l])}>{Ico.enviar}</button>
                       </div>
                     </td>
@@ -529,8 +533,8 @@ function Declaracoes() {
                 <button className={s.botao} disabled={ocupado} onClick={() => documento(detalhe, "recibo")}>{Ico.recibo} Recibo</button>
               )}
               <button className={s.botao} disabled={ocupado} onClick={() => emLote("consultar", [detalhe])}>{Ico.consultar} Consultar</button>
-              <button className={`${s.botao} ${s.primario}`} disabled={ocupado || !!motivoBloqueio(detalhe)}
-                      title={motivoBloqueio(detalhe) ?? undefined} onClick={() => emLote("transmitir", [detalhe])}>
+              <button className={`${s.botao} ${s.primario}`} disabled={ocupado || !!motivoBloqueioTransmissao(detalhe)}
+                      title={motivoBloqueioTransmissao(detalhe) ?? undefined} onClick={() => emLote("transmitir", [detalhe])}>
                 {Ico.enviar} Transmitir
               </button>
             </div>
@@ -635,12 +639,8 @@ function ParametrosDctf() {
             <input type="checkbox" checked={p.auto_transmissao} onChange={(e) => setP({ ...p, auto_transmissao: e.target.checked })} />
             <span><strong>Transmitir automaticamente</strong> no dia configurado</span>
           </label>
-          <label className={s.check}>
-            <input type="checkbox" checked={p.consultar_antes} onChange={(e) => setP({ ...p, consultar_antes: e.target.checked })} />
-            <span>Consultar a situação na Receita antes de transmitir (uma chamada a mais por empresa; a Receita já bloqueia retransmissão)</span>
-          </label>
           <div className={s.aviso}>
-            Só entram na transmissão empresas ativas com débito apurado maior que zero, ainda não transmitidas e sem a trava “não transmitir”.
+            Entram na transmissão TODAS as empresas com débito apurado maior que zero e sem a trava “não transmitir” — inclusive as já transmitidas. Assim, se a REINF foi entregue depois da transmissão do DP e a declaração voltou para “em andamento” na Receita, ela é transmitida de novo. Cada empresa é cobrada pelo SERPRO.
           </div>
           <div>
             <button className={`${s.botao} ${s.primario}`} onClick={salvar} disabled={salvando}>{salvando ? "Salvando…" : "Salvar parâmetros"}</button>
