@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { waitUntil } from "@vercel/functions";
 import {
-  agoraBrasilia, definirTravaLote, obterParametros, registrarRotina, sincronizarObrigadas, transmitirLote,
+  agoraBrasilia, definirInicioLote, definirTravaLote, obterParametros, registrarRotina, sincronizarObrigadas, transmitirLote,
 } from "@/lib/dctfweb";
 
 export const dynamic = "force-dynamic";
@@ -78,12 +78,15 @@ async function executar(c: { continuar: boolean; elo: number; falhas: number; ba
     if (c.elo > MAX_ELOS) { await definirTravaLote(null); return; }
 
     await definirTravaLote(new Date().toISOString());
+    let inicio = p.lote_inicio ?? new Date().toISOString();
     if (!c.continuar) {
+      inicio = new Date().toISOString();
+      await definirInicioLote(inicio);
       try { await sincronizarObrigadas(comp); }
       catch (e) { await registrarRotina(false, { competencia: comp, elo: c.elo, etapa: "sincronizar", erro: String(e) }); }
     }
 
-    const lote = await transmitirLote(comp, { consultarAntes: p.consultar_antes, budgetMs: ORCAMENTO_MS });
+    const lote = await transmitirLote(comp, { budgetMs: ORCAMENTO_MS, inicio });
     await registrarRotina(true, { competencia: comp, elo: c.elo, ...lote });
 
     if (lote.restantes > 0 && lote.processadas > 0 && c.elo < MAX_ELOS) {

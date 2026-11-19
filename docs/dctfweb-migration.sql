@@ -48,3 +48,6 @@ create or replace function dctfweb_competencias() returns table (competencia tex
 language sql stable as $$ select distinct competencia from dctfweb order by competencia desc $$;
 revoke all on function dctfweb_competencias() from public, anon, authenticated;
 grant execute on function dctfweb_competencias() to service_role;
+
+-- Rotina transmite todas (inclusive transmitidas): marca o início da rodada.
+alter table dctfweb_parametros add column if not exists lote_inicio timestamptz;
