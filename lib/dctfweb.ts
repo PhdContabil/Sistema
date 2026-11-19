@@ -168,9 +168,9 @@ export async function consultar(id: number, s?: Sessao) {
  * Transmite UMA declaração: XML da RFB -> assina -> TRANSDECLARACAO310.
  * Irreversível. "Já transmitida" na resposta só corrige a situação.
  */
-export async function transmitir(id: number, opts: { consultarAntes?: boolean; por?: string } = {}, s?: Sessao) {
+export async function transmitir(id: number, opts: { consultarAntes?: boolean; por?: string; semMovimento?: boolean } = {}, s?: Sessao) {
   const l = await linha(id);
-  const bloqueio = motivoBloqueio(l);
+  const bloqueio = opts.semMovimento ? (l.situacao === "transmitida" ? "já transmitida" : null) : motivoBloqueio(l);
   if (bloqueio) return { ok: false, id, pulou: true, motivo: bloqueio };
 
   const sessao = s ?? await abrirSessao();
@@ -324,7 +324,7 @@ export interface Parametros {
 
 export async function obterParametros(): Promise<Parametros> {
   const { data, error } = await db().from("dctfweb_parametros")
-    .select("dia_transmissao, auto_transmissao, consultar_antes, lote_ts, updated_at, updated_by").eq("id", 1).maybeSingle();
+    .select("dia_transmissao, auto_transmissao, consultar_antes, lote_ts, updated_at, updated_by, ambiente_reinf").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
   return (data ?? { dia_transmissao: 25, auto_transmissao: false, consultar_antes: false, lote_ts: null, updated_at: null, updated_by: null }) as Parametros;
 }

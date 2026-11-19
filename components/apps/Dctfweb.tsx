@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { formatBRL, formatCNPJ } from "@/lib/conciliacao";
 import { divergente, motivoBloqueio, type SituacaoDctf } from "@/lib/dctfweb-regras";
 import s from "./PainelPadrao.module.css";
+import SemMovimento from "./DctfwebSemMovimento";
 
 interface Linha {
   id: number;
@@ -80,14 +81,15 @@ const Ico = {
 };
 
 export default function Dctfweb() {
-  const [aba, setAba] = useState<"declaracoes" | "parametros">("declaracoes");
+  const [aba, setAba] = useState<"declaracoes" | "sem_movimento" | "parametros">("declaracoes");
   return (
     <div className={s.wrap}>
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" className={`${s.toggle} ${aba === "declaracoes" ? s.on : ""}`} onClick={() => setAba("declaracoes")}>Declarações</button>
+        <button type="button" className={`${s.toggle} ${aba === "sem_movimento" ? s.on : ""}`} onClick={() => setAba("sem_movimento")}>Sem movimento</button>
         <button type="button" className={`${s.toggle} ${aba === "parametros" ? s.on : ""}`} onClick={() => setAba("parametros")}>Parâmetros e agendamento</button>
       </div>
-      {aba === "declaracoes" ? <Declaracoes /> : <ParametrosDctf />}
+      {aba === "declaracoes" ? <Declaracoes /> : aba === "sem_movimento" ? <SemMovimento /> : <ParametrosDctf />}
     </div>
   );
 }

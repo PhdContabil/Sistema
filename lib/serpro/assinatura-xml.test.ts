@@ -51,3 +51,18 @@ test("assina no perfil da RFB e a assinatura confere", () => {
 test("recusa XML sem ConteudoDeclaracao", () => {
   assert.throws(() => assinarProcDctf("<ProcDctf/>", certificadoTeste()), /ConteudoDeclaracao/);
 });
+
+test("assina evento Reinf R-2099: Signature no fim do <Reinf>, URI #id, válida", async () => {
+  const { assinarEventoReinf } = await import("./assinatura-xml.ts");
+  const { xmlR2099 } = await import("../reinf-regras.ts");
+  const chaves = certificadoTeste();
+  const id = "ID1123456780000002026111913050900001";
+  const xml = xmlR2099({ id, cnpj: "12345678000190", competencia: "2026-11", ambiente: 2 });
+  const assinado = assinarEventoReinf(xml, chaves);
+  assert.match(assinado, new RegExp(`<Reference URI="#${id}"`));
+  assert.match(assinado, /<\/evtFechaEvPer><Signature[\s\S]*<\/Signature><\/Reinf>$/);
+  const sig = assinado.match(/<Signature[\s\S]*<\/Signature>/)![0];
+  const v = new SignedXml({ publicCert: chaves.certificatePem });
+  v.loadSignature(sig);
+  assert.equal(v.checkSignature(assinado), true);
+});
