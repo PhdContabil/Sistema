@@ -43,3 +43,24 @@ export function assinarProcDctf(xml: string, chaves: { privateKeyPem: string; ce
   sig.computeSignature(xml, { location: { reference: "//*[local-name(.)='ProcDctf']", action: "append" } });
   return sig.getSignedXml();
 }
+
+/**
+ * Assina um evento da EFD-Reinf (ex.: <evtFechaEvPer id="ID...">) no mesmo
+ * perfil RFB: Signature como último filho do <Reinf> raiz do evento.
+ */
+export function assinarEventoReinf(xml: string, chaves: { privateKeyPem: string; certificatePem: string }): string {
+  const id = xml.match(/<evt\w+\s[^>]*\bid="([^"]+)"/)?.[1];
+  if (!id) throw new Error("Não encontrei o id do evento Reinf.");
+  const certLimpo = chaves.certificatePem
+    .replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----/g, "").replace(/\r?\n/g, "").trim();
+  const sig = new SignedXml({
+    privateKey: chaves.privateKeyPem, publicCert: chaves.certificatePem,
+    signatureAlgorithm: RSA_SHA256, canonicalizationAlgorithm: C14N,
+  });
+  sig.addReference({
+    xpath: `//*[@id='${id}']`, transforms: [ENVELOPED, C14N], digestAlgorithm: SHA256_DIGEST, uri: id,
+  });
+  sig.getKeyInfoContent = () => `<X509Data><X509Certificate>${certLimpo}</X509Certificate></X509Data>`;
+  sig.computeSignature(xml, { location: { reference: "/*", action: "append" } });
+  return sig.getSignedXml();
+}
