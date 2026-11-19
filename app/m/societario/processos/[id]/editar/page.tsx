@@ -1,7 +1,7 @@
 import { tipoDescontinuado } from "@/lib/societario/aliasTipos";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { loadAll } from "@/lib/societario/dataSource";
+import { loadProcesso } from "@/lib/societario/dataSource";
 import { listTiposAtivos } from "@/lib/societario/tiposProcesso";
 import { ProcessoForm } from "@/components/societario/ProcessoForm";
 import { updateProcessoAction } from "./actions";
@@ -14,8 +14,8 @@ interface PageProps {
 
 export default async function EditarProcessoPage({ params }: PageProps) {
   const id = Number(params.id);
-  const [snap, tipos] = await Promise.all([loadAll(), listTiposAtivos()]);
-  const processo = snap.processos.find((p) => p.id === id);
+  // Lê o processo direto do banco: a lista completa (loadAll) fica em cache e processo recém-criado dava 404.
+  const [processo, tipos] = await Promise.all([Number.isFinite(id) ? loadProcesso(id) : Promise.resolve(null), listTiposAtivos()]);
   if (!processo) notFound();
   // Desde a migração (13/11/2026) todos os processos são editáveis no Núcleo, inclusive os que vieram do Tareffa.
 
