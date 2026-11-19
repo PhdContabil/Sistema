@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/fiscal/dctfweb/cron",
-      "schedule": "0 11 * * *"
+      "schedule": "*/10 * * * *"
     }
   ],
   "functions": {
