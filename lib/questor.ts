@@ -196,6 +196,11 @@ export function getDctfwebObrigadas(params: { ano?: number; mes?: number; origem
   return get<DctfwebResponse>(`/fiscal/dctfweb-obrigadas${qs}`);
 }
 
+/** Grupos de processamento do DP: empresa -> grupo (leitura, grátis). */
+export function getGruposProcessamento(): Promise<{ total?: number; dados: { codigoempresa: number | string; codigogrupoproc: number | null; descrgrupoproc: string | null }[] }> {
+  return get(`/rh/grupos-processamento`);
+}
+
 /**
  * ICMS DIFAL — referência real por empresa/estabelecimento/competência/tipo.
  * Painel de leitura em Apuração de Impostos; `meses` é o tamanho da janela
