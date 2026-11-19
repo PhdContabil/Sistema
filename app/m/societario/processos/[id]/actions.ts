@@ -10,7 +10,7 @@ import {
 } from "@/lib/societario/dataSource";
 
 export async function updateActivityObsAction(processoId: number, activityId: number, obs: string): Promise<void> {
-  await updateActivityObs(activityId, obs.trim().slice(0, 1000) || null);
+  await updateActivityObs(activityId, obs.trim().slice(0, 20000) || null);
   revalidatePath(`/m/societario/processos/${processoId}`);
 }
 
