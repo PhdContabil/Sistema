@@ -28,6 +28,7 @@ export const MODULES: ModuleDef[] = [
       { name: "Situação Fiscal", desc: "Relatório SITFIS da Receita: pendências, Simples/SIMEI e certidão.", href: "/m/fiscal/situacao-fiscal" },
       { name: "DARE SP", desc: "Guia de ICMS da Sefaz-SP, com multa, juros e envio ao Zen.", href: "/m/fiscal/dare-sp" },
       { name: "Recálculos", desc: "Guia atualizada (DAS, DCTFWeb, DARF) para nova data de pagamento. Compartilhado com o Trabalhista.", href: "/m/fiscal/recalculos" },
+      { name: "Parcelamentos", desc: "Parcelamentos do Simples Nacional (PARCSN, PERT-SN, RELP-SN): parcelas e DAS, um a um ou em lote.", href: "/m/fiscal/parcelamentos" },
       { name: "Notas Fiscais", desc: "Emissão, importação e escrituração de NF-e e NFS-e." },
       { name: "SPED Fiscal", desc: "Geração, validação e transmissão dos arquivos." },
       { name: "Obrigações Acessórias", desc: "Controle de entregas e prazos por cliente.", href: "/m/fiscal/obrigacoes-acessorias" },
