@@ -43,8 +43,7 @@ export async function POST(req: Request) {
         return NextResponse.json(await consultar(Number(b.id)));
       case "transmitir": {
         if (!b.id) return falha(null, "Informe a declaração.", 400);
-        const p = await obterParametros();
-        return NextResponse.json(await transmitir(Number(b.id), { consultarAntes: p.consultar_antes, por: email }));
+        return NextResponse.json(await transmitir(Number(b.id), { por: email }));
       }
       case "trava":
         if (!b.id) return falha(null, "Informe a declaração.", 400);

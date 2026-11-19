@@ -80,6 +80,17 @@ export function motivoBloqueio(l: { situacao: string; nao_transmitir: boolean; d
   return null;
 }
 
+/**
+ * Para TRANSMITIR (manual ou rotina): também retransmite as já transmitidas.
+ * Motivo: o DP transmite, o tributário entrega a REINF depois e a declaração
+ * volta a "em andamento" na Receita sem ninguém consultar. O custo é assumido.
+ */
+export function motivoBloqueioTransmissao(l: { nao_transmitir: boolean; debito: number | string | null }): string | null {
+  if (l.nao_transmitir) return "trava manual";
+  if (!(Number(l.debito) > 0)) return "sem débito apurado";
+  return null;
+}
+
 export const TOLERANCIA_DIVERGENCIA = 0.05;
 
 /**
