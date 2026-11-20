@@ -14,6 +14,8 @@ import SemMovimento from "./DctfwebSemMovimento";
 interface Linha {
   id: number;
   cnpj: string;
+  grupo_codigo?: number | null;
+  grupo_desc?: string | null;
   razao_social: string | null;
   codigoempresa: number | null;
   competencia: string;
@@ -108,6 +110,7 @@ function Declaracoes() {
 
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("");
+  const [grupo, setGrupo] = useState("");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [pagina, setPagina] = useState(0);
   const [detalhe, setDetalhe] = useState<Linha | null>(null);
@@ -135,7 +138,14 @@ function Declaracoes() {
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
-  useEffect(() => { setPagina(0); setSelecionados(new Set()); }, [busca, filtro, competencia]);
+  useEffect(() => { setPagina(0); setSelecionados(new Set()); }, [busca, filtro, grupo, competencia]);
+
+  const grupos = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const l of linhas) if (l.grupo_codigo != null) m.set(String(l.grupo_codigo), l.grupo_desc || `Grupo ${l.grupo_codigo}`);
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [linhas]);
+  const doGrupo = useMemo(() => (grupo ? linhas.filter((l) => String(l.grupo_codigo ?? "") === grupo) : linhas), [linhas, grupo]);
 
   const opcoesCompetencia = useMemo(() => {
     const padrao = competenciaPadrao();
@@ -145,7 +155,7 @@ function Declaracoes() {
   const filtrados = useMemo(() => {
     const q = semAcento(busca.trim());
     const qDig = busca.replace(/\D/g, "");
-    return linhas.filter((l) => {
+    return doGrupo.filter((l) => {
       if (filtro === "revisar" && !revisar(l)) return false;
       if (filtro === "travada" && !l.nao_transmitir) return false;
       if (filtro === "sem_debito" && Number(l.debito) > 0) return false;
@@ -155,22 +165,22 @@ function Declaracoes() {
       return semAcento(l.razao_social ?? "").includes(q) || (qDig.length >= 3 && l.cnpj.includes(qDig))
         || String(l.codigoempresa ?? "") === busca.trim();
     });
-  }, [linhas, busca, filtro]);
+  }, [doGrupo, busca, filtro]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const visiveis = filtrados.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
 
   const kpis = useMemo(() => {
-    const c = (f: (l: Linha) => boolean) => linhas.filter(f).length;
+    const c = (f: (l: Linha) => boolean) => doGrupo.filter(f).length;
     return {
-      total: linhas.length,
+      total: doGrupo.length,
       transmitida: c((l) => l.situacao === "transmitida"),
       aTransmitir: c((l) => !motivoBloqueio(l)),
       erro: c((l) => l.situacao === "erro"),
       revisar: c(revisar),
-      debito: linhas.reduce((t, l) => t + (Number(l.debito) || 0), 0),
+      debito: doGrupo.reduce((t, l) => t + (Number(l.debito) || 0), 0),
     };
-  }, [linhas]);
+  }, [doGrupo]);
   const pct = (n: number) => (kpis.total ? Math.round((n / kpis.total) * 100) : 0);
 
   async function sincronizar() {
@@ -268,11 +278,11 @@ function Declaracoes() {
   }
 
   function baixarCsv() {
-    const cab = ["Código", "Razão social", "CNPJ", "Competência", "Situação", "Débito Questor", "Folha", "REINF", "Valor guia RFB", "Revisar", "Origem", "Travada", "Transmitida em", "Erro"];
+    const cab = ["Código", "Razão social", "CNPJ", "Grupo", "Competência", "Situação", "Débito Questor", "Folha", "REINF", "Valor guia RFB", "Revisar", "Origem", "Travada", "Transmitida em", "Erro"];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const num = (v: number | null) => (v == null ? "" : formatBRL(Number(v)));
     const corpo = filtrados.map((l) => [
-      l.codigoempresa, l.razao_social, formatCNPJ(l.cnpj), compBR(l.competencia), ROTULO[l.situacao],
+      l.codigoempresa, l.razao_social, formatCNPJ(l.cnpj), l.grupo_desc, compBR(l.competencia), ROTULO[l.situacao],
       num(l.debito), num(l.debito_folha), num(l.debito_reinf), num(l.valor_guia), revisar(l) ? "sim" : "",
       l.origem, l.nao_transmitir ? "sim" : "", dataHora(l.transmitida_em), l.transmissao_erro,
     ].map(esc).join(";"));
@@ -337,14 +347,18 @@ function Declaracoes() {
             <option value="travada">Travadas</option>
             <option value="sem_debito">Sem débito</option>
           </select>
+          <select className={s.select} value={grupo} onChange={(e) => setGrupo(e.target.value)} title="Grupo de processamento do DP (Questor)">
+            <option value="">Todos os grupos</option>
+            {grupos.map(([c, d]) => <option key={c} value={c}>{d}</option>)}
+          </select>
           <span className={s.espaco} />
           <button className={s.botao} onClick={sincronizar} disabled={ocupado}
                   title="Traz do Questor quem deve entregar na competência (sem custo).">
             {Ico.sync} {sincronizando ? "Sincronizando…" : "Sincronizar obrigadas"}
           </button>
-          <button className={`${s.botao} ${s.primario}`} onClick={() => emLote("transmitir", linhas)} disabled={ocupado || !linhas.some((l) => !motivoBloqueioTransmissao(l))}
+          <button className={`${s.botao} ${s.primario}`} onClick={() => emLote("transmitir", doGrupo)} disabled={ocupado || !doGrupo.some((l) => !motivoBloqueioTransmissao(l))}
                   title="Transmite todas as declarações da competência com débito e sem trava, inclusive as já transmitidas (cobrado, irreversível).">
-            {Ico.enviar} Transmitir todas ({linhas.filter((l) => !motivoBloqueioTransmissao(l)).length})
+            {Ico.enviar} Transmitir {grupo ? "todas do grupo" : "todas"} ({doGrupo.filter((l) => !motivoBloqueioTransmissao(l)).length})
           </button>
           <button className={s.botao} onClick={baixarCsv} disabled={!filtrados.length}>{Ico.csv} Exportar CSV</button>
         </div>
