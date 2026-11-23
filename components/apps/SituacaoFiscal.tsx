@@ -13,7 +13,7 @@ type Chave = Situacao | "nunca";
 
 interface Linha {
   cnpj: string;
-  grupo_codigo?: number | null;
+  grupos?: { c: number; d: string | null }[];
   grupo_desc?: string | null;
   razao_social: string | null;
   codigoempresa: number | null;
@@ -136,10 +136,10 @@ export default function SituacaoFiscal() {
 
   const grupos = useMemo(() => {
     const m = new Map<string, string>();
-    for (const l of linhas) if (l.grupo_codigo != null) m.set(String(l.grupo_codigo), l.grupo_desc || `Grupo ${l.grupo_codigo}`);
+    for (const l of linhas) for (const g of l.grupos ?? []) m.set(String(g.c), g.d || `Grupo ${g.c}`);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
   }, [linhas]);
-  const doGrupo = useMemo(() => (grupo ? linhas.filter((l) => String(l.grupo_codigo ?? "") === grupo) : linhas), [linhas, grupo]);
+  const doGrupo = useMemo(() => (grupo ? linhas.filter((l) => (l.grupos ?? []).some((g) => String(g.c) === grupo)) : linhas), [linhas, grupo]);
 
   const filtrados = useMemo(() => {
     const q = semAcento(busca.trim());
