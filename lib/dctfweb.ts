@@ -40,7 +40,7 @@ export interface LinhaDctf {
   transmitida_em: string | null;
   transmissao_erro: string | null;
   ultima_consulta: string | null;
-  grupo_codigo?: number | null;
+  grupos?: { c: number; d: string | null }[];
   grupo_desc?: string | null;
 }
 

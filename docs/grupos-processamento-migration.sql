@@ -1,10 +1,11 @@
 -- Grupos de processamento do DP (Questor /rh/grupos-processamento), por empresa.
+-- Uma empresa pode estar em vários grupos: chave (codigoempresa, grupo_codigo).
 -- Atualizado pela sincronização da DCTFWeb e pela carteira da Situação Fiscal.
--- Usado como filtro nas telas (vindo do app antigo: empresas.grupo_codigo/grupo_desc).
 create table if not exists public.grupos_processamento (
-  codigoempresa integer primary key,
-  grupo_codigo  integer,
+  codigoempresa integer not null,
+  grupo_codigo  integer not null,
   grupo_desc    text,
-  updated_at    timestamptz not null default now()
+  updated_at    timestamptz not null default now(),
+  primary key (codigoempresa, grupo_codigo)
 );
 alter table public.grupos_processamento enable row level security;
