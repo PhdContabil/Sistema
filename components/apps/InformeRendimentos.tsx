@@ -46,6 +46,10 @@ interface SimulacaoMudanca {
   f100: Array<Record<string, unknown>>;
   avisos: string[];
 }
+/** Complemento da mensagem de sucesso sobre o aviso no Teams (alterar/excluir). */
+const avisoTeams = (n: unknown) =>
+  n === "falhou" ? " Atenção: o aviso no Teams não foi enviado."
+  : n === "desligada" ? " (O aviso no Teams de alteração e exclusão ainda não está ligado no servidor.)" : "";
 const ROTULO_ACAO: Record<string, string> = { atualizada: "Atualiza", inserida: "Insere", excluida: "Apaga" };
 const reais = (n: number) => `R$ ${formatBRL(n)}`;
 
@@ -209,7 +213,7 @@ export default function InformeRendimentos({
       const j = await chamar("/api/contabil/informe-rendimentos/alterar", {
         id: alt.id, rendimento: c.rendimento, demaisReceitas: c.demaisReceitas, dividendos: c.dividendos, retencao: c.retencao, confirmar: true,
       });
-      setOk(j.repetido ? "Esta alteração já estava gravada no Questor — nada novo foi escrito." : "Informe alterado no Questor com sucesso.");
+      setOk(j.repetido ? "Esta alteração já estava gravada no Questor — nada novo foi escrito." : "Informe alterado no Questor com sucesso." + avisoTeams(j.notificacao));
       cancelarAlteracao();
       await recarregarLog();
     } catch (e) {
@@ -231,7 +235,7 @@ export default function InformeRendimentos({
         (linhas.length ? `Serão apagadas:\n- ${linhas.join("\n- ")}` : "") + avisos + "\n\nEssa ação não tem volta pela tela."
       )) return;
       const j = await chamar("/api/contabil/informe-rendimentos/excluir", { id: l.id, confirmar: true });
-      setOk(j.repetido ? "Esta exclusão já tinha sido feita no Questor." : "Informe excluído do Questor.");
+      setOk(j.repetido ? "Esta exclusão já tinha sido feita no Questor." : "Informe excluído do Questor." + avisoTeams(j.notificacao));
       await recarregarLog();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao excluir.");
