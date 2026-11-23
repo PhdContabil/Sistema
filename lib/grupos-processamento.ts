@@ -31,11 +31,17 @@ export async function atualizarGrupos() {
 
 /** Mapa codigoempresa -> grupos. Atualiza antes se a leitura tiver mais de 12 h (falha não impede). */
 export async function mapaGrupos(atualizarSeVelho = false): Promise<Map<number, Grupo[]>> {
+  // o Supabase devolve no máximo 1000 linhas por consulta: lê em páginas
   const ler = async () => {
-    const { data, error } = await db().from("grupos_processamento")
-      .select("codigoempresa, grupo_codigo, grupo_desc, updated_at").limit(20000);
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    const tudo: { codigoempresa: number; grupo_codigo: number; grupo_desc: string | null; updated_at: string }[] = [];
+    for (let de = 0; ; de += 1000) {
+      const { data, error } = await db().from("grupos_processamento")
+        .select("codigoempresa, grupo_codigo, grupo_desc, updated_at")
+        .order("codigoempresa").order("grupo_codigo").range(de, de + 999);
+      if (error) throw new Error(error.message);
+      tudo.push(...(data ?? []));
+      if (!data || data.length < 1000) return tudo;
+    }
   };
   let dados = await ler();
   if (atualizarSeVelho) {
