@@ -277,6 +277,50 @@ function Declaracoes() {
     }
   }
 
+  /** Guias (DARF) de várias empresas: uma chamada por empresa (cobrada), todas num ZIP. */
+  async function guiasEmLote(alvos: Linha[]) {
+    const fila = alvos.filter((l) => Number(l.debito) > 0 || Number(l.valor_guia) > 0);
+    const fora = alvos.length - fila.length;
+    if (!fila.length) { setMsg("Nenhuma das selecionadas tem débito para gerar guia."); return; }
+    if (!confirm(`Gerar ${fila.length} guia(s) (DARF) de ${compBR(competencia)}?\n\nCada guia é cobrada pelo SERPRO. Os PDFs vêm num arquivo ZIP.${fora ? `\n${fora} sem débito ficam de fora.` : ""}`)) return;
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    parar.current = false;
+    setMsg(null);
+    setDetalhe(null);
+    let ok = 0, falhas = 0;
+    const erros: string[] = [];
+    const nomeArq = (l: Linha) => `${l.codigoempresa ?? ""} ${(l.razao_social ?? l.cnpj).replace(/[\/:*?"<>|]/g, "").slice(0, 60)}`.trim();
+    for (let i = 0; i < fila.length; i++) {
+      if (parar.current) break;
+      const l = fila[i];
+      setLote({ acao: "guia", feitos: i, total: fila.length, falhas, atual: l.razao_social ?? formatCNPJ(l.cnpj) });
+      try {
+        const r = await fetch(`/api/fiscal/dctfweb/documento?id=${l.id}&tipo=guia`, { cache: "no-store" });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          falhas++; erros.push(`${l.razao_social ?? l.cnpj}: ${j.error ?? "não foi possível emitir"}`);
+          continue;
+        }
+        zip.file(`DARF ${nomeArq(l)}.pdf`, await r.blob());
+        ok++;
+      } catch (e) {
+        falhas++; erros.push(`${l.razao_social ?? l.cnpj}: ${e instanceof Error ? e.message : "falha de rede"}`);
+      }
+    }
+    setLote(null);
+    if (erros.length) zip.file("ERROS.txt", erros.join("\r\n"));
+    if (ok) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await zip.generateAsync({ type: "blob" }));
+      a.download = `DARF_DCTFWeb_${competencia ?? ""}.zip`;
+      a.click();
+    }
+    setMsg(`${parar.current ? "Interrompido" : "Concluído"}: ${ok} guia(s) gerada(s), ${falhas} com falha.` + (erros.length ? "\n" + erros.slice(0, 8).join("\n") : ""));
+    setSelecionados(new Set());
+    carregar(competencia);
+  }
+
   function baixarCsv() {
     const cab = ["Código", "Razão social", "CNPJ", "Grupo", "Competência", "Situação", "Débito Questor", "Folha", "REINF", "Valor guia RFB", "Revisar", "Origem", "Travada", "Transmitida em", "Erro"];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -365,7 +409,7 @@ function Declaracoes() {
 
         {lote ? (
           <div className={s.selecao}>
-            <strong>{lote.acao === "transmitir" ? "Transmitindo" : "Consultando"} {lote.feitos + 1} de {lote.total}</strong>
+            <strong>{lote.acao === "transmitir" ? "Transmitindo" : lote.acao === "guia" ? "Gerando guia" : "Consultando"} {lote.feitos + 1} de {lote.total}</strong>
             <span className={s.progresso}><span style={{ width: `${(lote.feitos / lote.total) * 100}%` }} /></span>
             <span className={s.custo}>{lote.atual} · {lote.falhas} falha(s)</span>
             <button className={`${s.botao} ${s.perigo}`} onClick={() => { parar.current = true; }}>Parar</button>
@@ -375,6 +419,7 @@ function Declaracoes() {
             <strong>{selecionadas.length} selecionada(s)</strong>
             <button className={s.botao} onClick={() => emLote("consultar", selecionadas)}>{Ico.consultar} Consultar situação</button>
             <button className={`${s.botao} ${s.primario}`} onClick={() => emLote("transmitir", selecionadas)}>{Ico.enviar} Transmitir</button>
+            <button className={s.botao} onClick={() => guiasEmLote(selecionadas)}>{Ico.guia} Gerar guias</button>
             <span className={s.custo}>{Ico.moeda} cada chamada é cobrada pelo SERPRO · transmissão é irreversível</span>
             <span className={s.espaco} />
             <button className={s.botao} onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
