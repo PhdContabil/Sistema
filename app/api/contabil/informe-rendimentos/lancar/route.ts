@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasWriteKey, lancarInformeRendimentos } from "@/lib/questor";
 import { prepararInforme, ErroInforme } from "@/lib/informe-rendimentos-servico";
 import { planoZerado } from "@/lib/informe-rendimentos";
-import { jaLancado, registrarLog } from "@/lib/informe-rendimentos-log";
+import { comGeracao, geracaoLancamento, jaLancado, registrarLog } from "@/lib/informe-rendimentos-log";
 import { registrarLogInforme } from "@/lib/log-sharepoint";
 import { exigirContabil } from "../_auth";
 
@@ -39,20 +39,24 @@ export async function POST(req: Request) {
       );
     }
 
+    // Chave com "geração": lançar de novo um informe que foi excluído precisa de chave nova,
+    // senão a API do Questor devolve a resposta guardada e não grava nada.
+    const chave = comGeracao(p.chave, await geracaoLancamento(p.chave).catch(() => 0));
+
     // Informe zerado (chamado #1410): não grava nada no Questor, mas segue o log e o aviso no Teams.
     const zerado = planoZerado(p.plano);
     const r: Awaited<ReturnType<typeof lancarInformeRendimentos>> = zerado
       ? { ok: true, status: 200, corpo: { ok: true } as Awaited<ReturnType<typeof lancarInformeRendimentos>>["corpo"] }
-      : await lancarInformeRendimentos(p.plano, { dryRun: false, idempotencyKey: p.chave, usuario: email });
+      : await lancarInformeRendimentos(p.plano, { dryRun: false, idempotencyKey: chave, usuario: email });
     if (!r.ok) {
       const msg = r.status === 404
         ? "A API do Questor ainda não tem o endpoint de informe de rendimentos. Nada foi gravado."
         : `O Questor recusou o lançamento (HTTP ${r.status}): ${r.corpo.detail ?? r.corpo.erro ?? "sem detalhe"}`;
-      await registrarLog({ entrada: p.entrada, plano: p.plano, nomeEmpresa: p.nomeEmpresa, status: "erro", responsavel: email, chave: p.chave, resposta: r.corpo, erro: msg });
+      await registrarLog({ entrada: p.entrada, plano: p.plano, nomeEmpresa: p.nomeEmpresa, status: "erro", responsavel: email, chave, resposta: r.corpo, erro: msg });
       return NextResponse.json({ error: msg }, { status: r.status === 404 ? 501 : 502 });
     }
 
-    await registrarLog({ entrada: p.entrada, plano: p.plano, nomeEmpresa: p.nomeEmpresa, status: "lancado", responsavel: email, chave: p.chave, resposta: r.corpo });
+    await registrarLog({ entrada: p.entrada, plano: p.plano, nomeEmpresa: p.nomeEmpresa, status: "lancado", responsavel: email, chave, resposta: r.corpo });
     // Grava a linha na LogOperacoes (SharePoint): o fluxo do Power Automate avisa o grupo do Teams.
     // Reenvio idempotente não grava de novo.
     const repetido = r.corpo.repetido === true;

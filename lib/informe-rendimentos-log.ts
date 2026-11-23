@@ -4,6 +4,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import type { EntradaInforme, PlanoInforme } from "./informe-rendimentos";
+import { ehStatusAtivo, linhasDaResposta, STATUS_ATIVOS } from "./informe-rendimentos-alteracao";
 
 function db(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,12 +30,20 @@ export interface LinhaLog {
   retencao: number;
   pis: number;
   cofins: number;
-  status: "lancado" | "erro";
+  /**
+   * lancado/alterado = vale no Questor; alterado_depois/excluido_depois = foi
+   * substituído ou apagado depois; excluido = registro da exclusão.
+   */
+  status: StatusInforme;
   responsavel: string;
   erro: string | null;
   origem?: "nucleo" | "access";
   teste?: boolean;
+  /** Calculado no servidor: dá para alterar/excluir pela tela? (a resposta bruta da API não vai ao navegador) */
+  editavel?: boolean;
 }
+
+export type StatusInforme = "lancado" | "alterado" | "alterado_depois" | "excluido" | "excluido_depois" | "erro";
 
 /**
  * Chave de idempotência: mesma empresa, competência, regime e valores = mesma
@@ -47,19 +56,57 @@ export function chaveIdempotencia(e: EntradaInforme, regime: string): string {
   return `informe:${e.codigoempresa}:${e.competencia}:${h}`;
 }
 
-/** Já existe lançamento bem-sucedido com esta chave? (Barra o reenvio antes de chamar a API.) */
-export async function jaLancado(chave: string): Promise<LinhaLog | null> {
+export const comGeracao = (base: string, geracao: number) => `${base}:g${geracao}`;
+
+const filtroChave = (base: string) => `idempotency_key.eq.${base},idempotency_key.like.${base}:g*`;
+
+/**
+ * Geração do lançamento: quantas vezes este mesmo informe (mesma chave base) já
+ * foi lançado e depois excluído. A API do Questor devolve a resposta guardada
+ * quando a Idempotency-Key se repete, então lançar de novo depois de excluir
+ * precisa de uma chave nova — senão não grava nada.
+ */
+export async function geracaoLancamento(base: string): Promise<number> {
+  const sb = db();
+  if (!sb) return 0;
+  const { count, error } = await sb
+    .from("informe_rendimentos_log").select("id", { count: "exact", head: true })
+    .or(filtroChave(base)).eq("status", "excluido_depois");
+  if (error) { console.error("[informe-rendimentos/log]", error.message); return 0; }
+  return count ?? 0;
+}
+
+/** Já existe lançamento ativo com esta chave base (qualquer geração)? (Barra o reenvio antes de chamar a API.) */
+export async function jaLancado(base: string): Promise<LinhaLog | null> {
   const sb = db();
   if (!sb) return null;
   const { data } = await sb
     .from("informe_rendimentos_log").select("*")
-    .eq("idempotency_key", chave).eq("status", "lancado").limit(1).maybeSingle();
+    .or(filtroChave(base)).in("status", [...STATUS_ATIVOS]).limit(1).maybeSingle();
   return (data as LinhaLog | null) ?? null;
+}
+
+/** Linha do log com a resposta da API (usada para achar os `seq` ao alterar/excluir). */
+export async function buscarLinha(id: number): Promise<(LinhaLog & { resposta: unknown }) | null> {
+  const sb = db();
+  if (!sb) return null;
+  const { data } = await sb.from("informe_rendimentos_log").select("*").eq("id", id).maybeSingle();
+  return (data as (LinhaLog & { resposta: unknown }) | null) ?? null;
+}
+
+/** Marca uma linha como substituída/excluída depois. Só mexe se ela ainda estava ativa. */
+export async function marcarLinha(id: number, status: "alterado_depois" | "excluido_depois"): Promise<boolean> {
+  const sb = db();
+  if (!sb) return false;
+  const { data, error } = await sb.from("informe_rendimentos_log").update({ status })
+    .eq("id", id).in("status", [...STATUS_ATIVOS]).select("id");
+  if (error) { console.error("[informe-rendimentos/log]", error.message); return false; }
+  return (data?.length ?? 0) > 0;
 }
 
 export async function registrarLog(l: {
   entrada: EntradaInforme; plano: PlanoInforme; nomeEmpresa: string | null;
-  status: "lancado" | "erro"; responsavel: string; chave: string;
+  status: "lancado" | "alterado" | "excluido" | "erro"; responsavel: string; chave: string;
   resposta?: unknown; erro?: string | null;
 }): Promise<void> {
   const sb = db();
@@ -93,5 +140,8 @@ export async function listarLog(limite = 1000): Promise<LinhaLog[]> {
     .from("informe_rendimentos_log").select("*")
     .order("criado_em", { ascending: false }).limit(limite);
   if (error) throw new Error(`Falha ao ler o log: ${error.message}`);
-  return (data ?? []) as LinhaLog[];
+  return ((data ?? []) as Array<LinhaLog & { resposta?: unknown }>).map(({ resposta, ...l }) => ({
+    ...l,
+    editavel: ehStatusAtivo(l.status) && l.origem !== "access" && linhasDaResposta(resposta) !== null,
+  }));
 }

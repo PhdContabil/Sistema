@@ -604,6 +604,38 @@ export async function lancarInformeRendimentos(
   );
 }
 
+/** Resposta de alterar/excluir: cada linha traz `acao` (atualizada, inserida, excluida). */
+export interface RespostaAlteracaoInformeQuestor extends RespostaInformeQuestor {
+  anterior?: unknown;
+}
+
+/** PATCH /contabil/informe-rendimentos/{empresa}: compara `atual` com `novo` e ajusta as linhas. */
+export function alterarInformeRendimentos(
+  codigoempresa: number,
+  corpo: ReturnType<typeof import("./informe-rendimentos-alteracao").corpoAlterar>,
+  opts: { dryRun: boolean; idempotencyKey: string }
+) {
+  return enviar<RespostaAlteracaoInformeQuestor>(
+    "PATCH",
+    `/contabil/informe-rendimentos/${codigoempresa}?dry_run=${opts.dryRun ? "true" : "false"}`,
+    corpo,
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}
+
+/** POST .../{empresa}/excluir (o DELETE com corpo nem sempre passa por proxies): apaga só as linhas informadas. */
+export function excluirInformeRendimentos(
+  codigoempresa: number,
+  corpo: ReturnType<typeof import("./informe-rendimentos-alteracao").corpoExcluir>,
+  opts: { dryRun: boolean; idempotencyKey: string }
+) {
+  return post<RespostaAlteracaoInformeQuestor>(
+    `/contabil/informe-rendimentos/${codigoempresa}/excluir?dry_run=${opts.dryRun ? "true" : "false"}`,
+    corpo,
+    { idempotencyKey: opts.idempotencyKey }
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Lucros Distribuídos (escrita) — módulo Contábil.
 //
