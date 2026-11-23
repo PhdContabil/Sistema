@@ -130,3 +130,12 @@ Também é preciso rodar `docs/informe-rendimentos-migration.sql` no Supabase
 - Tela de lucros distribuídos (usa `OUTRORENDIMENTOPAGO` e
   `INFORMERENDIMENTOOUTREND`; terá endpoint próprio). O campo "Observação" sai.
 - Aluguéis no Lucro Real: o Núcleo recusa (sem regra de CST/conta definida).
+
+## Alterar e excluir (no ar na API do Questor)
+
+- **Alterar:** `PATCH /contabil/informe-rendimentos/{empresa}?dry_run=` com `{usuario, competencia, regime, tipo, atual:{ecf,f100}, novo:{ecf,f100}}`. Linha nos dois lados é atualizada (mantém o `seq`), só em `novo` é inserida, só em `atual` é apagada. O pareamento é pela operação na ECF e pela conta contábil na F100.
+- **Excluir:** `POST /contabil/informe-rendimentos/{empresa}/excluir?dry_run=` com `{usuario, competencia, tipo, ecf, f100}`. Apaga só as linhas informadas.
+- Os dois: tudo ou nada, trava por empresa, `Idempotency-Key` obrigatória para gravar (prefixos `informe-alterar:` e `informe-excluir:`), `409` se o valor no Questor mudou depois do lançamento ou se a F100 está na DIMOB, `404` se a linha não é do informe.
+- A API **não** bloqueia quando a ECF/EFD já foi transmitida (o Questor não guarda isso no banco): devolve um `aviso` se o prazo de entrega passou. O Núcleo mostra o aviso e pede confirmação.
+- No Núcleo: os `seq` vêm da resposta guardada no log (`informe_rendimentos_log.resposta`). Status do log: `lancado`/`alterado` (valem no Questor), `alterado_depois`/`excluido_depois` (substituídos) e `excluido` (registro da exclusão). Lançar de novo um informe excluído usa chave com "geração" (`:gN`), pelo mesmo motivo dos Lucros: a API devolve a resposta guardada quando a chave se repete.
+- Informe zerado e registros importados do Access não têm linhas no Questor: não aparecem com Alterar/Excluir.
