@@ -44,7 +44,7 @@ export interface LinhaSituacao {
   certidao_tipo: string | null;
   certidao_validade: string | null;
   tem_pdf: boolean;
-  grupo_codigo?: number | null;
+  grupos?: { c: number; d: string | null }[];
   grupo_desc?: string | null;
 }
 
