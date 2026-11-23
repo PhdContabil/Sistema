@@ -106,7 +106,18 @@ export function registrarLogSharepoint(d: DadosAvisoLucro, responsavel: string, 
 
 // ------------------------------------------------------------------ informe
 
+export type EventoInforme = "novo" | "alterado" | "excluido";
+
+/** Mesmos textos do status dos Lucros: o fluxo do Power Automate escolhe a mensagem por eles. */
+export const STATUS_INFORME: Record<EventoInforme, string> = {
+  novo: "1º LANÇAMENTO",
+  alterado: "LANÇAMENTO ALTERADO",
+  excluido: "LANÇAMENTO EXCLUIDO",
+};
+
 export interface DadosAvisoInforme {
+  /** Padrão: "novo". */
+  evento?: EventoInforme;
   /** AAAA-MM */
   competencia: string;
   codigoempresa: number;
@@ -122,8 +133,10 @@ export interface DadosAvisoInforme {
  * mesma lista, sem coluna de tipo — como no Access). DATALCTOFIS = primeiro dia
  * da competência.
  */
-export function montarCamposInforme(d: DadosAvisoInforme, responsavel: string, agora = new Date()) {
+export function montarCamposInforme(d: DadosAvisoInforme, responsavel: string, agora = new Date(), campoStatus?: string) {
   return {
+    // Só vai a coluna de status se ela existir na lista (nome interno em SHAREPOINT_INFORME_STATUS_CAMPO).
+    ...(campoStatus ? { [campoStatus]: STATUS_INFORME[d.evento ?? "novo"] } : {}),
     CODIGOEMPRESA: d.codigoempresa,
     RENDIMENTO: d.rendimento,
     RETENCAO: d.retencao,
@@ -138,5 +151,9 @@ export function montarCamposInforme(d: DadosAvisoInforme, responsavel: string, a
 
 /** Log do informe (lista LogOperacoes); o fluxo "Rendimentos - Cont / Fis" avisa o grupo. */
 export function registrarLogInforme(d: DadosAvisoInforme, responsavel: string, o: OpcoesSp = {}): Promise<ResultadoLogSp> {
-  return gravarItemSharepoint("SHAREPOINT_LISTA_INFORME_ID", () => montarCamposInforme(d, responsavel, o.agora), o);
+  const campoStatus = (o.env ?? process.env).SHAREPOINT_INFORME_STATUS_CAMPO?.trim() || undefined;
+  // Sem a coluna de status a linha de alteração/exclusão seria igual à de um lançamento novo
+  // e o grupo receberia o aviso errado: nesse caso não grava nada.
+  if ((d.evento ?? "novo") !== "novo" && !campoStatus) return Promise.resolve("desligado");
+  return gravarItemSharepoint("SHAREPOINT_LISTA_INFORME_ID", () => montarCamposInforme(d, responsavel, o.agora, campoStatus), o);
 }

@@ -3,10 +3,13 @@ import { alterarInformeRendimentos, hasWriteKey } from "@/lib/questor";
 import { prepararInforme, ErroInforme } from "@/lib/informe-rendimentos-servico";
 import { ehTipoInforme, planoZerado } from "@/lib/informe-rendimentos";
 import { buscarLinha, marcarLinha, registrarLog } from "@/lib/informe-rendimentos-log";
+import { registrarLogInforme } from "@/lib/log-sharepoint";
 import { chaveAlterar, corpoAlterar, ehStatusAtivo, linhasDaResposta, mesmosValores } from "@/lib/informe-rendimentos-alteracao";
 import { exigirContabil } from "../_auth";
 
 export const dynamic = "force-dynamic";
+
+const avisoDe = (r: "gravado" | "desligado" | "falhou") => (r === "gravado" ? "ok" : r === "falhou" ? "falhou" : "desligada");
 export const maxDuration = 60;
 
 /**
@@ -73,7 +76,14 @@ export async function POST(req: Request) {
       resposta: { ok: true, ecf: vivas?.ecf ?? [], f100: vivas?.f100 ?? [], alteracao: r.corpo, alterado_de: linha.id },
     });
     await marcarLinha(linha.id, "alterado_depois");
-    return NextResponse.json({ ok: true, repetido: r.corpo.repetido === true, ecf: r.corpo.ecf ?? [], f100: r.corpo.f100 ?? [], avisos: r.corpo.avisos ?? [] });
+    // Aviso no Teams (fluxo do Power Automate lê o STATUS da linha). Reenvio idempotente não avisa de novo.
+    const repetido = r.corpo.repetido === true;
+    const e = p.entrada;
+    const notificacao = repetido ? "desligada" : avisoDe(await registrarLogInforme({
+      evento: "alterado", competencia: e.competencia, codigoempresa: e.codigoempresa, nomeEmpresa: p.nomeEmpresa,
+      rendimento: e.rendimento, retencao: e.retencao, demaisReceitas: e.demaisReceitas, dividendos: e.dividendos,
+    }, email));
+    return NextResponse.json({ ok: true, repetido, notificacao, ecf: r.corpo.ecf ?? [], f100: r.corpo.f100 ?? [], avisos: r.corpo.avisos ?? [] });
   } catch (e) {
     if (e instanceof ErroInforme) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("[informe-rendimentos/alterar]", e);

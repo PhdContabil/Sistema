@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { excluirInformeRendimentos, hasWriteKey } from "@/lib/questor";
 import { ehTipoInforme, type EntradaInforme, type Regime } from "@/lib/informe-rendimentos";
 import { buscarLinha, marcarLinha, registrarLog } from "@/lib/informe-rendimentos-log";
+import { registrarLogInforme } from "@/lib/log-sharepoint";
 import { chaveExcluir, corpoExcluir, ehStatusAtivo, linhasDaResposta } from "@/lib/informe-rendimentos-alteracao";
 import { exigirContabil } from "../_auth";
 
 export const dynamic = "force-dynamic";
+
+const avisoDe = (r: "gravado" | "desligado" | "falhou") => (r === "gravado" ? "ok" : r === "falhou" ? "falhou" : "desligada");
 export const maxDuration = 60;
 
 /**
@@ -64,7 +67,13 @@ export async function POST(req: Request) {
 
     await registrarLog({ entrada, plano, nomeEmpresa: linha.nome_empresa, status: "excluido", responsavel: email, chave, resposta: { ...r.corpo, excluido_de: linha.id } });
     await marcarLinha(linha.id, "excluido_depois");
-    return NextResponse.json({ ok: true, repetido: r.corpo.repetido === true, avisos: r.corpo.avisos ?? [] });
+    // Aviso no Teams (fluxo do Power Automate lê o STATUS da linha). Reenvio idempotente não avisa de novo.
+    const repetido = r.corpo.repetido === true;
+    const notificacao = repetido ? "desligada" : avisoDe(await registrarLogInforme({
+      evento: "excluido", competencia: entrada.competencia, codigoempresa: entrada.codigoempresa, nomeEmpresa: linha.nome_empresa,
+      rendimento: entrada.rendimento, retencao: entrada.retencao, demaisReceitas: entrada.demaisReceitas, dividendos: entrada.dividendos,
+    }, email));
+    return NextResponse.json({ ok: true, repetido, notificacao, avisos: r.corpo.avisos ?? [] });
   } catch (e) {
     console.error("[informe-rendimentos/excluir]", e);
     return NextResponse.json({ error: "Falha ao excluir o informe." }, { status: 500 });
