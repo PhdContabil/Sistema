@@ -57,6 +57,20 @@ test("campos do informe seguem a LogOperacoes do Access", () => {
   });
 });
 
+test("informe: status de alteração/exclusão só vai com a coluna configurada", async () => {
+  const c = montarCamposInforme({ ...inf, evento: "alterado" }, "x", new Date("2026-11-05T12:00:00Z"), "STATUS");
+  assert.equal(c.STATUS, "LANÇAMENTO ALTERADO");
+  assert.equal(montarCamposInforme({ ...inf, evento: "excluido" }, "x", new Date(), "STATUS").STATUS, "LANÇAMENTO EXCLUIDO");
+  assert.equal(montarCamposInforme(inf, "x", new Date(), "STATUS").STATUS, "1º LANÇAMENTO");
+  assert.ok(!("STATUS" in montarCamposInforme(inf, "x", new Date())));
+  // Sem a coluna, alteração/exclusão não grava nada (a linha seria igual à de um lançamento novo).
+  let n = 0;
+  const f = (async (u: string) => { n++; return u.includes("oauth2") ? new Response(JSON.stringify({ access_token: "tk" })) : new Response(null, { status: 201 }); }) as typeof fetch;
+  assert.equal(await registrarLogInforme({ ...inf, evento: "alterado" }, "x", { env: envInf, fetchFn: f }), "desligado");
+  assert.equal(n, 0);
+  assert.equal(await registrarLogInforme({ ...inf, evento: "excluido" }, "x", { env: { ...envInf, SHAREPOINT_INFORME_STATUS_CAMPO: "STATUS" }, fetchFn: f }), "gravado");
+});
+
 test("informe: desligado sem a variável da lista; grava na lista do informe", async () => {
   let n = 0;
   assert.equal(await registrarLogInforme(inf, "x", { env, fetchFn: (async () => { n++; return new Response(null); }) as typeof fetch }), "desligado");

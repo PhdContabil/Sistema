@@ -35,6 +35,22 @@ function mesAnterior(): string {
 }
 
 const data = (iso: string) => iso.split("-").reverse().join("/");
+const ROTULO_STATUS: Record<string, string> = {
+  lancado: "Lançado", alterado: "Alterado", alterado_depois: "Alterado depois",
+  excluido: "Excluído", excluido_depois: "Excluído depois", erro: "Erro",
+};
+
+/** Resposta da simulação de alterar/excluir: o que a API do Questor vai fazer com cada linha. */
+interface SimulacaoMudanca {
+  ecf: Array<Record<string, unknown>>;
+  f100: Array<Record<string, unknown>>;
+  avisos: string[];
+}
+/** Complemento da mensagem de sucesso sobre o aviso no Teams (alterar/excluir). */
+const avisoTeams = (n: unknown) =>
+  n === "falhou" ? " Atenção: o aviso no Teams não foi enviado."
+  : n === "desligada" ? " (O aviso no Teams de alteração e exclusão ainda não está ligado no servidor.)" : "";
+const ROTULO_ACAO: Record<string, string> = { atualizada: "Atualiza", inserida: "Insere", excluida: "Apaga" };
 const reais = (n: number) => `R$ ${formatBRL(n)}`;
 
 export default function InformeRendimentos({
@@ -59,6 +75,9 @@ export default function InformeRendimentos({
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [log, setLog] = useState<LinhaLog[]>(logInicial);
+  /** Lançamento que está sendo alterado (empresa, competência e tipo ficam travados). */
+  const [alt, setAlt] = useState<LinhaLog | null>(null);
+  const [simAlt, setSimAlt] = useState<SimulacaoMudanca | null>(null);
   const [filtroLog, setFiltroLog] = useState<FiltroLog>(FILTRO_VAZIO);
   const logVisivel = aplicarFiltro(log, filtroLog, (l) => `${l.codigoempresa} ${l.nome_empresa ?? ""} ${l.responsavel}`, (l) => l.tipo);
   const [paginaLog, setPaginaLog] = useState(0);
@@ -148,12 +167,87 @@ export default function InformeRendimentos({
     } finally { setOcupado(false); }
   }
 
+  async function recarregarLog() {
+    const l = await fetch("/api/contabil/informe-rendimentos/log").then((r) => r.json()).catch(() => null);
+    if (l?.log) setLog(l.log);
+  }
+
+  function iniciarAlteracao(l: LinhaLog) {
+    setErro(null); setOk(null); setRes(null); setSimAlt(null);
+    setAlt(l);
+    setTipo(l.tipo as TipoInforme);
+    setBusca(`${l.codigoempresa} · ${l.nome_empresa ?? ""}`);
+    setCompetencia(l.competencia);
+    const v = (n: number) => (Number(n) ? formatBRL(Number(n)) : "");
+    setRendimento(v(l.rendimento)); setDemais(v(l.demais_receitas)); setDividendos(v(l.dividendos)); setRetencao(v(l.retencao));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelarAlteracao() {
+    setAlt(null); setSimAlt(null); setErro(null);
+    setRendimento(""); setDemais(""); setDividendos(""); setRetencao("");
+    setBusca(""); setCompetencia(mesAnterior());
+  }
+
+  async function simularAlteracao() {
+    if (!alt) return;
+    setErro(null); setOk(null); setSimAlt(null); setOcupado(true);
+    try {
+      const c = corpo();
+      const j = await chamar("/api/contabil/informe-rendimentos/alterar", {
+        id: alt.id, rendimento: c.rendimento, demaisReceitas: c.demaisReceitas, dividendos: c.dividendos, retencao: c.retencao,
+      });
+      setSimAlt({ ecf: j.ecf ?? [], f100: j.f100 ?? [], avisos: j.avisos ?? [] });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao simular a alteração.");
+    } finally { setOcupado(false); }
+  }
+
+  async function gravarAlteracao() {
+    if (!alt || !simAlt) return;
+    const avisos = simAlt.avisos.length ? `\n\nAtenção:\n- ${simAlt.avisos.join("\n- ")}` : "";
+    if (!window.confirm(`Gravar a alteração no Questor?\n\nEmpresa ${alt.codigoempresa} · competência ${data(alt.competencia)}${avisos}`)) return;
+    setErro(null); setOk(null); setOcupado(true);
+    try {
+      const c = corpo();
+      const j = await chamar("/api/contabil/informe-rendimentos/alterar", {
+        id: alt.id, rendimento: c.rendimento, demaisReceitas: c.demaisReceitas, dividendos: c.dividendos, retencao: c.retencao, confirmar: true,
+      });
+      setOk(j.repetido ? "Esta alteração já estava gravada no Questor — nada novo foi escrito." : "Informe alterado no Questor com sucesso." + avisoTeams(j.notificacao));
+      cancelarAlteracao();
+      await recarregarLog();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao alterar.");
+    } finally { setOcupado(false); }
+  }
+
+  async function excluirLinha(l: LinhaLog) {
+    setErro(null); setOk(null); setOcupado(true);
+    try {
+      const sim = await chamar("/api/contabil/informe-rendimentos/excluir", { id: l.id });
+      const linhas = [
+        ...(sim.ecf ?? []).map((x: Record<string, unknown>) => `ECF ${x.codigooperacaofis}: ${reais(Number(x.valoroutraoperacaofis))}`),
+        ...(sim.f100 ?? []).map((x: Record<string, unknown>) => `F100 seq ${x.seq}: ${reais(Number(x.valoroper))}`),
+      ];
+      const avisos = (sim.avisos ?? []).length ? `\n\nAtenção:\n- ${(sim.avisos as string[]).join("\n- ")}` : "";
+      if (!window.confirm(
+        `Excluir este informe do Questor?\n\nEmpresa ${l.codigoempresa} · competência ${data(l.competencia)}\n` +
+        (linhas.length ? `Serão apagadas:\n- ${linhas.join("\n- ")}` : "") + avisos + "\n\nEssa ação não tem volta pela tela."
+      )) return;
+      const j = await chamar("/api/contabil/informe-rendimentos/excluir", { id: l.id, confirmar: true });
+      setOk(j.repetido ? "Esta exclusão já tinha sido feita no Questor." : "Informe excluído do Questor." + avisoTeams(j.notificacao));
+      await recarregarLog();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Falha ao excluir.");
+    } finally { setOcupado(false); }
+  }
+
   /** Enter ou sair do campo: "100+20" vira "120,00"; conta inválida ou negativa mostra o erro. */
   function aplicarConta(v: string, set: (s: string) => void, rotulo: string) {
     if (v.trim() === "") return;
     try {
       const novo = resolverCampo(v, rotulo);
-      if (temConta(v)) { set(novo); setErro(null); setRes(null); }
+      if (temConta(v)) { set(novo); setErro(null); setRes(null); setSimAlt(null); }
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Conta inválida.");
     }
@@ -164,7 +258,7 @@ export default function InformeRendimentos({
       {rotulo}
       <input style={{ ...entrada, textAlign: "right" }} inputMode="text" placeholder="0,00" value={v}
         title="Aceita contas: 100+20 ou 90-10 e Enter"
-        onChange={(e) => { set(e.target.value.replace(/[^\d.,+\-\s]/g, "")); setRes(null); }}
+        onChange={(e) => { set(e.target.value.replace(/[^\d.,+\-\s]/g, "")); setRes(null); setSimAlt(null); }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); aplicarConta(v, set, rotulo); } }}
         onBlur={() => aplicarConta(v, set, rotulo)} />
     </label>
@@ -175,10 +269,16 @@ export default function InformeRendimentos({
       {erroServidor && <div className="banner error">{erroServidor}</div>}
 
       <div className="card" style={{ marginBottom: 16 }}>
+        {alt && (
+          <div className="banner" style={{ marginBottom: 12 }}>
+            Alterando o lançamento de {new Date(alt.criado_em).toLocaleString("pt-BR")} (empresa {alt.codigoempresa}, competência {data(alt.competencia)}).
+            Empresa e competência não mudam: para isso, exclua e lance de novo. Para tirar o informe do Questor, use Excluir no histórico.
+          </div>
+        )}
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", alignItems: "end" }}>
           {!tipoFixo && <label style={campo}>
             Tipo
-            <select style={entrada} value={tipo}
+            <select style={entrada} value={tipo} disabled={!!alt}
               onChange={(e) => {
                 const t = e.target.value as TipoInforme;
                 setTipo(t); setRes(null); setErro(null); setOk(null);
@@ -189,7 +289,7 @@ export default function InformeRendimentos({
           </label>}
           <label style={{ ...campo, gridColumn: "span 2" }}>
             Empresa (código ou nome)
-            <input style={entrada} list={`informe-empresas-${tipoFixo ?? "todos"}`} placeholder="Ex.: 1415" value={busca}
+            <input style={entrada} list={`informe-empresas-${tipoFixo ?? "todos"}`} placeholder="Ex.: 1415" value={busca} disabled={!!alt}
               onChange={(e) => { setBusca(e.target.value); setRes(null); }} />
             <datalist id={`informe-empresas-${tipoFixo ?? "todos"}`}>
               {empresas.map((e) => <option key={e.codigo} value={`${e.codigo} · ${e.nome}`} />)}
@@ -202,7 +302,7 @@ export default function InformeRendimentos({
           </label>
           <label style={campo}>
             Competência
-            <input style={entrada} type="month" value={competencia}
+            <input style={entrada} type="month" value={competencia} disabled={!!alt}
               onChange={(e) => { setCompetencia(e.target.value); setRes(null); }} />
           </label>
         </div>
@@ -222,15 +322,44 @@ export default function InformeRendimentos({
         </div>
 
         <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
-          <button className="btn primary" disabled={ocupado || !codigo} onClick={simular}>
-            {ocupado && !res ? "Consultando…" : "Simular"}
+          <button className="btn primary" disabled={ocupado || !codigo} onClick={alt ? simularAlteracao : simular}>
+            {ocupado && !res && !simAlt ? "Consultando…" : (alt ? "Simular alteração" : "Simular")}
           </button>
+          {alt && <button className="btn" disabled={ocupado} onClick={cancelarAlteracao}>Cancelar alteração</button>}
           <span style={{ fontSize: 12, color: "var(--muted, #667)" }}>Nada é gravado até você confirmar. Nos valores dá para digitar contas, como 100+20 ou 90-10, e apertar Enter.</span>
         </div>
       </div>
 
       {erro && <div className="banner error">{erro}</div>}
       {ok && <div className="banner">{ok}</div>}
+
+      {alt && simAlt && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          {simAlt.avisos.map((a) => <div key={a} className="banner">Aviso do Questor: {a}</div>)}
+          <h3 style={{ fontSize: 14, margin: "8px 0" }}>O que o Questor vai fazer</h3>
+          <div className="table-wrap" style={{ marginBottom: 14 }}>
+            <table className="grid">
+              <thead><tr><th style={{ textAlign: "left" }}>Tabela</th><th>Ação</th><th>Operação</th><th>Seq</th><th>Valor</th></tr></thead>
+              <tbody>
+                {simAlt.ecf.length + simAlt.f100.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center" }}>Nenhuma linha.</td></tr>}
+                {simAlt.ecf.map((l, i) => (
+                  <tr key={`e${i}`}>
+                    <td style={{ textAlign: "left" }}>ECF</td><td>{ROTULO_ACAO[String(l.acao)] ?? String(l.acao ?? "")}</td>
+                    <td>{String(l.codigooperacaofis ?? "")}</td><td>{String(l.seq ?? "—")}</td><td>{reais(Number(l.valoroutraoperacaofis))}</td>
+                  </tr>
+                ))}
+                {simAlt.f100.map((l, i) => (
+                  <tr key={`f${i}`}>
+                    <td style={{ textAlign: "left" }}>F100</td><td>{ROTULO_ACAO[String(l.acao)] ?? String(l.acao ?? "")}</td>
+                    <td>—</td><td>{String(l.seq ?? "—")}</td><td>{reais(Number(l.valoroper))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button className="btn primary" disabled={ocupado} onClick={gravarAlteracao}>{ocupado ? "Gravando…" : "Gravar alteração no Questor"}</button>
+        </div>
+      )}
 
       {res && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -314,11 +443,11 @@ export default function InformeRendimentos({
             <tr>
               <th style={{ textAlign: "left" }}>Quando</th><th style={{ textAlign: "left" }}>Empresa</th><th>Comp.</th><th>Tipo</th><th>Regime</th>
               <th>Rendim.</th><th>Demais</th><th>Dividendos</th><th>Retenção</th><th>PIS</th><th>COFINS</th>
-              <th>Status</th><th style={{ textAlign: "left" }}>Responsável</th>
+              <th>Status</th><th style={{ textAlign: "left" }}>Responsável</th><th>Ações</th>
             </tr>
           </thead>
           <tbody>
-            {logVisivel.length === 0 && <tr><td colSpan={13} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
+            {logVisivel.length === 0 && <tr><td colSpan={14} style={{ textAlign: "center" }}>Nenhum lançamento ainda.</td></tr>}
             {logPagina.map((l) => (
               <tr key={l.id} title={l.erro ?? undefined}>
                 <td style={{ textAlign: "left" }}>{new Date(l.criado_em).toLocaleString("pt-BR")}</td>
@@ -329,8 +458,16 @@ export default function InformeRendimentos({
                 <td>{formatBRL(l.rendimento)}</td><td>{formatBRL(l.demais_receitas)}</td>
                 <td>{formatBRL(l.dividendos)}</td><td>{formatBRL(l.retencao)}</td>
                 <td>{l.origem === "access" ? "—" : formatBRL(l.pis)}</td><td>{l.origem === "access" ? "—" : formatBRL(l.cofins)}</td>
-                <td><span className="badge badge-soft">{l.status === "lancado" ? "Lançado" : "Erro"}</span></td>
+                <td><span className="badge badge-soft">{ROTULO_STATUS[l.status] ?? l.status}</span></td>
                 <td style={{ textAlign: "left" }}>{l.responsavel}{l.origem === "access" && <> <span className="badge badge-soft">Access</span></>}{l.teste && <> <span className="badge badge-soft">teste</span></>}</td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {l.editavel && (
+                    <>
+                      <button className="btn" disabled={ocupado || !!alt} onClick={() => iniciarAlteracao(l)}>Alterar</button>{" "}
+                      <button className="btn" disabled={ocupado || !!alt} onClick={() => excluirLinha(l)}>Excluir</button>
+                    </>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
