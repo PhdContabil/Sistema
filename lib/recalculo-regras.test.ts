@@ -30,7 +30,9 @@ test("serviço por receita", () => {
 test("montagem dos pedidos", () => {
   assert.equal(aaaamm("10/2026"), "202610");
   const das = montarPedido({ servico: "das", periodo: "10/2026", dataPagamento: "2026-11-24" }, "2026-11-24");
-  assert.deepEqual(das.dados, { periodoApuracao: "202610", dataConsolidacao: "20261124" });
+  assert.deepEqual(das.dados, { periodoApuracao: "202610" }); // hoje: sem dataConsolidacao
+  const dasF = montarPedido({ servico: "das", periodo: "10/2026", dataPagamento: "2026-11-28" }, "2026-11-24");
+  assert.deepEqual(dasF.dados, { periodoApuracao: "202610", dataConsolidacao: "20261128" });
   const dw = montarPedido({ servico: "dctfweb", periodo: "10/2026", dataPagamento: "2026-11-25" }, "2026-11-24");
   assert.equal((dw.dados as Record<string, unknown>).DataAcolhimentoProposta, 20261125);
   assert.throws(() => montarPedido({ servico: "dctfweb", periodo: "10/2026", dataPagamento: "2026-12-01" }, "2026-11-24"));

@@ -117,13 +117,16 @@ export interface PedidoRecalculo {
 export function montarPedido(p: PedidoRecalculo, hoje: string) {
   if (p.dataPagamento < hoje) throw new Error("A data de pagamento não pode ser anterior a hoje.");
   const pa = aaaamm(p.periodo);
+  // PGDASD/PGMEI: dataConsolidacao só aceita data FUTURA (MSG_ISN_002 se for hoje);
+  // para pagar hoje vai sem o campo e a Receita consolida na data atual.
+  const consolidacao = p.dataPagamento > hoje ? { dataConsolidacao: aaaammdd(p.dataPagamento) } : {};
   switch (p.servico) {
     case "das":
       return { idSistema: "PGDASD", idServico: "GERARDAS12", versaoSistema: "1.0",
-        dados: { periodoApuracao: pa, dataConsolidacao: aaaammdd(p.dataPagamento) } };
+        dados: { periodoApuracao: pa, ...consolidacao } };
     case "das_mei":
       return { idSistema: "PGMEI", idServico: "GERARDASPDF21", versaoSistema: "1.0",
-        dados: { periodoApuracao: pa, dataConsolidacao: aaaammdd(p.dataPagamento) } };
+        dados: { periodoApuracao: pa, ...consolidacao } };
     case "dctfweb":
       if (p.dataPagamento.slice(0, 7) !== hoje.slice(0, 7)) throw new Error("Na DCTFWeb a data de pagamento precisa ser no mês corrente.");
       return { idSistema: "DCTFWEB", idServico: "GERARGUIA31", versaoSistema: "1.0",
