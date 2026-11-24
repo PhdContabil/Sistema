@@ -13,6 +13,8 @@ type Chave = Situacao | "nunca";
 
 interface Linha {
   cnpj: string;
+  grupos?: { c: number; d: string | null }[];
+  grupo_desc?: string | null;
   razao_social: string | null;
   codigoempresa: number | null;
   ativa_questor: boolean;
@@ -97,6 +99,7 @@ export default function SituacaoFiscal() {
 
   const [busca, setBusca] = useState("");
   const [filtroSit, setFiltroSit] = useState<"" | Chave>("");
+  const [grupo, setGrupo] = useState("");
   const [filtroSimples, setFiltroSimples] = useState<"" | "optante" | "saindo" | "mei" | "nao">("");
   const [soAtivas, setSoAtivas] = useState(true);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -131,10 +134,17 @@ export default function SituacaoFiscal() {
   const temCarteira = useMemo(() => linhas.some((l) => l.ativa_questor), [linhas]);
   const filtrarAtivas = soAtivas && temCarteira;
 
+  const grupos = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const l of linhas) for (const g of l.grupos ?? []) m.set(String(g.c), g.d || `Grupo ${g.c}`);
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [linhas]);
+  const doGrupo = useMemo(() => (grupo ? linhas.filter((l) => (l.grupos ?? []).some((g) => String(g.c) === grupo)) : linhas), [linhas, grupo]);
+
   const filtrados = useMemo(() => {
     const q = semAcento(busca.trim());
     const qDig = busca.replace(/\D/g, "");
-    return linhas.filter((l) => {
+    return doGrupo.filter((l) => {
       if (filtrarAtivas && !l.ativa_questor) return false;
       if (filtroSit && chave(l) !== filtroSit) return false;
       if (filtroSimples === "mei" && !l.simei_opcao) return false;
@@ -146,22 +156,22 @@ export default function SituacaoFiscal() {
         || (qDig.length >= 3 && l.cnpj.includes(qDig))
         || String(l.codigoempresa ?? "") === busca.trim();
     });
-  }, [linhas, busca, filtroSit, filtroSimples, filtrarAtivas]);
+  }, [doGrupo, busca, filtroSit, filtroSimples, filtrarAtivas]);
 
-  useEffect(() => { setPagina(0); }, [busca, filtroSit, filtroSimples, filtrarAtivas]);
+  useEffect(() => { setPagina(0); }, [busca, filtroSit, filtroSimples, grupo, filtrarAtivas]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const visiveis = filtrados.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
 
   const kpis = useMemo(() => {
-    const base = linhas.filter((l) => !filtrarAtivas || l.ativa_questor);
+    const base = doGrupo.filter((l) => !filtrarAtivas || l.ativa_questor);
     const c = (k: Chave) => base.filter((l) => chave(l) === k).length;
     return {
       total: base.length,
       regular: c("regular"), com_restricao: c("com_restricao"), irregular: c("irregular"),
       pendentes: c("nunca") + c("erro") + c("indefinida"),
     };
-  }, [linhas, filtrarAtivas]);
+  }, [doGrupo, filtrarAtivas]);
 
   function alternar(cnpj: string) {
     setSelecionados((atual) => {
@@ -241,10 +251,10 @@ export default function SituacaoFiscal() {
   }
 
   function baixarCsv() {
-    const cab = ["Código", "Razão social", "CNPJ", "Situação", "Pendências", "Resumo", "Simples", "Certidão", "Validade certidão", "Consultado em"];
+    const cab = ["Código", "Razão social", "CNPJ", "Grupo", "Situação", "Pendências", "Resumo", "Simples", "Certidão", "Validade certidão", "Consultado em"];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const corpo = filtrados.map((l) => [
-      l.codigoempresa, l.razao_social, formatCNPJ(l.cnpj), ROTULO[chave(l)], l.pendencias, l.resumo,
+      l.codigoempresa, l.razao_social, formatCNPJ(l.cnpj), l.grupo_desc, ROTULO[chave(l)], l.pendencias, l.resumo,
       simples(l).texto, l.certidao_tipo, dataBR(l.certidao_validade), dataBR(l.consultado_em),
     ].map(esc).join(";"));
     const blob = new Blob(["﻿" + [cab.map(esc).join(";"), ...corpo].join("\r\n")], { type: "text/csv;charset=utf-8" });
@@ -305,6 +315,10 @@ export default function SituacaoFiscal() {
             <option value="saindo">Saída agendada</option>
             <option value="mei">MEI (SIMEI)</option>
             <option value="nao">Não optante</option>
+          </select>
+          <select className={s.select} value={grupo} onChange={(e) => setGrupo(e.target.value)} title="Grupo de processamento do DP (Questor)">
+            <option value="">Todos os grupos</option>
+            {grupos.map(([c, d]) => <option key={c} value={c}>{d}</option>)}
           </select>
           {temCarteira && (
             <button type="button" className={`${s.toggle} ${soAtivas ? s.on : ""}`} onClick={() => setSoAtivas((v) => !v)}>

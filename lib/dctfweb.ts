@@ -8,6 +8,7 @@
 // Vindo de app-empresas-integra/lib/dctfwebCore.mjs.
 
 import { getDctfwebObrigadas } from "./questor";
+import { atualizarGrupos, comGrupo, mapaGrupos } from "./grupos-processamento";
 import {
   autenticar, consumir, dadosDe, loadPfx, participante,
   type CredenciaisSerpro, type Participante, type TokensSerpro,
@@ -39,6 +40,8 @@ export interface LinhaDctf {
   transmitida_em: string | null;
   transmissao_erro: string | null;
   ultima_consulta: string | null;
+  grupos?: { c: number; d: string | null }[];
+  grupo_desc?: string | null;
 }
 
 const COLUNAS = "id, cnpj, razao_social, codigoempresa, competencia, situacao, tem_recibo, recibo_numero, debito, "
@@ -64,7 +67,7 @@ export async function listar(competencia: string): Promise<LinhaDctf[]> {
   const { data, error } = await db().from("dctfweb").select(COLUNAS)
     .eq("competencia", validarCompetencia(competencia)).order("razao_social");
   if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as LinhaDctf[];
+  return comGrupo((data ?? []) as unknown as LinhaDctf[], await mapaGrupos(true).catch(() => new Map()));
 }
 
 async function linha(id: number): Promise<LinhaDctf> {
@@ -105,7 +108,10 @@ export async function sincronizarObrigadas(competencia: string) {
     const { error } = await db().from("dctfweb").upsert(rows.slice(i, i + 500), { onConflict: "cnpj,competencia" });
     if (error) throw new Error(error.message);
   }
-  return { competencia, recebidas: dados.length, gravadas: rows.length };
+  // aproveita para atualizar os grupos de processamento (como no app antigo)
+  let grupos: { recebidos?: number; erro?: string };
+  try { grupos = await atualizarGrupos(); } catch (e) { grupos = { erro: e instanceof Error ? e.message : String(e) }; }
+  return { competencia, recebidas: dados.length, gravadas: rows.length, grupos };
 }
 
 // ------------------------------------------------------------ SERPRO base

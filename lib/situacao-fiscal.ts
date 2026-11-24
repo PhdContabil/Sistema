@@ -6,6 +6,7 @@
 // por requisição (o lote é um laço no navegador, com progresso e parar).
 
 import { getEmpresas, hasApiKey } from "./questor";
+import { comGrupo, mapaGrupos } from "./grupos-processamento";
 import {
   autenticar, consumir, dadosDe, participante, textoMensagens,
   type Participante, type TokensSerpro,
@@ -43,6 +44,8 @@ export interface LinhaSituacao {
   certidao_tipo: string | null;
   certidao_validade: string | null;
   tem_pdf: boolean;
+  grupos?: { c: number; d: string | null }[];
+  grupo_desc?: string | null;
 }
 
 type Registro = Omit<LinhaSituacao, "codigoempresa" | "ativa_questor">;
@@ -87,7 +90,7 @@ export async function listarCarteira(): Promise<{ linhas: LinhaSituacao[]; aviso
     linhas.push({ ...vazio(r.cnpj), ...r, codigoempresa: null, ativa_questor: false });
   }
   linhas.sort((a, b) => (a.razao_social ?? "").localeCompare(b.razao_social ?? "", "pt-BR"));
-  return { linhas, avisoCarteira };
+  return { linhas: comGrupo(linhas, await mapaGrupos(true).catch(() => new Map())), avisoCarteira };
 }
 
 function vazio(cnpj: string): LinhaSituacao {
