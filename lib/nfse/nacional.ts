@@ -92,13 +92,24 @@ export type ResultadoNac =
   | { ok: true; chave: string; nNFSe: string | null; dhProc: string | null; vLiq: string | null; nfseXml: string; dpsXml: string }
   | { ok: false; erro: string; codigos: string[] };
 
-/** Assina e envia uma DPS. Uma por chamada (a Sefin não recebe lote). */
-export async function emitirNacional(n: NotaNac, cfg: ConfigNacional, c: Cert): Promise<ResultadoNac> {
+/**
+ * DPS montada e assinada, sem enviar. `procuracao`: o certificado é de outra
+ * empresa (a PHD) com procuração eletrônica do prestador no Emissor Nacional —
+ * aí só a validade do certificado é conferida, não o CNPJ.
+ */
+export function prepararDps(n: NotaNac, cfg: ConfigNacional, c: Cert, opts: { procuracao?: boolean } = {}): { id: string; xml: string } {
   const falta = problemasConfig(cfg);
   if (falta.length) throw new NacionalError(`Configuração da empresa incompleta: ${falta.join(", ")}.`);
-  conferirCertificado(c, cfg.cnpj);
+  if (opts.procuracao) {
+    if (c.validade.getTime() < Date.now()) throw new NacionalError(`Certificado A1 vencido em ${c.validade.toLocaleDateString("pt-BR")}.`);
+  } else conferirCertificado(c, cfg.cnpj);
   const { id, xml } = montarDps(n, cfg, dhEmiAgora());
-  const assinado = assinar(xml, id, c);
+  return { id, xml: assinar(xml, id, c) };
+}
+
+/** Assina e envia uma DPS. Uma por chamada (a Sefin não recebe lote). */
+export async function emitirNacional(n: NotaNac, cfg: ConfigNacional, c: Cert, opts: { procuracao?: boolean } = {}): Promise<ResultadoNac> {
+  const { xml: assinado } = prepararDps(n, cfg, c, opts);
   const dpsXmlGZipB64 = zlib.gzipSync(Buffer.from(assinado, "utf8")).toString("base64");
   const r = await requisitar("POST", `${sefinUrl(cfg.ambiente)}/nfse`, { dpsXmlGZipB64 }, c, 60_000);
   const resp = lerRespostaSefin(r.json);
