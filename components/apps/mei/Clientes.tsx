@@ -287,7 +287,13 @@ function Encerramento({ m, fechar, mudou }: { m: Mei; fechar: () => void; mudou:
     if (!confirm(`Encerrar ${m.cod} - ${m.razao} em ${dt(data)}?`)) return;
     const r = await api("POST", `/empresas/${m.cod}/encerrar`, { corpo: { data_encerramento: data }, idempotencia: `mei-encerrar-${m.cod}-${data}-${Date.now()}` }); // chave nova a cada encerramento: quem foi reativado e é encerrado de novo na mesma data não pode cair na chave antiga
     const res = resumoGravacao(r);
-    setMsg(r.status < 300 ? { ok: true, texto: `${res.texto} Resultado: ${JSON.stringify(r.dados).slice(0, 400)}` } : { ok: false, texto: mensagemErro(r) });
+    const avisos = ((r.dados as { avisos?: unknown } | null)?.avisos as string[] | undefined ?? []).filter((a) => typeof a === "string" && !a.startsWith("dry_run"));
+    const termoPosterior = avisos.filter((a) => a.includes("posterior à saída"));
+    setMsg(r.status < 300
+      ? { ok: termoPosterior.length === 0, texto: termoPosterior.length
+          ? `${res.texto} ATENÇÃO — serviço(s) com término depois da saída, não alterado(s); acerte no financeiro: ${termoPosterior.join(" | ")}`
+          : `${res.texto}${avisos.length ? ` Avisos: ${avisos.join(" | ")}` : ""}` }
+      : { ok: false, texto: mensagemErro(r) });
     if (r.status < 300) {
       setFeito(true);
       if (!r.dryRunForcado) {
