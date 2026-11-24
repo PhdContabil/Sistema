@@ -3,7 +3,7 @@
 // Notas MEI (menu_mei): profissionais do salão, notas do período, Exportar Notas, Exportar DAS,
 // relatório rel_notas e a tela de emissão (emitirnota).
 import { useEffect, useMemo, useState } from "react";
-import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, verificarRobo, AvisoRobo, ErroRobo, fmtDoc, type RoboEstado, type Mei } from "./ui";
+import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, fmtDoc, type Mei } from "./ui";
 
 export interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
@@ -133,8 +133,14 @@ function tomadorDoc(m: { salaoCod?: number | null; salaoCnpj?: string }): string
 
 export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
   const [d, setD] = useState({ data: data > hojeISO() ? hojeISO() : data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
-  const [roboEstado, setRoboEstado] = useState<RoboEstado>("ok");
-  const [robo, setRobo] = useState<{ id?: string; status: string; passos: { msg: string }[]; erro?: string } | null>(null);
+  // Emissão pela API do Portal Nacional (certificado da PHD + procuração do MEI), no lugar do robô.
+  const [cTribNac, setCTribNac] = useState("");
+  const [servicos, setServicos] = useState<{ cTribNac: string; descricao: string }[]>([]);
+  const [ambiente, setAmbiente] = useState<number>(1);
+  const [tomadorNome, setTomadorNome] = useState("");
+  const [idem] = useState(() => `mei-nfse-${m.cod}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [emitindo, setEmitindo] = useState(false);
+  const [emitida, setEmitida] = useState<{ chave: string; numero: string | null; ja?: boolean } | null>(null);
   const [sugestao, setSugestao] = useState("");
   const [erro, setErro] = useState("");
   const [res, setRes] = useState<{ r: ResultadoNota; simulacao: boolean } | null>(null);
@@ -154,8 +160,11 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
       setD((x) => ({ ...x, serie: x.serie || ult?.serienf || "S", numero: x.numero || String((ult?.numeronf ?? 0) + 1) }));
     }).catch(() => null);
   }, [m.cod]);
+  useEffect(() => {
+    fetch("/api/mei/nota/emitir").then((r) => r.json()).then((j) => { setServicos(j.servicos ?? []); setAmbiente(j.ambiente ?? 1); }).catch(() => null);
+  }, []);
 
-  // Robô (igual ao "Salvar" do Access): abre o Emissor Nacional no PC de quem emite e preenche a nota.
+  // Emissão (igual ao "Salvar" do Access), agora direto pela API do Portal Nacional.
   /** Profissional baixado: a nota não pode ter data depois da baixa (ela aparece no período só para as notas até lá). */
   function foraDaBaixa(): boolean {
     const b = baixaDe(m);
@@ -163,39 +172,31 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
     return false;
   }
 
-  async function preencherPortal() {
+  async function emitirPortal() {
     if (foraDaBaixa()) return;
     setErro("");
     const valor = Number(d.valor.replace(/\./g, "").replace(",", "."));
-    if (!valor || !d.data) { setErro("Informe a data e o valor antes de preencher no portal."); return; }
+    if (!valor || !d.data) { setErro("Informe a data e o valor antes de emitir."); return; }
     if (tomadorModo === "salao" && !tomador) { setErro("Salão sem CNPJ no cadastro — escolha \"Outro\" e digite o tomador, ou \"Sem tomador\"."); return; }
     if (tomadorModo === "outro" && ![11, 14].includes(tomador.length)) { setErro("Tomador: digite um CPF (11 números) ou CNPJ (14 números)."); return; }
-    const estado = await verificarRobo();
-    setRoboEstado(estado);
-    if (estado !== "ok") return;
-    setRobo({ status: "buscando senha", passos: [] });
-    const rc = await fetch(`/api/mei/nota/credenciais?cod=${m.cod}`);
-    const jc = await rc.json();
-    if (!rc.ok) { setRobo({ status: "erro", erro: jc.error ?? "Falha ao buscar a senha (sem senha cadastrada?).", passos: [] }); return; }
-    const r = await fetch("http://localhost:3199/preparar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-      cod: m.cod, razao: m.razao, data: d.data, valor, tomadorCnpj: tomador, descricao: d.obs,
-      municipio: m.cidade, uf: m.uf, codigoativmunic: (m.ativMunic || "").split(" ")[0], creds: jc.creds,
-    }) });
-    const j = await r.json();
-    if (!r.ok) { setRobo({ status: "erro", erro: j.erro ?? "O robô recusou.", passos: [] }); return; }
-    setRobo({ ...j, passos: [{ msg: `Login: ${jc.origem}` }, ...(j.passos ?? [])] });
-    const id = j.id;
-    const t = setInterval(async () => {
-      try {
-        const s = await (await fetch(`http://localhost:3199/jobs/${id}`)).json();
-        setRobo({ ...s, passos: [{ msg: `Login: ${jc.origem}` }, ...(s.passos ?? [])] });
-        if (!["preparando", "login", "preenchendo"].includes(s.status)) clearInterval(t);
-      } catch { clearInterval(t); }
-    }, 1500);
-  }
-  async function cancelarRobo() {
-    if (robo?.id) await fetch(`http://localhost:3199/jobs/${robo.id}/cancelar`, { method: "POST" }).catch(() => null);
-    setRobo(null);
+    if (tomadorModo === "outro" && tomador.length === 11 && !tomadorNome.trim()) { setErro("Informe o nome do tomador (CPF)."); return; }
+    const tom = tomadorModo === "sem" || tomador === "00000000000" ? "sem tomador (consumidor não identificado)" : tomadorModo === "salao" ? `${m.salao} (${fmtDoc(tomador)})` : `${tomadorNome || ""} (${fmtDoc(tomador)})`;
+    if (!confirm(`Você está logado como PHD CONTABIL LTDA (11.274.011/0001-86), mas representando ${m.razao} (${m.cnpj}).\n\n`
+      + `Esta NFS-e será gerada tendo ${m.razao} como emitente.\nData ${dt(d.data)} · Valor R$ ${d.valor} · Tomador: ${tom}`
+      + `${ambiente === 2 ? "\n\nAMBIENTE DE TESTE (produção restrita): a nota não vale." : ""}\n\nDeseja confirmar a emissão?`)) return;
+    setEmitindo(true);
+    try {
+      const r = await fetch("/api/mei/nota/emitir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        cod: m.cod, data: d.data, valor, descricao: d.obs, cTribNac: cTribNac || undefined,
+        tomadorModo, tomadorDoc: tomadorModo === "sem" ? null : tomador, tomadorNome: tomadorNome || null, idem,
+      }) });
+      const j = await r.json();
+      if (!j.ok) { setErro(j.erro ?? j.error ?? `Erro ${r.status}`); return; }
+      setEmitida({ chave: j.chave, numero: j.numero, ja: j.ja_emitida });
+      // O número da NFS-e vem da Sefin: já fica pronto para o lançamento no Questor.
+      if (j.numero) setD((x) => ({ ...x, numero: String(Number(j.numero)) }));
+    } catch (e) { setErro(e instanceof Error ? e.message : "Falha ao emitir."); }
+    finally { setEmitindo(false); }
   }
 
   async function lancar(_lancarEntrada = false) {
@@ -232,28 +233,33 @@ export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: 
             <option value="outro">Outro tomador (digitar CPF/CNPJ)</option>
           </select>
           {tomadorModo === "outro" && <input style={{ ...st.input, marginTop: 6 }} placeholder="CPF ou CNPJ do tomador" value={tomadorOutro} onChange={(e) => setTomadorOutro(e.target.value)} />}
+          {tomadorModo === "outro" && <input style={{ ...st.input, marginTop: 6 }} placeholder="Nome do tomador (obrigatório para CPF)" value={tomadorNome} onChange={(e) => setTomadorNome(e.target.value)} />}
+        </Campo>
+        <Campo label="Serviço (código nacional)">
+          <select style={st.input} value={cTribNac} onChange={(e) => setCTribNac(e.target.value)}>
+            <option value="">{`Automático pela atividade${m.ativMunic ? `: ${m.ativMunic.slice(0, 40)}` : ""}`}</option>
+            {servicos.map((s) => <option key={s.cTribNac} value={s.cTribNac}>{s.descricao}</option>)}
+          </select>
         </Campo>
         <Campo label="Número da NFS-e (do portal) *"><input style={st.input} value={d.numero} onChange={(e) => setD({ ...d, numero: e.target.value.replace(/\D/g, "") })} /></Campo>
         <Campo label="Série"><input style={st.input} value={d.serie} maxLength={4} onChange={(e) => setD({ ...d, serie: e.target.value.toUpperCase() })} /></Campo>
         <Campo label="Data *"><input type="date" style={st.input} value={d.data} onChange={(e) => setD({ ...d, data: e.target.value })} /></Campo>
         <Campo label="Valor *"><input style={st.input} value={d.valor} onChange={(e) => setD({ ...d, valor: e.target.value })} placeholder="0,00" /></Campo>
       </div>
-      {sugestao && <p style={st.mut}>Referência: {sugestao}. O portal numera por conta própria — use o número da nota emitida.</p>}
+      {sugestao && <p style={st.mut}>Referência: {sugestao}. Ao emitir, o número da NFS-e vem do portal e é preenchido sozinho.</p>}
       <Campo label="Discriminação do serviço (para o portal)"><textarea style={{ ...st.input, minHeight: 70 }} value={d.obs} onChange={(e) => setD({ ...d, obs: e.target.value })} /></Campo>
       <div style={{ ...st.bar, marginTop: 10 }}>
-        <button style={st.btnP} disabled={m.bloqueado || (!!robo && ["buscando senha", "preparando", "login", "preenchendo"].includes(robo.status))} onClick={preencherPortal}>1) Preencher no Emissor Nacional (robô)</button>
-        {robo && <button style={st.btn} onClick={cancelarRobo}>Cancelar robô</button>}
+        <button style={st.btnP} disabled={m.bloqueado || emitindo || !!emitida} onClick={emitirPortal}>{emitindo ? "Emitindo no Portal Nacional…" : emitida ? "NFS-e emitida" : "1) Emitir NFS-e (Portal Nacional)"}</button>
         <button style={st.btn} disabled={enviando || m.bloqueado} onClick={() => lancar(true)}>{enviando ? "Lançando…" : "2) Lançar no Questor"}</button>
         <button style={st.btn} onClick={() => navigator.clipboard?.writeText(d.obs)}>Copiar discriminação</button>
         
       </div>
       {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
-      <AvisoRobo estado={roboEstado} fechar={() => setRoboEstado("ok")} />
-      {robo && (
+      {emitida && (
         <div style={{ ...st.card, marginTop: 10 }}>
-          <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Robô: {({ "buscando senha": "buscando a senha…", preparando: "abrindo o Chrome…", login: "fazendo login…", preenchendo: "preenchendo a nota…", aguardando_confirmacao: "PRONTO — confira na janela do Chrome e clique em EMITIR lá. Depois informe o número da nota acima e lance no Questor.", erro: "erro", cancelada: "cancelado", fechada: "janela do Chrome fechada" } as Record<string, string>)[robo.status] ?? robo.status}</p>
-          {robo.erro && <ErroRobo erro={robo.erro} jobId={robo.id} passos={robo.passos} contexto={`Emissão de NFS-e (Emissor Nacional) — MEI ${m.cod} - ${m.razao}, data ${d.data}, valor ${d.valor}`} />}
-          {robo.passos.slice(-6).map((p, i) => <p key={i} style={{ ...st.mut, margin: "2px 0" }}>• {p.msg}</p>)}
+          <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--ok)" }}>{emitida.ja ? "Esta nota já tinha sido emitida" : "NFS-e emitida"}{ambiente === 2 ? " (TESTE — não vale)" : ""}: nº {emitida.numero ?? "—"}</p>
+          <p style={{ ...st.mut, margin: "2px 0" }}>Chave de acesso: {emitida.chave}</p>
+          <p style={{ margin: "6px 0 0" }}><a href={`/api/mei/nota/danfse?chave=${emitida.chave}`} target="_blank" rel="noreferrer">Abrir PDF da nota</a> · agora clique em <b>2) Lançar no Questor</b>.</p>
         </div>
       )}
       {res && (
