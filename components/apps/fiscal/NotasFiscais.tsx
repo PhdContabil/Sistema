@@ -296,8 +296,8 @@ function Busca({ valor, rotulo, opcoes, escolher, placeholder }: { valor: string
   const [texto, setTexto] = useState<string | null>(null);
   const lista = useMemo(() => (texto === null ? [] : opcoes(texto)), [texto, opcoes]);
   return (
-    <div style={{ position: "relative" }}>
-      <input style={st.input} placeholder={placeholder} value={texto ?? (valor ? rotulo(valor) : "")}
+    <div style={{ position: "relative", width: "100%" }}>
+      <input style={{ ...st.input, width: "100%", boxSizing: "border-box" }} placeholder={placeholder} value={texto ?? (valor ? rotulo(valor) : "")}
         onFocus={() => setTexto("")} onChange={(e) => setTexto(e.target.value)}
         onBlur={() => setTimeout(() => setTexto(null), 150)}
         onKeyDown={(e) => { if (e.key === "Enter" && lista[0]) { e.preventDefault(); escolher(lista[0]); setTexto(null); } }} />
