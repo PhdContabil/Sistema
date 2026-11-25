@@ -3,7 +3,7 @@
 // Fiscal › Notas Fiscais: NFS-e de clientes do Simples Nacional (ME/EPP) pelo Portal
 // Nacional, com o certificado da PHD e a procuração eletrônica do cliente. Depois de
 // emitir, lança a nota no Questor. Usa os mesmos componentes visuais do Sistema MEI.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import catalogo from "@/lib/nfse/catalogo-nfse.json";
 import { st, Campo, Tabela, Modal, brl, dt, fmtDoc } from "../mei/ui";
 
@@ -178,27 +178,48 @@ export default function NotasFiscais() {
           )}
       {emp && podeEmitir && (
         <div>
-          <div style={st.grid}>
-            <Campo label="Data (competência) *"><input type="date" style={st.input} value={f.data} max={hoje()} onChange={(e) => setF({ ...f, data: e.target.value })} /></Campo>
-            <Campo label="Valor *"><input style={st.input} value={f.valor} placeholder="0,00" onChange={(e) => setF({ ...f, valor: e.target.value })} /></Campo>
-            <Campo label="Código de tributação nacional *">
-              <Busca valor={f.cTribNac} rotulo={rotuloServ} opcoes={opcoesServ}
-                escolher={(c) => setF((x) => ({ ...x, cTribNac: c, cNBS: SERV.get(c)?.nbs.includes(x.cNBS) ? x.cNBS : (SERV.get(c)?.nbs[0] ?? "") }))} placeholder="Digite o código ou o nome do serviço" />
-            </Campo>
-            <Campo label="Item da NBS *">
-              <Busca valor={f.cNBS} rotulo={rotuloNbs} opcoes={(t) => opcoesNbs(t, f.cTribNac)}
-                escolher={(c) => setF((x) => ({ ...x, cNBS: c }))} placeholder="Digite o código ou o nome" />
-            </Campo>
-            <Campo label="Cód. tributação municipal (só se o município exigir)"><input style={st.input} value={f.cTribMun} placeholder="3 dígitos" maxLength={3} onChange={(e) => setF({ ...f, cTribMun: e.target.value.replace(/\D/g, "") })} /></Campo>
-            <Campo label="Tomador — CPF/CNPJ (em branco = sem tomador)"><input style={st.input} value={f.tomadorDoc} onChange={(e) => setF({ ...f, tomadorDoc: e.target.value })} /></Campo>
-            <Campo label="Nome do tomador (obrigatório para CPF)"><input style={st.input} value={f.tomadorNome} placeholder="CNPJ: vem da Receita" onChange={(e) => setF({ ...f, tomadorNome: e.target.value })} /></Campo>
-          </div>
-          <Campo label="Descrição do serviço *"><textarea style={{ ...st.input, minHeight: 70 }} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} /></Campo>
-          <Campo label="Informações complementares"><textarea style={{ ...st.input, minHeight: 40 }} value={f.infoCompl} onChange={(e) => setF({ ...f, infoCompl: e.target.value })} /></Campo>
-          <p style={st.mut}>Simples Nacional (ME/EPP), ISS dentro do DAS, sem retenções. O % aproximado de tributos sai da alíquota efetiva do Simples no Questor.</p>
-          <div style={{ ...st.bar, marginTop: 10 }}>
-            <button style={st.btnP} disabled={emitindo || !!emitida} onClick={emitir}>{emitindo ? "Emitindo no Portal Nacional…" : emitida ? "NFS-e emitida" : "Emitir NFS-e (Portal Nacional)"}</button>
-            {emitida && <button style={st.btn} onClick={novaNota}>Nova nota</button>}
+          <Secao titulo="Serviço">
+            <div style={linha("1fr 1fr 1fr")}>
+              <Campo label="Data *"><input type="date" style={st.input} value={f.data} max={hoje()} onChange={(e) => setF({ ...f, data: e.target.value })} /></Campo>
+              <Campo label="Valor (R$) *"><input style={st.input} value={f.valor} placeholder="0,00" onChange={(e) => setF({ ...f, valor: e.target.value })} /></Campo>
+              <Campo label="Cód. municipal"><input style={st.input} value={f.cTribMun} placeholder="Só se o município exigir" maxLength={3} onChange={(e) => setF({ ...f, cTribMun: e.target.value.replace(/\D/g, "") })} /></Campo>
+            </div>
+            <div style={linha("1fr")}>
+              <Campo label="Código de tributação nacional *">
+                <Busca valor={f.cTribNac} rotulo={rotuloServ} opcoes={opcoesServ}
+                  escolher={(c) => setF((x) => ({ ...x, cTribNac: c, cNBS: SERV.get(c)?.nbs.includes(x.cNBS) ? x.cNBS : (SERV.get(c)?.nbs[0] ?? "") }))} placeholder="Digite o código ou o nome do serviço" />
+              </Campo>
+            </div>
+            <div style={linha("1fr")}>
+              <Campo label="Item da NBS *">
+                <Busca valor={f.cNBS} rotulo={rotuloNbs} opcoes={(t) => opcoesNbs(t, f.cTribNac)}
+                  escolher={(c) => setF((x) => ({ ...x, cNBS: c }))} placeholder="Digite o código ou o nome" />
+              </Campo>
+            </div>
+          </Secao>
+
+          <Secao titulo="Tomador" dica="Em branco = nota sem tomador">
+            <div style={linha("1fr 2fr")}>
+              <Campo label="CPF ou CNPJ"><input style={st.input} value={f.tomadorDoc} placeholder="Somente números" onChange={(e) => setF({ ...f, tomadorDoc: e.target.value })} /></Campo>
+              <Campo label="Nome"><input style={st.input} value={f.tomadorNome} placeholder="Para CNPJ, vem da Receita" onChange={(e) => setF({ ...f, tomadorNome: e.target.value })} /></Campo>
+            </div>
+          </Secao>
+
+          <Secao titulo="Descrição">
+            <div style={linha("1fr")}>
+              <Campo label="Descrição do serviço *"><textarea style={{ ...st.input, minHeight: 70, resize: "vertical" }} value={f.descricao} onChange={(e) => setF({ ...f, descricao: e.target.value })} /></Campo>
+            </div>
+            <div style={linha("1fr")}>
+              <Campo label="Informações complementares"><textarea style={{ ...st.input, minHeight: 44, resize: "vertical" }} value={f.infoCompl} onChange={(e) => setF({ ...f, infoCompl: e.target.value })} /></Campo>
+            </div>
+          </Secao>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 6, paddingTop: 12, borderTop: "1px solid var(--line, rgba(127,127,127,.25))" }}>
+            <span style={{ ...st.mut, fontSize: 12 }}>Simples Nacional · ISS no DAS · sem retenções</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              {emitida && <button style={st.btn} onClick={novaNota}>Nova nota</button>}
+              <button style={st.btnP} disabled={emitindo || !!emitida} onClick={emitir}>{emitindo ? "Emitindo no Portal Nacional…" : emitida ? "NFS-e emitida" : "Emitir NFS-e (Portal Nacional)"}</button>
+            </div>
           </div>
           {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
           {emitida && (
@@ -289,5 +310,20 @@ function Busca({ valor, rotulo, opcoes, escolher, placeholder }: { valor: string
         </div>
       )}
     </div>
+  );
+}
+
+const linha = (colunas: string): CSSProperties => ({ display: "grid", gridTemplateColumns: colunas, gap: 12, marginBottom: 10 });
+
+/** Bloco do formulário com título. */
+function Secao({ titulo, dica, children }: { titulo: string; dica?: string; children: ReactNode }) {
+  return (
+    <section style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "0 0 8px", paddingBottom: 4, borderBottom: "1px solid var(--line, rgba(127,127,127,.25))" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.8 }}>{titulo}</span>
+        {dica && <span style={{ ...st.mut, fontSize: 12 }}>{dica}</span>}
+      </div>
+      {children}
+    </section>
   );
 }
