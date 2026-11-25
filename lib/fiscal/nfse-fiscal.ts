@@ -83,6 +83,7 @@ export interface PedidoNotaFiscal {
   infoCompl?: string;
   cTribNac: string;
   cTribMun?: string;
+  cNBS?: string;
   tomadorDoc?: string | null;
   tomadorNome?: string | null;
   idem: string;
@@ -100,6 +101,8 @@ export async function emitirNotaFiscal(p: PedidoNotaFiscal, email: string): Prom
     if (cTribNac.length !== 6) throw new NacionalError("Código de tributação nacional: 6 dígitos (item + subitem + desdobro, ex.: 170101).");
     const cTribMun = dig(p.cTribMun);
     if (cTribMun && cTribMun.length !== 3) throw new NacionalError("Código de tributação municipal: 3 dígitos.");
+    const cNBS = dig(p.cNBS);
+    if (cNBS.length !== 9) throw new NacionalError("Item da NBS: 9 dígitos (ex.: 1.2602.10.00).");
 
     const emp = await obterEmpresaFiscal(Number(p.codigoempresa), p.data);
     if (!emp.ativa) throw new NacionalError("Empresa inativa no Questor.");
@@ -111,7 +114,7 @@ export async function emitirNotaFiscal(p: PedidoNotaFiscal, email: string): Prom
 
     const cfg: ConfigNacional = {
       ambiente: ambienteFiscal(), cnpj: emp.cnpj, im: emp.im.slice(0, 15), cLocEmi: ibge, serie: SERIE_DPS,
-      cTribNac, cTribMun: cTribMun && cTribMun !== "000" ? cTribMun : undefined, cNBS: "",
+      cTribNac, cTribMun: cTribMun && cTribMun !== "000" ? cTribMun : undefined, cNBS,
       opSimpNac: 3, pTotTribSN: emp.simples.aliquota ?? 0, verAplic: "NucleoFiscal1",
     };
     const nota: Omit<NotaNac, "nDPS"> = { dCompet: p.data, valor, descricao: p.descricao.trim(), infoCompl: String(p.infoCompl ?? "").trim(), tomador: tomador ?? ({} as NotaNac["tomador"]) };
