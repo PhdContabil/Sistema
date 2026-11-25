@@ -4,13 +4,18 @@
 // Nacional, com o certificado da PHD e a procuração eletrônica do cliente. Depois de
 // emitir, lança a nota no Questor. Usa os mesmos componentes visuais do Sistema MEI.
 import { useEffect, useState } from "react";
-import { st, Campo, Tabela, brl, dt, fmtDoc } from "../mei/ui";
+import { st, Campo, Tabela, Modal, brl, dt, fmtDoc } from "../mei/ui";
 
 interface Empresa {
   codigoempresa: number; nome: string; cnpj: string; im: string; municipio: string; uf: string; cep: string;
   regime: string; ativa: boolean; ativMunic: string; cTribNacSugerido: string;
   simples: { ok: boolean; aliquota: number | null; competencia: string | null; motivo?: string };
 }
+interface EmpresaLista { codigoempresa: number; nome: string; cnpj: string; regime: string; municipio: string; uf: string }
+const ehMei = (r: string) => /MICRO\s*EMPREENDEDOR|\bMEI\b/i.test(r);
+const ehSimples = (r: string) => /MICROEMPRESA|PEQUENO PORTE/i.test(r) && !ehMei(r);
+const LIMITE = 300;
+
 interface NotaEmitida {
   id: number; codigoempresa: number; cnpj: string; dcompet: string; valor: number; nnfse: string | null; chave_acesso: string | null;
   status: string; tomador_doc: string | null; tomador_nome: string | null; emitido_por: string | null; criado_em: string; ambiente: number;
@@ -21,7 +26,10 @@ const hoje = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10
 const novaIdem = (cod: number) => `fiscal-nfse-${cod}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default function NotasFiscais() {
-  const [codTxt, setCodTxt] = useState("");
+  const [lista, setLista] = useState<EmpresaLista[] | null>(null);
+  const [filtro, setFiltro] = useState({ cod: "", nome: "", regime: "" });
+  const [aplicado, setAplicado] = useState({ cod: "", nome: "", regime: "" });
+  const [aberta, setAberta] = useState(false);
   const [emp, setEmp] = useState<Empresa | null>(null);
   const [notas, setNotas] = useState<NotaEmitida[]>([]);
   const [ambiente, setAmbiente] = useState(1);
@@ -50,7 +58,30 @@ export default function NotasFiscais() {
       }
     } catch (e) { setInfo(e instanceof Error ? e.message : "Falha ao buscar."); }
   }
-  useEffect(() => { void carregar(); }, []);
+  useEffect(() => {
+    void carregar();
+    fetch("/api/fiscal/nfse/empresas").then((r) => r.json()).then((j) => setLista(j.empresas ?? [])).catch(() => setLista([]));
+  }, []);
+
+  const regimes = Array.from(new Set((lista ?? []).map((e) => e.regime || "SEM REGIME"))).sort();
+  const filtradas = (lista ?? []).filter((e) => {
+    if (aplicado.cod && !String(e.codigoempresa).startsWith(aplicado.cod)) return false;
+    if (aplicado.regime && (e.regime || "SEM REGIME") !== aplicado.regime) return false;
+    if (aplicado.nome) {
+      const t = aplicado.nome.toLowerCase(), d = aplicado.nome.replace(/\D/g, "");
+      if (!e.nome.toLowerCase().includes(t) && !(d.length >= 3 && e.cnpj.includes(d))) return false;
+    }
+    return true;
+  });
+
+  function abrirEmissao(cod: number) {
+    setEmp(null); setAberta(true);
+    void carregar(cod);
+  }
+  function fecharEmissao() {
+    setAberta(false); setEmp(null); setEmitida(null); setErro("");
+    void carregar();
+  }
 
   async function emitir() {
     if (!emp) return;
@@ -105,28 +136,45 @@ export default function NotasFiscais() {
       {ambiente === 2 && <div style={{ ...st.aviso, color: "var(--div)" }}>Ambiente de TESTE (produção restrita): as notas não valem.</div>}
       <div style={st.card}>
         <div style={st.bar}>
-          <input style={{ ...st.input, maxWidth: 160 }} placeholder="Código da empresa" value={codTxt}
-            onChange={(e) => setCodTxt(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => { if (e.key === "Enter" && codTxt) void carregar(Number(codTxt)); }} />
-          <button style={st.btnP} disabled={!codTxt} onClick={() => carregar(Number(codTxt))}>Buscar</button>
-          {info && <span style={st.mut}>{info}</span>}
+          <input style={{ ...st.input, maxWidth: 140 }} placeholder="Cód. Questor" value={filtro.cod}
+            onChange={(e) => setFiltro({ ...filtro, cod: e.target.value.replace(/\D/g, "") })} onKeyDown={(e) => { if (e.key === "Enter") setAplicado(filtro); }} />
+          <input style={{ ...st.input, maxWidth: 320 }} placeholder="Nome ou CNPJ" value={filtro.nome}
+            onChange={(e) => setFiltro({ ...filtro, nome: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") setAplicado(filtro); }} />
+          <select style={{ ...st.input, maxWidth: 240 }} value={filtro.regime} onChange={(e) => { const f2 = { ...filtro, regime: e.target.value }; setFiltro(f2); setAplicado(f2); }}>
+            <option value="">Todos os regimes</option>
+            {regimes.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <button style={st.btnP} onClick={() => setAplicado(filtro)}>Buscar</button>
+          {(aplicado.cod || aplicado.nome || aplicado.regime) && <button style={st.btn} onClick={() => { const z = { cod: "", nome: "", regime: "" }; setFiltro(z); setAplicado(z); }}>Limpar</button>}
+          {info && !aberta && <span style={st.mut}>{info}</span>}
         </div>
-        {emp && (
-          <div style={{ marginTop: 10 }}>
-            <p style={{ margin: "0 0 4px", fontWeight: 600 }}>{emp.codigoempresa} - {emp.nome} · {fmtDoc(emp.cnpj)}</p>
-            <p style={{ ...st.mut, margin: 0 }}>
-              {emp.municipio}/{emp.uf} · IM {emp.im || "—"} · Regime: {emp.regime || "—"}
-              {emp.simples.ok ? ` · Simples: alíquota efetiva ${String(emp.simples.aliquota).replace(".", ",")}% (${emp.simples.competencia})` : ""}
-              {emp.ativMunic ? ` · Atividade municipal: ${emp.ativMunic}` : ""}
-            </p>
-            {!emp.ativa && <p style={{ color: "var(--div)" }}>Empresa inativa no Questor.</p>}
-            {!emp.simples.ok && <p style={{ color: "var(--div)" }}>{emp.simples.motivo ?? "Só Simples Nacional por enquanto."}</p>}
-          </div>
+        {lista === null ? <p style={st.mut}>Carregando empresas do Questor…</p> : (
+          <>
+            <p style={{ ...st.mut, margin: "10px 0 6px" }}>{filtradas.length} empresa(s){filtradas.length > LIMITE ? ` — mostrando as ${LIMITE} primeiras; use os filtros` : ""}</p>
+            <Tabela cab={["Cód.", "Empresa", "CNPJ", "Regime", "Município", ""]} linhas={filtradas.slice(0, LIMITE).map((e) => [
+              e.codigoempresa, e.nome, fmtDoc(e.cnpj), e.regime || "SEM REGIME", e.municipio ? `${e.municipio}/${e.uf}` : "",
+              ehSimples(e.regime)
+                ? <button key="b" style={{ ...st.btnP, padding: "4px 10px" }} onClick={() => abrirEmissao(e.codigoempresa)}>Emitir nota</button>
+                : <span key="b" style={st.mut}>{ehMei(e.regime) ? "MEI: Sistema MEI" : "só Simples, por ora"}</span>,
+            ])} />
+          </>
         )}
       </div>
 
+      {aberta && (
+        <Modal titulo={emp ? `Emitir NFS-e — ${emp.codigoempresa} - ${emp.nome}` : "Emitir NFS-e"} fechar={fecharEmissao} largura={820}>
+          {!emp ? <p style={st.mut}>{info || "Buscando a empresa…"}</p> : (
+            <>
+              <p style={{ ...st.mut, marginTop: 0 }}>
+                {fmtDoc(emp.cnpj)} · {emp.municipio}/{emp.uf} · IM {emp.im || "—"} · {emp.regime || "—"}
+                {emp.simples.ok ? ` · Simples: alíquota efetiva ${String(emp.simples.aliquota).replace(".", ",")}% (${emp.simples.competencia})` : ""}
+              </p>
+              {!emp.ativa && <p style={{ color: "var(--div)" }}>Empresa inativa no Questor.</p>}
+              {!emp.simples.ok && <p style={{ color: "var(--div)" }}>{emp.simples.motivo ?? "Só Simples Nacional por enquanto."}</p>}
+            </>
+          )}
       {emp && podeEmitir && (
-        <div style={st.card}>
-          <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Nova NFS-e</h3>
+        <div>
           <div style={st.grid}>
             <Campo label="Data (competência) *"><input type="date" style={st.input} value={f.data} max={hoje()} onChange={(e) => setF({ ...f, data: e.target.value })} /></Campo>
             <Campo label="Valor *"><input style={st.input} value={f.valor} placeholder="0,00" onChange={(e) => setF({ ...f, valor: e.target.value })} /></Campo>
@@ -152,24 +200,38 @@ export default function NotasFiscais() {
           )}
         </div>
       )}
+          {emp && notas.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Notas emitidas desta empresa</h3>
+              <TabelaNotas notas={notas} lancar={lancar} lancando={lancando} msgLanc={msgLanc} />
+            </div>
+          )}
+        </Modal>
+      )}
 
-      <div style={st.card}>
-        <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>{emp ? `Notas emitidas — ${emp.codigoempresa}` : "Últimas notas emitidas"}</h3>
-        {notas.length === 0 ? <p style={st.mut}>Nenhuma nota emitida pelo Núcleo.</p> : (
-          <Tabela cab={["Empresa", "Data", "Nº NFS-e", "Tomador", "Valor", "Emitida por", "PDF", "Questor"]} linhas={notas.map((n) => [
-            n.codigoempresa, dt(n.dcompet), n.status === "incerta" ? "sem resposta — confira no portal" : (n.nnfse ?? "—"),
-            n.tomador_nome ? `${n.tomador_nome}${n.tomador_doc ? ` (${fmtDoc(n.tomador_doc)})` : ""}` : "Sem tomador",
-            brl(Number(n.valor)), n.emitido_por ?? "",
-            n.chave_acesso ? <a key="p" href={`/api/fiscal/nfse/pdf?chave=${n.chave_acesso}`} target="_blank" rel="noreferrer">PDF</a> : "",
-            n.status !== "emitida" ? "" : n.questor_ok ? <span key="q" style={{ color: "var(--ok)" }}>lançada</span> : (
-              <span key="q">
-                <button style={{ ...st.btn, padding: "3px 8px" }} disabled={lancando === n.id} onClick={() => lancar(n)}>{lancando === n.id ? "Lançando…" : "Lançar no Questor"}</button>
-                {(msgLanc[n.id] || n.questor_erro) && <><br /><span style={{ ...st.mut, color: "var(--div)" }}>{msgLanc[n.id] || n.questor_erro}</span></>}
-              </span>
-            ),
-          ])} />
-        )}
-      </div>
+      {!aberta && (
+        <div style={st.card}>
+          <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Últimas notas emitidas</h3>
+          {notas.length === 0 ? <p style={st.mut}>Nenhuma nota emitida pelo Núcleo.</p> : <TabelaNotas notas={notas} lancar={lancar} lancando={lancando} msgLanc={msgLanc} />}
+        </div>
+      )}
     </div>
+  );
+}
+
+function TabelaNotas({ notas, lancar, lancando, msgLanc }: { notas: NotaEmitida[]; lancar: (n: NotaEmitida) => void; lancando: number | null; msgLanc: Record<number, string> }) {
+  return (
+    <Tabela cab={["Empresa", "Data", "Nº NFS-e", "Tomador", "Valor", "Emitida por", "PDF", "Questor"]} linhas={notas.map((n) => [
+      n.codigoempresa, dt(n.dcompet), n.status === "incerta" ? "sem resposta — confira no portal" : (n.nnfse ?? "—"),
+      n.tomador_nome ? `${n.tomador_nome}${n.tomador_doc ? ` (${fmtDoc(n.tomador_doc)})` : ""}` : "Sem tomador",
+      brl(Number(n.valor)), n.emitido_por ?? "",
+      n.chave_acesso ? <a key="p" href={`/api/fiscal/nfse/pdf?chave=${n.chave_acesso}`} target="_blank" rel="noreferrer">PDF</a> : "",
+      n.status !== "emitida" ? "" : n.questor_ok ? <span key="q" style={{ color: "var(--ok)" }}>lançada</span> : (
+        <span key="q">
+          <button style={{ ...st.btn, padding: "3px 8px" }} disabled={lancando === n.id} onClick={() => lancar(n)}>{lancando === n.id ? "Lançando…" : "Lançar no Questor"}</button>
+          {(msgLanc[n.id] || n.questor_erro) && <><br /><span style={{ ...st.mut, color: "var(--div)" }}>{msgLanc[n.id] || n.questor_erro}</span></>}
+        </span>
+      ),
+    ])} />
   );
 }

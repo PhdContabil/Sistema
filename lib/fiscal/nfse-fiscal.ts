@@ -26,6 +26,26 @@ export function cTribNacDaAtividadeMunic(cod: string): string {
   return "";
 }
 
+export interface EmpresaLista { codigoempresa: number; nome: string; cnpj: string; regime: string; municipio: string; uf: string }
+let cacheLista: { t: number; v: EmpresaLista[] } | null = null;
+
+/** Empresas ativas do Questor (matriz), por código — para a lista da tela. Cache de 10 min. */
+export async function listarEmpresasFiscal(): Promise<EmpresaLista[]> {
+  if (cacheLista && Date.now() - cacheLista.t < 600_000) return cacheLista.v;
+  const r = await q("/empresas/cadastro", { apenas_ativas: "true" });
+  if (r.status !== 200) throw new NacionalError(`Questor ${r.status} ao listar as empresas.`);
+  const vistos = new Set<number>();
+  const v: EmpresaLista[] = [];
+  for (const e of (r.json.dados ?? []) as Json[]) {
+    if (vistos.has(e.codigoempresa) || !(e.matriz || e.codigoestab === 1)) continue;
+    vistos.add(e.codigoempresa);
+    v.push({ codigoempresa: e.codigoempresa, nome: e.nomeestab || e.nomeempresa || "", cnpj: dig(e.inscrfederal), regime: String(e.regime ?? ""), municipio: e.nomemunic || "", uf: e.siglaestado || "" });
+  }
+  v.sort((a, b) => a.codigoempresa - b.codigoempresa);
+  cacheLista = { t: Date.now(), v };
+  return v;
+}
+
 /** Cadastro + situação no Simples (alíquota efetiva = % aproximado dos tributos na DPS). */
 export async function obterEmpresaFiscal(cod: number, competencia?: string): Promise<EmpresaFiscal> {
   const [c, s] = await Promise.all([
@@ -38,7 +58,7 @@ export async function obterEmpresaFiscal(cod: number, competencia?: string): Pro
   if (!e) throw new NacionalError(`Empresa ${cod} não encontrada no Questor.`);
   const regime = String(e.regime ?? "");
   let simples: EmpresaFiscal["simples"] = { ok: false, aliquota: null, competencia: null, motivo: "Empresa fora do Simples Nacional (ou sem apuração no Questor)." };
-  if (/\bMEI\b|MICROEMPREENDEDOR/i.test(regime)) simples.motivo = "Empresa MEI: emita pelo Sistema MEI.";
+  if (/\bMEI\b|MICRO\s*EMPREENDEDOR/i.test(regime)) simples.motivo = "Empresa MEI: emita pelo Sistema MEI.";
   else if (s.status === 200) {
     const comp = (competencia ?? hojeBR()).slice(0, 7);
     const per = [s.json.atual, s.json.proximo].find((x: Json) => x?.competencia === comp) ?? s.json.atual ?? s.json.proximo;
