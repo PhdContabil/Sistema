@@ -10,7 +10,7 @@
 import { getDctfwebObrigadas } from "./questor";
 import { atualizarGrupos, comGrupo, mapaGrupos } from "./grupos-processamento";
 import {
-  autenticar, consumir, dadosDe, loadPfx, participante,
+  TokenExpiradoError, autenticar, consumir, dadosDe, loadPfx, participante,
   type CredenciaisSerpro, type Participante, type TokensSerpro,
 } from "./serpro/integra-contador";
 import { assinarProcDctf } from "./serpro/assinatura-xml";
@@ -123,11 +123,39 @@ export async function abrirSessao(): Promise<Sessao> {
   return { cred, tokens: await autenticar(cred), contratante: participante(cred.contratante_cnpj) };
 }
 
-function pedir(s: Sessao, cnpj: string, metodo: "Consultar" | "Emitir" | "Declarar", idServico: string, dados: Record<string, unknown>) {
-  return consumir({
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Renova o token antes de vencer (margem de 2 min). */
+async function garantirToken(s: Sessao) {
+  const validade = (s.tokens.expires_in ?? 3600) * 1000;
+  if (Date.now() - s.tokens.obtidoEm > validade - 120_000) s.tokens = await autenticar(s.cred);
+}
+
+/**
+ * Chamada ao gateway com proteção contra falhas passageiras do SERPRO:
+ * - 401 (token vencido): reautentica e repete uma vez (o gateway recusou, nada foi feito);
+ * - HTTP 5xx em Consultar/Emitir: espera e repete até 2 vezes.
+ * "Declarar" (transmissão) NÃO é repetido em 5xx: a Receita pode ter recebido.
+ */
+async function pedir(s: Sessao, cnpj: string, metodo: "Consultar" | "Emitir" | "Declarar", idServico: string, dados: Record<string, unknown>) {
+  const chamar = () => consumir({
     tokens: s.tokens, metodo, contratante: s.contratante, contribuinte: participante(cnpj),
     pedidoDados: { idSistema: "DCTFWEB", idServico, versaoSistema: "1.0", dados: JSON.stringify(dados) },
   });
+  await garantirToken(s);
+  const tentativas = metodo === "Declarar" ? 1 : 3;
+  for (let i = 1; ; i++) {
+    let r;
+    try {
+      r = await chamar();
+    } catch (e) {
+      if (!(e instanceof TokenExpiradoError)) throw e;
+      s.tokens = await autenticar(s.cred);
+      r = await chamar();
+    }
+    if (r.httpStatus < 500 || i >= tentativas) return r;
+    await espera(2000 * i);
+  }
 }
 
 const periodo = (competencia: string) => {

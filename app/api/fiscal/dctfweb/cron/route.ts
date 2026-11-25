@@ -58,10 +58,19 @@ export async function POST(req: Request) {
 
 async function encadear(base: string, elo: number, falhas: number): Promise<number | string> {
   const secret = process.env.CRON_SECRET ?? "";
+  // A origem da requisição pode ser a URL própria do deploy, protegida pelo login
+  // da Vercel (401 antes de chegar aqui). Encadeia pelo domínio de produção e, se
+  // houver, manda o segredo de bypass de automação.
+  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const destino = prod ? `https://${prod}` : base;
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   try {
-    const r = await fetch(`${base}/api/fiscal/dctfweb/cron`, {
+    const r = await fetch(`${destino}/api/fiscal/dctfweb/cron`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${secret}`, "Content-Type": "application/json",
+        ...(bypass ? { "x-vercel-protection-bypass": bypass } : {}),
+      },
       body: JSON.stringify({ elo, falhas, segredo: secret }),
     });
     return r.status;
