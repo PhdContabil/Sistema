@@ -165,3 +165,35 @@ export function baixarDanfseOficial(chave: string, amb: 1 | 2, c: Cert): Promise
     req.end();
   });
 }
+
+const escXml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * Cancelamento da NFS-e (evento e101101) — POST {Sefin}/nfse/{chave}/eventos.
+ * cMotivo: 1 erro na emissão · 2 serviço não prestado · 9 outros. Irreversível.
+ * Por procuração, o autor é o prestador (CNPJAutor) e a assinatura é da PHD.
+ */
+export async function cancelarNacional(p: { chave: string; cnpjAutor: string; amb: 1 | 2; cMotivo: 1 | 2 | 9; xMotivo: string; cert: Cert }):
+  Promise<{ ok: true; xml: string } | { ok: false; erro: string; codigos: string[] }> {
+  const motivo = p.xMotivo.trim();
+  if (motivo.length < 15) throw new NacionalError("A justificativa do cancelamento precisa de pelo menos 15 caracteres.");
+  if (p.cert.validade.getTime() < Date.now()) throw new NacionalError("Certificado A1 vencido.");
+  const id = `PRE${p.chave}101101001`;
+  const desc = "Cancelamento de NFS-e";
+  const xml = `<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infPedReg Id="${id}">`
+    + `<tpAmb>${p.amb}</tpAmb><verAplic>NucleoFiscal1</verAplic><dhEvento>${dhEmiAgora()}</dhEvento>`
+    + `<CNPJAutor>${p.cnpjAutor}</CNPJAutor><chNFSe>${p.chave}</chNFSe><nPedRegEvento>1</nPedRegEvento>`
+    + `<e101101><xDesc>${desc}</xDesc><cMotivo>${p.cMotivo}</cMotivo><xMotivo>${escXml(motivo.slice(0, 255))}</xMotivo></e101101>`
+    + `</infPedReg></pedRegEvento>`;
+  const assinado = assinar(xml, id, p.cert, "infPedReg");
+  const pedidoRegistroEventoXmlGZipB64 = zlib.gzipSync(Buffer.from(assinado, "utf8")).toString("base64");
+  const r = await requisitar("POST", `${sefinUrl(p.amb)}/nfse/${p.chave}/eventos`, { pedidoRegistroEventoXmlGZipB64 }, p.cert, 60_000);
+  const resp = lerRespostaSefin(r.json);
+  if (r.status >= 200 && r.status < 300 && resp.erros.length === 0) {
+    const o = (r.json ?? {}) as Record<string, string>;
+    const b64 = o.eventoXmlGZipB64 ?? o.EventoXmlGZipB64;
+    return { ok: true, xml: b64 ? zlib.gunzipSync(Buffer.from(b64, "base64")).toString("utf8") : assinado };
+  }
+  const erro = resp.erros.length ? textoErros(resp.erros) : `HTTP ${r.status}: ${r.texto.slice(0, 300)}`;
+  return { ok: false, erro, codigos: resp.erros.map((e) => e.codigo) };
+}

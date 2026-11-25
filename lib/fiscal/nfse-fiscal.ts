@@ -2,11 +2,12 @@
 // do Portal Nacional, com o certificado da PHD + procuração do cliente — SERVIDOR.
 // Mesmo núcleo da emissão do MEI (lib/nfse/procuracao.ts). Primeira versão:
 // só Simples (regApTribSN 1 — ISS dentro do DAS), sem retenções.
-import { ibgePorCep, NacionalError } from "@/lib/nfse/nacional";
+import { ibgePorCep, cancelarNacional, NacionalError } from "@/lib/nfse/nacional";
+import { carregarEmpresa } from "@/lib/nfse/empresas";
 import type { ConfigNacional, NotaNac } from "@/lib/nfse/nacional-formato";
 import { q } from "@/lib/mei/questor-mei";
 import { chamar } from "@/lib/mei/api";
-import { db, dig, hojeBR, tomadorDigitado, emitirPorProcuracao, SERIE_DPS, type RespostaProcuracao } from "@/lib/nfse/procuracao";
+import { db, dig, hojeBR, tomadorDigitado, emitirPorProcuracao, SERIE_DPS, EMPRESA_CERT_PHD, type RespostaProcuracao } from "@/lib/nfse/procuracao";
 
 export const ambienteFiscal = (): 1 | 2 => (process.env.FISCAL_NFSE_AMBIENTE === "homologacao" ? 2 : 1);
 
@@ -126,8 +127,8 @@ export async function emitirNotaFiscal(p: PedidoNotaFiscal, email: string): Prom
 
 /** Notas emitidas pelo Fiscal (por empresa, ou as últimas de todas). */
 export async function notasEmitidasFiscal(cod?: number) {
-  let qy = db().from("mei_nfse").select("id,codigoempresa,cnpj,dcompet,valor,nnfse,chave_acesso,status,tomador_doc,tomador_nome,emitido_por,criado_em,ambiente,questor_ok,questor_erro")
-    .eq("origem", "fiscal").in("status", ["emitida", "incerta"]).order("criado_em", { ascending: false }).limit(cod ? 50 : 1000);
+  let qy = db().from("mei_nfse").select("id,codigoempresa,cnpj,dcompet,valor,nnfse,chave_acesso,status,tomador_doc,tomador_nome,emitido_por,criado_em,ambiente,questor_ok,questor_erro,descricao,cancelada_em,cancelada_por,cancel_motivo")
+    .eq("origem", "fiscal").in("status", ["emitida", "incerta", "cancelada"]).order("criado_em", { ascending: false }).limit(cod ? 50 : 1000);
   if (cod) qy = qy.eq("codigoempresa", cod);
   const { data } = await qy;
   return data ?? [];
@@ -163,4 +164,27 @@ export async function lancarNoQuestor(id: number, email: string): Promise<{ ok: 
   if (j?.dry_run) return { ok: false, mensagem: "A API respondeu em simulação (dry_run): nada foi gravado.", dados: j };
   await sb.from("mei_nfse").update({ questor_ok: true, questor_erro: null, atualizado_em: new Date().toISOString() }).eq("id", id);
   return { ok: true, mensagem: "Nota lançada no Questor.", dados: j };
+}
+
+/** Cancela a NFS-e no Portal Nacional (certificado da PHD, por procuração). Irreversível. */
+export async function cancelarNotaFiscal(id: number, motivo: number, justificativa: string, email: string): Promise<{ ok: boolean; mensagem: string }> {
+  try {
+    const sb = db();
+    const { data: n } = await sb.from("mei_nfse").select("id,status,chave_acesso,cnpj,ambiente,nnfse").eq("id", id).eq("origem", "fiscal").maybeSingle();
+    if (!n || !n.chave_acesso) return { ok: false, mensagem: "Nota não encontrada." };
+    if (n.status === "cancelada") return { ok: true, mensagem: "Esta nota já estava cancelada." };
+    if (n.status !== "emitida") return { ok: false, mensagem: "Só notas emitidas podem ser canceladas." };
+    const cMotivo = ([1, 2, 9].includes(motivo) ? motivo : 9) as 1 | 2 | 9;
+    const { cert } = await carregarEmpresa(EMPRESA_CERT_PHD);
+    const r = await cancelarNacional({ chave: n.chave_acesso, cnpjAutor: n.cnpj, amb: n.ambiente === 1 ? 1 : 2, cMotivo, xMotivo: justificativa, cert });
+    if (!r.ok) {
+      const dica = /procura|represent|autoriza/i.test(r.erro) ? " — Verifique a procuração eletrônica do cliente para a PHD (precisa incluir cancelamento)." : "";
+      return { ok: false, mensagem: r.erro + dica };
+    }
+    const agora = new Date().toISOString();
+    await sb.from("mei_nfse").update({ status: "cancelada", cancelada_em: agora, cancelada_por: email, cancel_motivo: `${cMotivo} - ${justificativa.trim()}`.slice(0, 300), cancel_xml: r.xml, atualizado_em: agora }).eq("id", id);
+    return { ok: true, mensagem: `NFS-e nº ${n.nnfse ?? ""} cancelada no Portal Nacional.` };
+  } catch (e) {
+    return { ok: false, mensagem: e instanceof Error ? e.message : "Falha ao cancelar." };
+  }
 }
