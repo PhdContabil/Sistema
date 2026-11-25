@@ -8,16 +8,11 @@
 //
 // O número da DPS é controlado aqui, por CNPJ do MEI (tabela mei_nfse). O número
 // da NFS-e quem dá é a Sefin; ele volta na resposta e vai para o lançamento no Questor.
-import { createClient } from "@supabase/supabase-js";
-import { carregarEmpresa } from "@/lib/nfse/empresas";
-import { emitirNacional, prepararDps, ibgePorCep, baixarDanfseOficial, NacionalError } from "@/lib/nfse/nacional";
-import { gerarDanfse } from "@/lib/nfse/danfse";
+import { ibgePorCep, NacionalError } from "@/lib/nfse/nacional";
 import type { ConfigNacional, NotaNac, TomadorNac } from "@/lib/nfse/nacional-formato";
 import { listaMEI, AVULSO_SALAO } from "@/lib/mei/questor-mei";
+import { db, dig, hojeBR, tomadorPorCnpj, tomadorDigitado, emitirPorProcuracao, pdfPorChave, SERIE_DPS, type RespostaProcuracao } from "@/lib/nfse/procuracao";
 
-/** Empresa do Financeiro cujo certificado A1 assina as notas dos MEI (PHD CONTABIL LTDA). */
-export const EMPRESA_CERT_PHD = 725;
-const SERIE_DPS = "1";
 const DISCRIMINACAO_PADRAO = "NOTA PELO PRESTADOR. Serviços prestados de beleza, conforme resolução CGSN nº 140 de 22 de maio de 2018, cota parte profissional parceiro.";
 
 /** Códigos de tributação nacional (LC 116, item + subitem + desdobro) usados pelos MEI de salão. */
@@ -27,14 +22,6 @@ export const SERVICOS_MEI: { cTribNac: string; descricao: string }[] = [
   { cTribNac: "060301", descricao: "06.03.01 — Banhos, duchas, sauna, massagens e congêneres" },
 ];
 
-function db() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Banco indisponível.");
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
-const dig = (v: unknown) => String(v ?? "").replace(/\D/g, "");
-const hojeBR = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
 export const ambienteMei = (): 1 | 2 => (process.env.MEI_NFSE_AMBIENTE === "homologacao" ? 2 : 1);
 
 /**
@@ -52,25 +39,6 @@ export function cTribNacDaAtividade(ativ: string): string {
   return "";
 }
 
-/** Endereço público do CNPJ (BrasilAPI) para o grupo <toma>. Falhou: vai sem endereço. */
-async function tomadorPorCnpj(cnpj: string, nomePadrao: string): Promise<TomadorNac> {
-  const base: TomadorNac = { cpf_cnpj: cnpj, razao_social: nomePadrao, inscricao_municipal: "", email: "", tipo_logradouro: "", logradouro: "", numero: "", complemento: "", bairro: "", cep: "", ibge: "" };
-  try {
-    const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-    if (!r.ok) return base;
-    const j = (await r.json()) as Record<string, unknown>;
-    const s = (k: string) => String(j[k] ?? "").trim();
-    return {
-      ...base,
-      razao_social: s("razao_social") || nomePadrao,
-      tipo_logradouro: s("descricao_tipo_de_logradouro"), logradouro: s("logradouro"), numero: s("numero"),
-      complemento: s("complemento"), bairro: s("bairro"), cep: dig(s("cep")), ibge: dig(s("codigo_municipio_ibge")),
-    };
-  } catch {
-    return base;
-  }
-}
-
 export interface PedidoNotaMei {
   cod: number;
   data: string;            // competência AAAA-MM-DD
@@ -84,10 +52,7 @@ export interface PedidoNotaMei {
   simular?: boolean;       // monta e assina, não envia
 }
 
-export type RespostaNotaMei =
-  | { ok: true; simulacao: true; prestador: string; tomador: string | null; cTribNac: string; ambiente: number; idDps: string; xml: string }
-  | { ok: true; simulacao?: false; ja_emitida?: boolean; chave: string; numero: string | null; serie: string; dhProc: string | null; ambiente: number }
-  | { ok: false; erro: string; codigos?: string[] };
+export type RespostaNotaMei = RespostaProcuracao;
 
 /** Monta tudo o que a DPS precisa a partir do cadastro do MEI no Questor. */
 async function montar(p: PedidoNotaMei) {
@@ -114,14 +79,8 @@ async function montar(p: PedidoNotaMei) {
     else if (doc.length === 14) tomador = await tomadorPorCnpj(doc, m.salao);
     else throw new NacionalError("CNPJ do salão inválido no cadastro — escolha \"Outro\" ou \"Sem tomador\".");
   } else if (p.tomadorModo === "outro") {
-    const doc = dig(p.tomadorDoc);
-    if (doc.length === 14) tomador = await tomadorPorCnpj(doc, String(p.tomadorNome ?? "").trim());
-    else if (doc.length === 11) {
-      const nome = String(p.tomadorNome ?? "").trim();
-      if (!nome) throw new NacionalError("Informe o nome do tomador (CPF).");
-      tomador = { cpf_cnpj: doc, razao_social: nome, inscricao_municipal: "", email: "", tipo_logradouro: "", logradouro: "", numero: "", complemento: "", bairro: "", cep: "", ibge: "" };
-    } else throw new NacionalError("Tomador: CPF (11 números) ou CNPJ (14 números).");
-    if (!tomador.razao_social) throw new NacionalError("Não achei o nome do tomador — digite o nome.");
+    tomador = await tomadorDigitado(p.tomadorDoc, p.tomadorNome);
+    if (!tomador) throw new NacionalError("Tomador: CPF (11 números) ou CNPJ (14 números).");
   }
   if (tomador && dig(tomador.cpf_cnpj) === cnpj) throw new NacionalError("Tomador igual ao prestador.");
 
@@ -129,93 +88,21 @@ async function montar(p: PedidoNotaMei) {
     ambiente: ambienteMei(), cnpj, im: "", cLocEmi: ibge, serie: SERIE_DPS, cTribNac, cNBS: "",
     opSimpNac: 2, pTotTribSN: 0, verAplic: "NucleoMEI1",
   };
-  const vazio: TomadorNac = { cpf_cnpj: "", razao_social: "", inscricao_municipal: "", email: "", tipo_logradouro: "", logradouro: "", numero: "", complemento: "", bairro: "", cep: "", ibge: "" };
   const nota: Omit<NotaNac, "nDPS"> = {
     dCompet: p.data, valor, descricao: String(p.descricao ?? "").trim() || DISCRIMINACAO_PADRAO, infoCompl: "",
-    tomador: tomador ?? vazio,
+    tomador: tomador ?? ({} as TomadorNac),
   };
   return { m, cnpj, cfg, nota, tomador };
 }
 
 export async function emitirNotaMei(p: PedidoNotaMei, email: string): Promise<RespostaNotaMei> {
   let base: Awaited<ReturnType<typeof montar>>;
-  let cert: Awaited<ReturnType<typeof carregarEmpresa>>["cert"];
-  try {
-    base = await montar(p);
-    cert = (await carregarEmpresa(EMPRESA_CERT_PHD)).cert;
-  } catch (e) {
-    return { ok: false, erro: e instanceof Error ? e.message : "Falha ao preparar a nota." };
-  }
-  const { m, cnpj, cfg, nota, tomador } = base;
-  const tomTxt = tomador ? `${tomador.razao_social} (${tomador.cpf_cnpj})` : null;
-
-  if (p.simular) {
-    try {
-      const { id, xml } = prepararDps({ ...nota, nDPS: 1 }, cfg, cert, { procuracao: true });
-      return { ok: true, simulacao: true, prestador: `${m.razao} (${cnpj})`, tomador: tomTxt, cTribNac: cfg.cTribNac, ambiente: cfg.ambiente, idDps: id, xml };
-    } catch (e) {
-      return { ok: false, erro: e instanceof Error ? e.message : "Falha ao montar a DPS." };
-    }
-  }
-
-  const sb = db();
-  const idem = String(p.idem ?? "").slice(0, 120);
-  if (!idem) return { ok: false, erro: "Falta a chave de idempotência." };
-  const { data: ja } = await sb.from("mei_nfse").select("status,chave_acesso,nnfse,serie_dps,dh_proc,ambiente").eq("idem", idem).maybeSingle();
-  if (ja?.status === "emitida") return { ok: true, ja_emitida: true, chave: ja.chave_acesso, numero: ja.nnfse, serie: ja.serie_dps, dhProc: ja.dh_proc, ambiente: ja.ambiente };
-  if (ja) return { ok: false, erro: "Esta nota já está sendo emitida (ou ficou sem resposta). Confira no portal antes de tentar de novo." };
-
-  // Reserva o número da DPS (único por CNPJ + série + ambiente) e envia; E0014 = número já usado → próximo.
-  for (let tentativa = 0; tentativa < 8; tentativa++) {
-    const { data: ult } = await sb.from("mei_nfse").select("ndps").eq("cnpj", cnpj).eq("serie_dps", SERIE_DPS).eq("ambiente", cfg.ambiente)
-      .order("ndps", { ascending: false }).limit(1);
-    const nDPS = Number(ult?.[0]?.ndps ?? 0) + 1;
-    const { data: linha, error } = await sb.from("mei_nfse").insert({
-      codigoempresa: m.cod, cnpj, serie_dps: SERIE_DPS, ndps: nDPS, ambiente: cfg.ambiente, status: "emitindo", idem,
-      dcompet: nota.dCompet, valor: nota.valor, tomador_doc: tomador?.cpf_cnpj ?? null, tomador_nome: tomador?.razao_social ?? null,
-      ctribnac: cfg.cTribNac, descricao: nota.descricao, emitido_por: email,
-    }).select("id").single();
-    if (error) {
-      if (/duplicate|unique/i.test(error.message)) {
-        if (/idem/i.test(error.message)) return { ok: false, erro: "Esta nota já está sendo emitida." };
-        continue;
-      }
-      return { ok: false, erro: `Banco: ${error.message}` };
-    }
-    const agora = () => new Date().toISOString();
-    let r: Awaited<ReturnType<typeof emitirNacional>>;
-    try {
-      r = await emitirNacional({ ...nota, nDPS }, cfg, cert, { procuracao: true });
-    } catch (e) {
-      // Sem resposta: não dá para saber se a Sefin gerou a nota. A linha fica "incerta" (o número não é reutilizado).
-      const msg = e instanceof Error ? e.message : "Falha ao falar com a Sefin.";
-      await sb.from("mei_nfse").update({ status: "incerta", idem: null, erro: msg, atualizado_em: agora() }).eq("id", linha.id);
-      return { ok: false, erro: `${msg} Confira no Emissor Nacional se a nota saiu antes de emitir de novo.` };
-    }
-    if (r.ok) {
-      await sb.from("mei_nfse").update({
-        status: "emitida", chave_acesso: r.chave, nnfse: r.nNFSe, dh_proc: r.dhProc, nfse_xml: r.nfseXml, dps_xml: r.dpsXml, erro: null, atualizado_em: agora(),
-      }).eq("id", linha.id);
-      return { ok: true, chave: r.chave, numero: r.nNFSe, serie: SERIE_DPS, dhProc: r.dhProc, ambiente: cfg.ambiente };
-    }
-    if (r.codigos.includes("E0014")) {
-      await sb.from("mei_nfse").update({ status: "numero_usado", idem: null, erro: r.erro, codigos: r.codigos, atualizado_em: agora() }).eq("id", linha.id);
-      continue;
-    }
-    // Recusa definitiva: a nota não existe; libera o número e a chave para corrigir e tentar de novo.
-    await sb.from("mei_nfse").delete().eq("id", linha.id);
-    return { ok: false, erro: traduzir(r.erro, r.codigos), codigos: r.codigos };
-  }
-  return { ok: false, erro: "Não achei um número de DPS livre depois de 8 tentativas. Avise a T.I." };
-}
-
-/** Mensagens mais claras para os erros que dependem da procuração. */
-function traduzir(erro: string, codigos: string[]): string {
-  if (/procura|represent|autoriza|E1235|E1229|certificado/i.test(erro)) {
-    return `${erro} — Possível falta de procuração eletrônica do MEI para a PHD no Emissor Nacional.`;
-  }
-  void codigos;
-  return erro;
+  try { base = await montar(p); }
+  catch (e) { return { ok: false, erro: e instanceof Error ? e.message : "Falha ao preparar a nota." }; }
+  return emitirPorProcuracao({
+    origem: "mei", codigoempresa: base.m.cod, nome: base.m.razao, cfg: base.cfg, nota: base.nota, tomador: base.tomador,
+    idem: p.idem, email, simular: p.simular,
+  });
 }
 
 /** Notas emitidas pelo Núcleo para um MEI (mais recentes primeiro). */
@@ -225,14 +112,5 @@ export async function notasEmitidasMei(cod: number) {
   return data ?? [];
 }
 
-/** PDF da nota: DANFSe oficial do ADN (com o certificado da PHD) ou, se o serviço falhar, gerado do XML. */
-export async function pdfNotaMei(chave: string): Promise<Buffer> {
-  const { data } = await db().from("mei_nfse").select("nfse_xml,ambiente").eq("chave_acesso", chave).maybeSingle();
-  if (!data) throw new NacionalError("Nota não encontrada no Núcleo.");
-  const amb = data.ambiente === 1 ? 1 : 2;
-  const { cert } = await carregarEmpresa(EMPRESA_CERT_PHD);
-  const of = await baixarDanfseOficial(chave, amb, cert);
-  if (of.pdf) return of.pdf;
-  if (!data.nfse_xml) throw new NacionalError(`PDF oficial indisponível (${of.motivo}).`);
-  return gerarDanfse(data.nfse_xml, chave, amb);
-}
+/** PDF da nota (DANFSe). */
+export const pdfNotaMei = pdfPorChave;
