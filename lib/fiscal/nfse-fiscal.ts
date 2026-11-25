@@ -127,7 +127,7 @@ export async function emitirNotaFiscal(p: PedidoNotaFiscal, email: string): Prom
 /** Notas emitidas pelo Fiscal (por empresa, ou as últimas de todas). */
 export async function notasEmitidasFiscal(cod?: number) {
   let qy = db().from("mei_nfse").select("id,codigoempresa,cnpj,dcompet,valor,nnfse,chave_acesso,status,tomador_doc,tomador_nome,emitido_por,criado_em,ambiente,questor_ok,questor_erro")
-    .eq("origem", "fiscal").in("status", ["emitida", "incerta"]).order("criado_em", { ascending: false }).limit(50);
+    .eq("origem", "fiscal").in("status", ["emitida", "incerta"]).order("criado_em", { ascending: false }).limit(cod ? 50 : 1000);
   if (cod) qy = qy.eq("codigoempresa", cod);
   const { data } = await qy;
   return data ?? [];

@@ -31,6 +31,8 @@ export default function NotasFiscais() {
   const [filtro, setFiltro] = useState({ cod: "", nome: "", regime: "" });
   const [aplicado, setAplicado] = useState({ cod: "", nome: "", regime: "" });
   const [aberta, setAberta] = useState(false);
+  const [aba, setAba] = useState<"empresas" | "notas">("empresas");
+  const [fn, setFn] = useState({ busca: "", de: "", ate: "", questor: "" });
   const [emp, setEmp] = useState<Empresa | null>(null);
   const [notas, setNotas] = useState<NotaEmitida[]>([]);
   const [ambiente, setAmbiente] = useState(1);
@@ -133,11 +135,47 @@ export default function NotasFiscais() {
   }
 
   const podeEmitir = !!emp && emp.ativa && emp.simples.ok;
+  const nomePorCod = useMemo(() => new Map((lista ?? []).map((e) => [e.codigoempresa, e.nome])), [lista]);
+  const notasFiltradas = notas.filter((n) => {
+    const t = semAcento(fn.busca.trim()), d = fn.busca.replace(/\D/g, "");
+    if (t && !(String(n.codigoempresa) === d || semAcento(nomePorCod.get(n.codigoempresa) ?? "").includes(t) || semAcento(n.tomador_nome ?? "").includes(t) || (d.length >= 3 && ((n.tomador_doc ?? "").includes(d) || (n.nnfse ?? "") === d)))) return false;
+    if (fn.de && n.dcompet < fn.de) return false;
+    if (fn.ate && n.dcompet > fn.ate) return false;
+    if (fn.questor === "sim" && !n.questor_ok) return false;
+    if (fn.questor === "nao" && n.questor_ok) return false;
+    return true;
+  });
+  const totalNotas = notasFiltradas.reduce((a, n) => a + Number(n.valor || 0), 0);
 
   return (
     <div>
       {ambiente === 2 && <div style={{ ...st.aviso, color: "var(--div)" }}>Ambiente de TESTE (produção restrita): as notas não valem.</div>}
-      <div style={st.card}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {([["empresas", "Emitir nota"], ["notas", `Notas emitidas${notas.length ? ` (${notas.length})` : ""}`]] as const).map(([k, t]) => (
+          <button key={k} style={aba === k ? st.btnP : st.btn} onClick={() => setAba(k)}>{t}</button>
+        ))}
+      </div>
+
+      {aba === "notas" && (
+        <div style={st.card}>
+          <div style={st.bar}>
+            <input style={{ ...st.input, maxWidth: 320 }} placeholder="Empresa, cód., tomador ou nº da nota" value={fn.busca} onChange={(e) => setFn({ ...fn, busca: e.target.value })} />
+            <label style={{ ...st.mut, display: "flex", alignItems: "center", gap: 6 }}>De <input type="date" style={{ ...st.input, maxWidth: 160 }} value={fn.de} onChange={(e) => setFn({ ...fn, de: e.target.value })} /></label>
+            <label style={{ ...st.mut, display: "flex", alignItems: "center", gap: 6 }}>Até <input type="date" style={{ ...st.input, maxWidth: 160 }} value={fn.ate} onChange={(e) => setFn({ ...fn, ate: e.target.value })} /></label>
+            <select style={{ ...st.input, maxWidth: 200 }} value={fn.questor} onChange={(e) => setFn({ ...fn, questor: e.target.value })}>
+              <option value="">Questor: todas</option>
+              <option value="nao">Falta lançar</option>
+              <option value="sim">Já lançadas</option>
+            </select>
+            {(fn.busca || fn.de || fn.ate || fn.questor) && <button style={st.btn} onClick={() => setFn({ busca: "", de: "", ate: "", questor: "" })}>Limpar</button>}
+          </div>
+          <p style={{ ...st.mut, margin: "10px 0 6px" }}>{notasFiltradas.length} nota(s) · total {brl(totalNotas)}</p>
+          {notasFiltradas.length === 0 ? <p style={st.mut}>Nenhuma nota encontrada.</p>
+            : <TabelaNotas notas={notasFiltradas} nomes={nomePorCod} lancar={lancar} lancando={lancando} msgLanc={msgLanc} />}
+        </div>
+      )}
+
+      {aba === "empresas" && <div style={st.card}>
         <div style={st.bar}>
           <input style={{ ...st.input, maxWidth: 140 }} placeholder="Cód. Questor" value={filtro.cod}
             onChange={(e) => setFiltro({ ...filtro, cod: e.target.value.replace(/\D/g, "") })} onKeyDown={(e) => { if (e.key === "Enter") setAplicado(filtro); }} />
@@ -162,7 +200,7 @@ export default function NotasFiscais() {
             ])} />
           </>
         )}
-      </div>
+      </div>}
 
       {aberta && (
         <Modal titulo={emp ? `Emitir NFS-e — ${emp.codigoempresa} - ${emp.nome}` : "Emitir NFS-e"} fechar={fecharEmissao} largura={820}>
@@ -234,26 +272,20 @@ export default function NotasFiscais() {
           {emp && notas.length > 0 && (
             <div style={{ marginTop: 14 }}>
               <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Notas emitidas desta empresa</h3>
-              <TabelaNotas notas={notas} lancar={lancar} lancando={lancando} msgLanc={msgLanc} />
+              <TabelaNotas notas={notas} nomes={nomePorCod} lancar={lancar} lancando={lancando} msgLanc={msgLanc} />
             </div>
           )}
         </Modal>
       )}
 
-      {!aberta && (
-        <div style={st.card}>
-          <h3 style={{ margin: "0 0 10px", fontSize: 14 }}>Últimas notas emitidas</h3>
-          {notas.length === 0 ? <p style={st.mut}>Nenhuma nota emitida pelo Núcleo.</p> : <TabelaNotas notas={notas} lancar={lancar} lancando={lancando} msgLanc={msgLanc} />}
-        </div>
-      )}
     </div>
   );
 }
 
-function TabelaNotas({ notas, lancar, lancando, msgLanc }: { notas: NotaEmitida[]; lancar: (n: NotaEmitida) => void; lancando: number | null; msgLanc: Record<number, string> }) {
+function TabelaNotas({ notas, nomes, lancar, lancando, msgLanc }: { notas: NotaEmitida[]; nomes: Map<number, string>; lancar: (n: NotaEmitida) => void; lancando: number | null; msgLanc: Record<number, string> }) {
   return (
     <Tabela cab={["Empresa", "Data", "Nº NFS-e", "Tomador", "Valor", "Emitida por", "PDF", "Questor"]} linhas={notas.map((n) => [
-      n.codigoempresa, dt(n.dcompet), n.status === "incerta" ? "sem resposta — confira no portal" : (n.nnfse ?? "—"),
+      `${n.codigoempresa}${nomes.get(n.codigoempresa) ? ` - ${nomes.get(n.codigoempresa)}` : ""}`, dt(n.dcompet), n.status === "incerta" ? "sem resposta — confira no portal" : (n.nnfse ?? "—"),
       n.tomador_nome ? `${n.tomador_nome}${n.tomador_doc ? ` (${fmtDoc(n.tomador_doc)})` : ""}` : "Sem tomador",
       brl(Number(n.valor)), n.emitido_por ?? "",
       n.chave_acesso ? <a key="p" href={`/api/fiscal/nfse/pdf?chave=${n.chave_acesso}`} target="_blank" rel="noreferrer">PDF</a> : "",
