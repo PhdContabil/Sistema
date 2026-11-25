@@ -11,6 +11,7 @@ export interface ConfigNacional {
   cLocEmi: string;          // IBGE 7 dígitos do município emissor
   serie: string;            // 1..49999 (aplicativo próprio)
   cTribNac: string;         // 6 dígitos
+  cTribMun?: string;        // 3 dígitos, só quando o município exige (E0312)
   cNBS: string;             // 9 dígitos
   opSimpNac: 1 | 2 | 3;     // 1 não optante, 2 MEI, 3 ME/EPP
   pTotTribSN: number;       // % aproximado dos tributos do Simples (só ME/EPP)
@@ -120,7 +121,7 @@ export function montarDps(n: NotaNac, c: ConfigNacional, dhEmi: string): { id: s
   const lgr = [t.tipo_logradouro, t.logradouro].filter(Boolean).join(" ");
   const tomaDoc = doc.length === 11 ? `<CPF>${doc}</CPF>` : `<CNPJ>${doc}</CNPJ>`;
   const im = dig(t.inscricao_municipal) ? `<IM>${txt(t.inscricao_municipal, 15)}</IM>` : "";
-  const end = dig(t.cep).length === 8 && dig(t.ibge).length === 7
+  const end = dig(t.cep).length === 8 && dig(t.ibge).length === 7 && lgr.trim() && t.bairro.trim()
     ? `<end><endNac><cMun>${dig(t.ibge)}</cMun><CEP>${dig(t.cep)}</CEP></endNac><xLgr>${txt(lgr, 255)}</xLgr><nro>${txt(t.numero || "S/N", 60)}</nro>`
       + (t.complemento.trim() ? `<xCpl>${txt(t.complemento, 156)}</xCpl>` : "") + `<xBairro>${txt(t.bairro, 60)}</xBairro></end>`
     : "";
@@ -134,7 +135,7 @@ export function montarDps(n: NotaNac, c: ConfigNacional, dhEmi: string): { id: s
     + `<prest><CNPJ>${c.cnpj}</CNPJ>${c.im ? `<IM>${c.im}</IM>` : ""}<regTrib><opSimpNac>${c.opSimpNac}</opSimpNac>${c.opSimpNac === 3 ? "<regApTribSN>1</regApTribSN>" : ""}<regEspTrib>0</regEspTrib></regTrib></prest>`
     + (doc ? `<toma>${tomaDoc}${im}<xNome>${txt(t.razao_social, 300)}</xNome>${end}${email}</toma>` : "")
     + `<serv><locPrest><cLocPrestacao>${c.cLocEmi}</cLocPrestacao></locPrest>`
-    + `<cServ><cTribNac>${c.cTribNac}</cTribNac><xDescServ>${txt(n.descricao, 2000)}</xDescServ>${dig(c.cNBS).length === 9 ? `<cNBS>${dig(c.cNBS)}</cNBS>` : ""}</cServ>${info}</serv>`
+    + `<cServ><cTribNac>${c.cTribNac}</cTribNac>${dig(c.cTribMun).length === 3 && dig(c.cTribMun) !== "000" ? `<cTribMun>${dig(c.cTribMun)}</cTribMun>` : ""}<xDescServ>${txt(n.descricao, 2000)}</xDescServ>${dig(c.cNBS).length === 9 ? `<cNBS>${dig(c.cNBS)}</cNBS>` : ""}</cServ>${info}</serv>`
     + `<valores><vServPrest><vServ>${n.valor.toFixed(2)}</vServ></vServPrest>`
     + `<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>`
     + (c.opSimpNac === 3 ? `<totTrib><pTotTribSN>${c.pTotTribSN.toFixed(2)}</pTotTribSN></totTrib>` : `<totTrib><indTotTrib>0</indTotTrib></totTrib>`) + `</trib></valores>`
