@@ -3,7 +3,8 @@
 // Fiscal › Notas Fiscais: NFS-e de clientes do Simples Nacional (ME/EPP) pelo Portal
 // Nacional, com o certificado da PHD e a procuração eletrônica do cliente. Depois de
 // emitir, lança a nota no Questor. Usa os mesmos componentes visuais do Sistema MEI.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import catalogo from "@/lib/nfse/catalogo-nfse.json";
 import { st, Campo, Tabela, Modal, brl, dt, fmtDoc } from "../mei/ui";
 
 interface Empresa {
@@ -34,7 +35,7 @@ export default function NotasFiscais() {
   const [notas, setNotas] = useState<NotaEmitida[]>([]);
   const [ambiente, setAmbiente] = useState(1);
   const [info, setInfo] = useState("");
-  const [f, setF] = useState({ data: hoje(), valor: "", descricao: "", infoCompl: "", cTribNac: "", cTribMun: "", tomadorDoc: "", tomadorNome: "" });
+  const [f, setF] = useState({ data: hoje(), valor: "", descricao: "", infoCompl: "", cTribNac: "", cTribMun: "", cNBS: "", tomadorDoc: "", tomadorNome: "" });
   const [idem, setIdem] = useState("");
   const [erro, setErro] = useState("");
   const [emitindo, setEmitindo] = useState(false);
@@ -52,7 +53,8 @@ export default function NotasFiscais() {
       setNotas(j.notas ?? []);
       if (cod) {
         setEmp(j.empresa);
-        setF((x) => ({ ...x, cTribNac: j.empresa?.cTribNacSugerido || "" }));
+        const sug = j.empresa?.cTribNacSugerido || "";
+        setF((x) => ({ ...x, cTribNac: sug, cNBS: SERV.get(sug)?.nbs[0] ?? "" }));
         setIdem(novaIdem(cod)); setEmitida(null); setErro("");
         setInfo("");
       }
@@ -90,6 +92,7 @@ export default function NotasFiscais() {
     if (!valor || !f.data) { setErro("Informe a data e o valor."); return; }
     if (!f.descricao.trim()) { setErro("Descreva o serviço."); return; }
     if (f.cTribNac.replace(/\D/g, "").length !== 6) { setErro("Código de tributação nacional: 6 dígitos (ex.: 170101)."); return; }
+    if (f.cNBS.replace(/\D/g, "").length !== 9) { setErro("Item da NBS: 9 dígitos (escolha na lista)."); return; }
     const doc = f.tomadorDoc.replace(/\D/g, "");
     if (doc && ![11, 14].includes(doc.length)) { setErro("Tomador: CPF (11 números) ou CNPJ (14 números), ou deixe em branco."); return; }
     if (doc.length === 11 && !f.tomadorNome.trim()) { setErro("Informe o nome do tomador (CPF)."); return; }
@@ -101,7 +104,7 @@ export default function NotasFiscais() {
     try {
       const r = await fetch("/api/fiscal/nfse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         codigoempresa: emp.codigoempresa, data: f.data, valor, descricao: f.descricao, infoCompl: f.infoCompl,
-        cTribNac: f.cTribNac, cTribMun: f.cTribMun || undefined, tomadorDoc: doc || null, tomadorNome: f.tomadorNome || null, idem,
+        cTribNac: f.cTribNac, cTribMun: f.cTribMun || undefined, cNBS: f.cNBS, tomadorDoc: doc || null, tomadorNome: f.tomadorNome || null, idem,
       }) });
       const j = await r.json();
       if (!j.ok) { setErro(j.erro ?? j.error ?? `Erro ${r.status}`); return; }
@@ -178,7 +181,14 @@ export default function NotasFiscais() {
           <div style={st.grid}>
             <Campo label="Data (competência) *"><input type="date" style={st.input} value={f.data} max={hoje()} onChange={(e) => setF({ ...f, data: e.target.value })} /></Campo>
             <Campo label="Valor *"><input style={st.input} value={f.valor} placeholder="0,00" onChange={(e) => setF({ ...f, valor: e.target.value })} /></Campo>
-            <Campo label="Cód. tributação nacional * (6 dígitos)"><input style={st.input} value={f.cTribNac} placeholder="ex.: 170101" maxLength={8} onChange={(e) => setF({ ...f, cTribNac: e.target.value.replace(/\D/g, "") })} /></Campo>
+            <Campo label="Código de tributação nacional *">
+              <Busca valor={f.cTribNac} rotulo={rotuloServ} opcoes={opcoesServ}
+                escolher={(c) => setF((x) => ({ ...x, cTribNac: c, cNBS: SERV.get(c)?.nbs.includes(x.cNBS) ? x.cNBS : (SERV.get(c)?.nbs[0] ?? "") }))} placeholder="Digite o código ou o nome do serviço" />
+            </Campo>
+            <Campo label="Item da NBS *">
+              <Busca valor={f.cNBS} rotulo={rotuloNbs} opcoes={(t) => opcoesNbs(t, f.cTribNac)}
+                escolher={(c) => setF((x) => ({ ...x, cNBS: c }))} placeholder="Digite o código ou o nome" />
+            </Campo>
             <Campo label="Cód. tributação municipal (só se o município exigir)"><input style={st.input} value={f.cTribMun} placeholder="3 dígitos" maxLength={3} onChange={(e) => setF({ ...f, cTribMun: e.target.value.replace(/\D/g, "") })} /></Campo>
             <Campo label="Tomador — CPF/CNPJ (em branco = sem tomador)"><input style={st.input} value={f.tomadorDoc} onChange={(e) => setF({ ...f, tomadorDoc: e.target.value })} /></Campo>
             <Campo label="Nome do tomador (obrigatório para CPF)"><input style={st.input} value={f.tomadorNome} placeholder="CNPJ: vem da Receita" onChange={(e) => setF({ ...f, tomadorNome: e.target.value })} /></Campo>
@@ -233,5 +243,51 @@ function TabelaNotas({ notas, lancar, lancando, msgLanc }: { notas: NotaEmitida[
         </span>
       ),
     ])} />
+  );
+}
+
+// ---------- Catálogo oficial: lista de serviços (LC 116) e NBS (Anexo VIII) ----------
+interface Serv { c: string; d: string; nbs: string[] }
+const CAT = catalogo as { servicos: Serv[]; nbs: Record<string, string> };
+const SERV = new Map(CAT.servicos.map((x) => [x.c, x]));
+const fmtServ = (c: string) => `${c.slice(0, 2)}.${c.slice(2, 4)}.${c.slice(4, 6)}`;
+const fmtNbs = (c: string) => `${c.slice(0, 1)}.${c.slice(1, 5)}.${c.slice(5, 7)}.${c.slice(7, 9)}`;
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const rotuloServ = (c: string) => (SERV.has(c) ? `${fmtServ(c)} - ${SERV.get(c)!.d}` : c);
+const rotuloNbs = (c: string) => (CAT.nbs[c] ? `${fmtNbs(c)} - ${CAT.nbs[c]}` : c);
+function bate(texto: string, codigo: string, desc: string) {
+  const d = texto.replace(/\D/g, ""), t = semAcento(texto.trim());
+  if (!t) return true;
+  if (d && d.length === t.replace(/[\s.\-]/g, "").length) return codigo.startsWith(d);
+  return semAcento(desc).includes(t) || codigo.startsWith(d || "#");
+}
+function opcoesServ(t: string) {
+  return CAT.servicos.filter((x) => bate(t, x.c, x.d)).slice(0, 15).map((x) => x.c);
+}
+function opcoesNbs(t: string, cTribNac: string) {
+  const ligados = SERV.get(cTribNac)?.nbs ?? [];
+  const todos = [...ligados, ...Object.keys(CAT.nbs).filter((c) => !ligados.includes(c))];
+  return todos.filter((c) => bate(t, c, CAT.nbs[c] ?? "")).slice(0, 15);
+}
+
+/** Campo com sugestões: digita parte do código ou do nome e escolhe na lista. */
+function Busca({ valor, rotulo, opcoes, escolher, placeholder }: { valor: string; rotulo: (c: string) => string; opcoes: (t: string) => string[]; escolher: (c: string) => void; placeholder?: string }) {
+  const [texto, setTexto] = useState<string | null>(null);
+  const lista = useMemo(() => (texto === null ? [] : opcoes(texto)), [texto, opcoes]);
+  return (
+    <div style={{ position: "relative" }}>
+      <input style={st.input} placeholder={placeholder} value={texto ?? (valor ? rotulo(valor) : "")}
+        onFocus={() => setTexto("")} onChange={(e) => setTexto(e.target.value)}
+        onBlur={() => setTimeout(() => setTexto(null), 150)}
+        onKeyDown={(e) => { if (e.key === "Enter" && lista[0]) { e.preventDefault(); escolher(lista[0]); setTexto(null); } }} />
+      {texto !== null && lista.length > 0 && (
+        <div style={{ position: "absolute", zIndex: 60, left: 0, right: 0, top: "100%", maxHeight: 260, overflow: "auto", background: "var(--card, #fff)", border: "1px solid var(--line, #ccd)", borderRadius: 8, boxShadow: "0 6px 18px rgba(0,0,0,.15)" }}>
+          {lista.map((c) => (
+            <div key={c} onMouseDown={(e) => { e.preventDefault(); escolher(c); setTexto(null); }}
+              style={{ padding: "6px 10px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--line, #eef)" }}>{rotulo(c)}</div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
