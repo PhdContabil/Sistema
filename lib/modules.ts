@@ -61,6 +61,7 @@ export const MODULES: ModuleDef[] = [
       { name: "eSocial", desc: "Eventos, envios e retornos ao governo.", href: "/m/trabalhista/esocial" },
       { name: "DCTFWeb", desc: "Compartilhada com o Fiscal: obrigadas, situação, guia, recibo e transmissão.", href: "/m/trabalhista/dctfweb" },
       { name: "Recálculos", desc: "Compartilhado com o Fiscal: guia atualizada (DCTFWeb, DAS, DARF) para nova data de pagamento.", href: "/m/trabalhista/recalculos" },
+      { name: "Convenções Coletivas", desc: "Sindicatos por nome e CNPJ, pesquisas programadas e consulta de convenções, acordos e aditivos no Mediador.", href: "/m/trabalhista/convencoes" },
       { name: "Admissões", desc: "Registro e onboarding de novos colaboradores." },
       { name: "Férias e 13º", desc: "Programação, avisos e cálculos." },
       { name: "Rescisões", desc: "Cálculo de verbas e homologação." },
