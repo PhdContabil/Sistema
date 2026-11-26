@@ -65,7 +65,7 @@ export async function competenciasSalvas(): Promise<string[]> {
 
 export async function listar(competencia: string): Promise<LinhaDctf[]> {
   const { data, error } = await db().from("dctfweb").select(COLUNAS)
-    .eq("competencia", validarCompetencia(competencia)).order("razao_social");
+    .eq("competencia", validarCompetencia(competencia)).not("obrigada", "is", false).order("razao_social");
   if (error) throw new Error(error.message);
   return comGrupo((data ?? []) as unknown as LinhaDctf[], await mapaGrupos(true).catch(() => new Map()));
 }
@@ -108,10 +108,21 @@ export async function sincronizarObrigadas(competencia: string) {
     const { error } = await db().from("dctfweb").upsert(rows.slice(i, i + 500), { onConflict: "cnpj,competencia" });
     if (error) throw new Error(error.message);
   }
+  // Quem estava na competência e não veio mais do Questor (e ainda não foi
+  // transmitido): deixa de ser obrigada e o débito fica em branco.
+  const { data: atuais, error: eAt } = await db().from("dctfweb").select("id, cnpj, situacao, tem_recibo, obrigada")
+    .eq("competencia", competencia).limit(5000);
+  if (eAt) throw new Error(eAt.message);
+  const sairam = (atuais ?? []).filter((l) => !porCnpj.has(l.cnpj as string) && l.obrigada !== false
+    && !l.tem_recibo && l.situacao !== "transmitida" && l.situacao !== "em_andamento").map((l) => l.id as number);
+  if (sairam.length) {
+    const { error } = await db().from("dctfweb").update({ obrigada: false, debito: null, debito_folha: null, debito_reinf: null, updated_at: agora }).in("id", sairam);
+    if (error) throw new Error(error.message);
+  }
   // aproveita para atualizar os grupos de processamento (como no app antigo)
   let grupos: { recebidos?: number; erro?: string };
   try { grupos = await atualizarGrupos(); } catch (e) { grupos = { erro: e instanceof Error ? e.message : String(e) }; }
-  return { competencia, recebidas: dados.length, gravadas: rows.length, grupos };
+  return { competencia, recebidas: dados.length, gravadas: rows.length, removidas: sairam.length, grupos };
 }
 
 // ------------------------------------------------------------ SERPRO base
@@ -269,7 +280,7 @@ export async function transmitirLote(competencia: string, opts: { budgetMs: numb
   // Todas, inclusive as já transmitidas. Quem já passou NESTA rodada (ultima_consulta
   // >= inicio, gravado em todo resultado, inclusive erro) não entra de novo.
   const { data, error } = await db().from("dctfweb").select("id, situacao, nao_transmitir, debito, ultima_consulta")
-    .eq("competencia", validarCompetencia(competencia)).eq("nao_transmitir", false)
+    .eq("competencia", validarCompetencia(competencia)).eq("nao_transmitir", false).not("obrigada", "is", false)
     .or(`ultima_consulta.is.null,ultima_consulta.lt.${opts.inicio}`).limit(2000);
   if (error) throw new Error(error.message);
   const elegiveis = (data ?? []).filter((l) => !motivoBloqueioTransmissao(l as never));
