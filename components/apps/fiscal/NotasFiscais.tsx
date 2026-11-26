@@ -15,14 +15,19 @@ interface Empresa {
   simples: { ok: boolean; aliquota: number | null; competencia: string | null; motivo?: string };
 }
 interface EmpresaLista { codigoempresa: number; nome: string; cnpj: string; regime: string; municipio: string; uf: string }
-interface Tomador { id: number; codigoempresa: number; doc: string | null; nome: string | null; padrao: boolean }
+interface Tomador { id: number; codigoempresa: number; doc: string | null; nome: string | null; padrao: boolean; descricao?: string | null; info_compl?: string | null }
+interface Grupo { id: number; nome: string }
 interface Cad {
   codigoempresa: number; nome: string; cnpj: string; regime: string | null;
-  grupo_codigo: number | null; grupo_nome: string | null;
+  grupo_codigo: number | null; grupo_nome: string | null; grupo_id?: number | null;
   c_trib_nac: string | null; c_trib_mun: string | null; c_nbs: string | null;
   descricao_padrao: string | null; info_compl_padrao: string | null; ativo: boolean;
   tomadores: Tomador[];
 }
+/** Descrição / inf. complementar: a do tomador escolhido, senão a padrão da empresa. */
+const textosDe = (c: Cad | undefined, tom: Tomador | undefined) => ({
+  descricao: tom?.descricao || c?.descricao_padrao || "", infoCompl: tom?.info_compl || c?.info_compl_padrao || "",
+});
 const ehMei = (r: string) => /MICRO\s*EMPREENDEDOR|\bMEI\b/i.test(r);
 
 interface NotaEmitida {
@@ -53,6 +58,7 @@ function agrupar<T>(itens: T[], chaveDe: (x: T) => number, nomeDe: (cod: number)
 export default function NotasFiscais() {
   const [lista, setLista] = useState<EmpresaLista[] | null>(null);
   const [cads, setCads] = useState<Cad[] | null>(null);
+  const [gruposCad, setGruposCad] = useState<Grupo[]>([]);
   const [busca, setBusca] = useState("");
   const [modo, setModo] = useModo("nfse-fiscal-modo");
   const [modoNotas, setModoNotas] = useModo("nfse-fiscal-modo-notas");
@@ -97,7 +103,7 @@ export default function NotasFiscais() {
         const nac = c?.c_trib_nac || j.empresa?.cTribNacSugerido || "";
         setF({
           ...FORM_VAZIO, data: hoje(), cTribNac: nac, cTribMun: c?.c_trib_mun ?? "", cNBS: c?.c_nbs || (SERV.get(nac)?.nbs[0] ?? ""),
-          descricao: c?.descricao_padrao ?? "", infoCompl: c?.info_compl_padrao ?? "",
+          ...textosDe(c, tom),
           tomadorDoc: tom?.doc ?? "", tomadorNome: tom?.nome ?? "",
         });
         setIdem(novaIdem(cod)); setEmitida(null); setErro("");
@@ -108,6 +114,7 @@ export default function NotasFiscais() {
   async function carregarCadastro() {
     const j = await fetch("/api/fiscal/nfse/cadastro").then((r) => r.json()).catch(() => ({}));
     setCads(j.empresas ?? []);
+    setGruposCad(j.grupos ?? []);
   }
   useEffect(() => {
     void carregar();
@@ -118,10 +125,10 @@ export default function NotasFiscais() {
 
   const t = semAcento(busca.trim()), dBusca = busca.replace(/\D/g, "");
   const cadsFiltrados = (cads ?? []).filter((c) => !t || String(c.codigoempresa) === dBusca || semAcento(c.nome).includes(t)
-    || semAcento(c.grupo_nome ?? "").includes(t) || (dBusca.length >= 3 && c.cnpj.includes(dBusca)));
+    || semAcento(c.grupo_nome ?? "").includes(t) || semAcento(gruposCad.find((g) => g.id === c.grupo_id)?.nome ?? "").includes(t) || (dBusca.length >= 3 && c.cnpj.includes(dBusca)));
   const grupos = useMemo(() => agrupar(cadsFiltrados, (c) => c.grupo_codigo ?? c.codigoempresa, (cod) => nomePorCod.get(cod) ?? `Empresa ${cod}`),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cads, busca, nomePorCod]);
+    [cads, busca, nomePorCod, gruposCad]);
 
   function abrirEmissao(cod: number) {
     setEmp(null); setAberta(true);
@@ -166,7 +173,7 @@ export default function NotasFiscais() {
     const c = cadPorCod.get(emp.codigoempresa);
     const tom = c?.tomadores.find((x) => x.padrao);
     setEmitida(null); setErro(""); setIdem(novaIdem(emp.codigoempresa));
-    setF((x) => ({ ...x, valor: "", tomadorDoc: tom?.doc ?? "", tomadorNome: tom?.nome ?? "", descricao: c?.descricao_padrao ?? x.descricao, infoCompl: c?.info_compl_padrao ?? "" }));
+    setF((x) => ({ ...x, valor: "", tomadorDoc: tom?.doc ?? "", tomadorNome: tom?.nome ?? "", ...textosDe(c, tom) }));
   }
 
   async function lancar(n: NotaEmitida) {
@@ -207,7 +214,7 @@ export default function NotasFiscais() {
   const linhaCad = (c: Cad, recuo = false): ReactNode[] => [
     <span key="c" style={recuo ? { paddingLeft: 22 } : undefined}>{c.codigoempresa}</span>,
     c.nome, fmtDoc(c.cnpj),
-    c.grupo_codigo ? `${c.grupo_codigo} - ${nomePorCod.get(c.grupo_codigo) ?? c.grupo_nome ?? ""}` : "—",
+    [gruposCad.find((g) => g.id === c.grupo_id)?.nome, c.grupo_codigo ? `${c.grupo_codigo} - ${nomePorCod.get(c.grupo_codigo) ?? c.grupo_nome ?? ""}` : ""].filter(Boolean).join(" › ") || "—",
     c.c_trib_nac ? fmtServ(c.c_trib_nac) : <span key="s" style={{ color: "var(--div)" }}>sem serviço</span>,
     c.tomadores.length ? `${c.tomadores.length}${c.tomadores.some((x) => x.padrao) ? " (com padrão)" : ""}` : "—",
     <span key="a" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
@@ -293,35 +300,66 @@ export default function NotasFiscais() {
             <>
               <div style={{ display: "flex", gap: 6, margin: "10px 0 8px", alignItems: "center" }}>
                 <span style={st.mut}>{grupos.length} grupo(s) · {cadsFiltrados.length} empresa(s)</span>
-                <button style={st.btn} onClick={() => setAbertos(new Set(grupos.map((g) => g.cod)))}>Expandir tudo</button>
+                <button style={st.btn} onClick={() => setAbertos(new Set([...grupos.map((g) => g.cod), ...gruposCad.map((x) => -x.id)]))}>Expandir tudo</button>
                 <button style={st.btn} onClick={() => setAbertos(new Set())}>Recolher tudo</button>
               </div>
-              {grupos.map((g) => {
-                const dono = cadPorCod.get(g.cod);
-                const filhos = g.filhos.filter((c) => c.codigoempresa !== g.cod);
-                return (
-                  <div key={g.cod} style={{ border: "1px solid var(--border)", borderRadius: 10, marginBottom: 8 }}>
-                    <Cabecalho aberto={abertos.has(g.cod)} alternar={() => alternar(g.cod)} titulo={`${g.cod} - ${g.nome}`}
-                      resumo={filhos.length ? `${filhos.length} profissional(is)` : "sem profissionais vinculados"}
-                      acoes={dono ? <>
-                        <button style={{ ...st.btnP, padding: "4px 10px" }} onClick={() => abrirEmissao(dono.codigoempresa)}>Emitir nota</button>
-                        <button style={{ ...st.btn, padding: "4px 10px" }} onClick={() => setEditando(dono)}>Editar</button>
-                      </> : <span style={st.mut}>não emite</span>} />
-                    {abertos.has(g.cod) && filhos.length > 0 && (
-                      <div style={{ padding: "0 8px 8px" }}>
-                        <Tabela cab={["Cód.", "Profissional", "CNPJ", "Pertence a", "Serviço", "Tomadores", ""]} linhas={filhos.map((c) => linhaCad(c, true))} />
+              {(() => {
+                // Nível 1: grupo com nome (ex.: Grupo OBDE). Nível 2: a empresa do grupo (ex.: o salão) com "+".
+                // Nível 3: os profissionais que pertencem a ela. Sem grupo com nome: como antes.
+                const cabecaGrupo = (g: typeof grupos[number]) => {
+                  const dono = cadPorCod.get(g.cod);
+                  const filhos = g.filhos.filter((c) => c.codigoempresa !== g.cod);
+                  return (
+                    <div key={g.cod} style={{ border: "1px solid var(--border)", borderRadius: 10, marginBottom: 8 }}>
+                      <Cabecalho aberto={abertos.has(g.cod)} alternar={() => alternar(g.cod)} titulo={`${g.cod} - ${g.nome}`}
+                        resumo={filhos.length ? `${filhos.length} profissional(is)` : "sem profissionais vinculados"}
+                        acoes={dono ? <>
+                          <button style={{ ...st.btnP, padding: "4px 10px" }} onClick={() => abrirEmissao(dono.codigoempresa)}>Emitir nota</button>
+                          <button style={{ ...st.btn, padding: "4px 10px" }} onClick={() => setEditando(dono)}>Editar</button>
+                        </> : <span style={st.mut}>não emite</span>} />
+                      {abertos.has(g.cod) && filhos.length > 0 && (
+                        <div style={{ padding: "0 8px 8px" }}>
+                          <Tabela cab={["Cód.", "Profissional", "CNPJ", "Pertence a", "Serviço", "Tomadores", ""]} linhas={filhos.map((c) => linhaCad(c, true))} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+                const familiaDe = (g: typeof grupos[number]) => cadPorCod.get(g.cod)?.grupo_id ?? g.filhos.find((c) => c.grupo_id)?.grupo_id ?? null;
+                const porFamilia = new Map<number, typeof grupos>();
+                const soltos: typeof grupos = [];
+                for (const g of grupos) { const fid = familiaDe(g); if (fid) porFamilia.set(fid, [...(porFamilia.get(fid) ?? []), g]); else soltos.push(g); }
+                const familias = gruposCad.filter((x) => porFamilia.has(x.id));
+                return <>
+                  {familias.map((fam) => {
+                    const membros = porFamilia.get(fam.id)!;
+                    const comFilhos = membros.filter((g) => g.filhos.some((c) => c.codigoempresa !== g.cod));
+                    const sozinhos = membros.filter((g) => !comFilhos.includes(g)).flatMap((g) => g.filhos);
+                    const total = membros.reduce((n, g) => n + g.filhos.length, 0);
+                    const k = -fam.id;
+                    return (
+                      <div key={`f${fam.id}`} style={{ border: "1px solid var(--accent)", borderRadius: 10, marginBottom: 10 }}>
+                        <Cabecalho aberto={abertos.has(k)} alternar={() => alternar(k)} titulo={fam.nome}
+                          resumo={`${comFilhos.length} empresa(s) com profissionais · ${total} cadastro(s)`} acoes={<span style={st.mut}>grupo</span>} />
+                        {abertos.has(k) && (
+                          <div style={{ padding: "0 8px 8px 22px" }}>
+                            {comFilhos.map(cabecaGrupo)}
+                            {sozinhos.length > 0 && <Tabela cab={["Cód.", "Empresa", "CNPJ", "Pertence a", "Serviço", "Tomadores", ""]} linhas={sozinhos.map((c) => linhaCad(c, true))} />}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                  {soltos.map(cabecaGrupo)}
+                </>;
+              })()}
             </>
           )}
       </div>}
 
       {editando && (
-        <CadastroModal inicial={editando} lista={lista ?? []} fechar={() => setEditando(null)}
-          salvo={(L) => { setCads(L); }} />
+        <CadastroModal inicial={editando} lista={lista ?? []} grupos={gruposCad} fechar={() => setEditando(null)}
+          salvo={(L, G) => { setCads(L); if (G) setGruposCad(G); }} />
       )}
 
       {cancelando && (
@@ -370,11 +408,12 @@ export default function NotasFiscais() {
                       <select style={st.input} value={cadPorCod.get(emp.codigoempresa)!.tomadores.find((x) => (x.doc ?? "") === f.tomadorDoc.replace(/\D/g, "") && (x.nome ?? "") === f.tomadorNome)?.id ?? ""}
                         onChange={(e) => {
                           const x = cadPorCod.get(emp.codigoempresa)!.tomadores.find((y) => String(y.id) === e.target.value);
-                          setF({ ...f, tomadorDoc: x?.doc ?? "", tomadorNome: x?.nome ?? "" });
+                          const c = cadPorCod.get(emp.codigoempresa);
+                          setF({ ...f, tomadorDoc: x?.doc ?? "", tomadorNome: x?.nome ?? "", ...(x ? textosDe(c, x) : {}) });
                         }}>
                         <option value="">— digitar outro / sem tomador —</option>
                         {cadPorCod.get(emp.codigoempresa)!.tomadores.map((x) => (
-                          <option key={x.id} value={x.id}>{x.nome || "(sem nome)"}{x.doc ? ` (${fmtDoc(x.doc)})` : ""}{x.padrao ? " · padrão" : ""}</option>
+                          <option key={x.id} value={x.id}>{x.nome || "(sem nome)"}{x.doc ? ` (${fmtDoc(x.doc)})` : x.nome ? "" : ""}{x.padrao ? " · padrão" : ""}{x.descricao ? " · descrição própria" : ""}</option>
                         ))}
                       </select>
                     </Campo>
@@ -512,10 +551,13 @@ function CancelarModal({ nota, nome, fechar, feito }: { nota: NotaEmitida; nome:
 }
 
 /** Cadastro da empresa emissora: busca no cadastro de empresas, serviço, textos padrão, grupo e tomadores. */
-function CadastroModal({ inicial, lista, fechar, salvo }: { inicial: Partial<Cad>; lista: EmpresaLista[]; fechar: () => void; salvo: (L: Cad[]) => void }) {
+function CadastroModal({ inicial, lista, grupos, fechar, salvo }: { inicial: Partial<Cad>; lista: EmpresaLista[]; grupos: Grupo[]; fechar: () => void; salvo: (L: Cad[], G?: Grupo[]) => void }) {
   const novo = !inicial.codigoempresa;
   const [c, setC] = useState<Partial<Cad>>(inicial);
-  const [tom, setTom] = useState({ doc: "", nome: "", padrao: false });
+  const TOM_VAZIO = { doc: "", nome: "", padrao: false, sem_tomador: false, descricao: "", info_compl: "" };
+  const [tom, setTom] = useState(TOM_VAZIO);
+  const [novoGrupo, setNovoGrupo] = useState<string | null>(null);
+  const [textos, setTextos] = useState<{ id: number; descricao: string; info_compl: string } | null>(null);
   const [msg, setMsg] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [salvoUmaVez, setSalvoUmaVez] = useState(!novo);
@@ -523,8 +565,10 @@ function CadastroModal({ inicial, lista, fechar, salvo }: { inicial: Partial<Cad
   const rotuloEmp = (cod: string) => { const e = porCod.get(Number(cod)); return e ? `${e.codigoempresa} - ${e.nome} (${fmtDoc(e.cnpj)})` : cod; };
   const opcoesEmp = (tx: string) => {
     const d = tx.replace(/\D/g, ""), s = semAcento(tx.trim());
+    // Código exato primeiro, depois código que começa com o digitado, depois nome/CNPJ (Enter pega o 1º).
+    const peso = (e: EmpresaLista) => (d && String(e.codigoempresa) === d ? 0 : d && String(e.codigoempresa).startsWith(d) ? 1 : 2);
     return lista.filter((e) => !s || String(e.codigoempresa).startsWith(d || "#") || semAcento(e.nome).includes(s) || (d.length >= 3 && e.cnpj.includes(d)))
-      .slice(0, 15).map((e) => String(e.codigoempresa));
+      .sort((a, b) => peso(a) - peso(b)).slice(0, 15).map((e) => String(e.codigoempresa));
   };
 
   async function enviar(corpo: Record<string, unknown>) {
@@ -533,7 +577,8 @@ function CadastroModal({ inicial, lista, fechar, salvo }: { inicial: Partial<Cad
       const r = await fetch("/api/fiscal/nfse/cadastro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
       const j = await r.json();
       if (!r.ok || !j.ok) { setMsg(j.error ?? `Erro ${r.status}`); return null; }
-      salvo(j.empresas);
+      salvo(j.empresas, j.grupos);
+      if (j.grupo) setC((v) => ({ ...v, grupo_id: j.grupo.id }));
       return j.empresas as Cad[];
     } catch (e) { setMsg(e instanceof Error ? e.message : "Falha."); return null; }
     finally { setOcupado(false); }
@@ -547,7 +592,7 @@ function CadastroModal({ inicial, lista, fechar, salvo }: { inicial: Partial<Cad
   }
   async function addTomador() {
     const L = await enviar({ acao: "tomador", codigoempresa: c.codigoempresa, ...tom });
-    if (L) { atualizarTomadores(L); setTom({ doc: "", nome: "", padrao: false }); }
+    if (L) { atualizarTomadores(L); setTom(TOM_VAZIO); }
   }
   async function remover() {
     if (!confirm(`Remover ${c.nome} da lista de emissão? (As notas já emitidas continuam no histórico.)`)) return;
@@ -567,7 +612,26 @@ function CadastroModal({ inicial, lista, fechar, salvo }: { inicial: Partial<Cad
         </div>
         {c.regime && !/MICROEMPRESA|PEQUENO PORTE/i.test(c.regime) && <p style={{ ...st.mut, color: "var(--div)", marginTop: 0 }}>Regime {c.regime}: {ehMei(c.regime) ? "MEI emite pelo Sistema MEI." : "por ora a emissão é só para o Simples Nacional."}</p>}
         <div style={linha("1fr")}>
-          <Campo label="Pertence a (empresa do grupo, ex.: o salão)">
+          <Campo label="Grupo (ex.: Grupo OBDE — não precisa ser cliente)">
+            {novoGrupo === null ? (
+              <div style={{ display: "flex", gap: 6 }}>
+                <select style={{ ...st.input, flex: 1 }} value={c.grupo_id ?? ""} onChange={(e) => setC((v) => ({ ...v, grupo_id: e.target.value ? Number(e.target.value) : null }))}>
+                  <option value="">Nenhum</option>
+                  {grupos.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
+                </select>
+                <button style={st.btn} onClick={() => setNovoGrupo("")}>+ Novo grupo</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <input style={{ ...st.input, flex: 1 }} autoFocus placeholder="Nome do grupo (ex.: Dao e Novadao)" value={novoGrupo} onChange={(e) => setNovoGrupo(e.target.value)} />
+                <button style={st.btnP} disabled={ocupado || !novoGrupo.trim()} onClick={async () => { if (await enviar({ acao: "grupo_criar", nome: novoGrupo })) setNovoGrupo(null); }}>Criar</button>
+                <button style={st.btn} onClick={() => setNovoGrupo(null)}>Cancelar</button>
+              </div>
+            )}
+          </Campo>
+        </div>
+        <div style={linha("1fr")}>
+          <Campo label="Pertence a (empresa do grupo, ex.: o salão — pode ser a própria empresa)">
             <div style={{ display: "flex", gap: 6 }}>
               <div style={{ flex: 1 }}>
                 <Busca valor={c.grupo_codigo ? String(c.grupo_codigo) : ""} rotulo={(cod) => (porCod.has(Number(cod)) ? rotuloEmp(cod) : `${cod} - ${c.grupo_nome ?? ""}`)} opcoes={opcoesEmp}
@@ -606,23 +670,48 @@ function CadastroModal({ inicial, lista, fechar, salvo }: { inicial: Partial<Cad
 
       <Secao titulo="Tomadores" dica={salvoUmaVez ? "O padrão já vem selecionado ao emitir" : "Salve a empresa para cadastrar tomadores"}>
         {(c.tomadores ?? []).length > 0 && (
-          <Tabela cab={["Tomador", "CPF/CNPJ", "Padrão", ""]} linhas={(c.tomadores ?? []).map((x) => [
-            x.nome || "(nome pela Receita)", x.doc ? fmtDoc(x.doc) : "—",
+          <Tabela cab={["Tomador", "CPF/CNPJ", "Descrição", "Padrão", ""]} linhas={(c.tomadores ?? []).map((x) => [
+            x.nome || "(nome pela Receita)", x.doc ? fmtDoc(x.doc) : "sem tomador",
+            <span key="d" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ ...st.mut, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={x.descricao ?? ""}>{x.descricao ? x.descricao : "padrão da empresa"}</span>
+              <button style={{ ...st.btn, padding: "3px 8px" }} disabled={ocupado} onClick={() => setTextos({ id: x.id, descricao: x.descricao ?? "", info_compl: x.info_compl ?? "" })}>Editar</button>
+            </span>,
             x.padrao ? <strong key="p" style={{ color: "var(--ok)" }}>padrão</strong>
               : <button key="p" style={{ ...st.btn, padding: "3px 8px" }} disabled={ocupado} onClick={async () => atualizarTomadores(await enviar({ acao: "tomador_padrao", id: x.id }))}>Tornar padrão</button>,
             <button key="r" style={{ ...st.btnD, padding: "3px 8px" }} disabled={ocupado} onClick={async () => { if (confirm("Remover este tomador?")) atualizarTomadores(await enviar({ acao: "tomador_remover", id: x.id })); }}>Remover</button>,
           ])} />
         )}
         {salvoUmaVez && (
-          <div style={{ ...linha("1fr 2fr auto auto"), alignItems: "end", marginTop: 8 }}>
-            <Campo label="CPF ou CNPJ"><input style={st.input} value={tom.doc} placeholder="Somente números" onChange={(e) => setTom({ ...tom, doc: e.target.value })} /></Campo>
-            <Campo label="Nome"><input style={st.input} value={tom.nome} placeholder="Para CNPJ pode ficar em branco" onChange={(e) => setTom({ ...tom, nome: e.target.value })} /></Campo>
-            <label style={{ ...st.mut, display: "flex", gap: 4, alignItems: "center", paddingBottom: 8 }}><input type="checkbox" checked={tom.padrao} onChange={(e) => setTom({ ...tom, padrao: e.target.checked })} /> padrão</label>
-            <button style={st.btn} disabled={ocupado} onClick={addTomador}>Adicionar</button>
+          <div style={{ marginTop: 8 }}>
+            <div style={{ ...linha("1fr 2fr auto auto"), alignItems: "end" }}>
+              <Campo label="CPF ou CNPJ"><input style={st.input} value={tom.doc} disabled={tom.sem_tomador} placeholder={tom.sem_tomador ? "sem tomador" : "Somente números"} onChange={(e) => setTom({ ...tom, doc: e.target.value })} /></Campo>
+              <Campo label="Nome"><input style={st.input} value={tom.nome} placeholder={tom.sem_tomador ? "Sem tomador" : "Para CNPJ pode ficar em branco"} onChange={(e) => setTom({ ...tom, nome: e.target.value })} /></Campo>
+              <label style={{ ...st.mut, display: "flex", gap: 4, alignItems: "center", paddingBottom: 8 }}><input type="checkbox" checked={tom.sem_tomador} onChange={(e) => setTom({ ...tom, sem_tomador: e.target.checked, doc: e.target.checked ? "" : tom.doc })} /> sem tomador</label>
+              <label style={{ ...st.mut, display: "flex", gap: 4, alignItems: "center", paddingBottom: 8 }}><input type="checkbox" checked={tom.padrao} onChange={(e) => setTom({ ...tom, padrao: e.target.checked })} /> padrão</label>
+            </div>
+            <div style={linha("1fr")}>
+              <Campo label="Descrição para este tomador (em branco = padrão da empresa)"><textarea style={{ ...st.input, minHeight: 50, resize: "vertical" }} value={tom.descricao} onChange={(e) => setTom({ ...tom, descricao: e.target.value })} /></Campo>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}><button style={st.btn} disabled={ocupado} onClick={addTomador}>Adicionar tomador</button></div>
           </div>
         )}
       </Secao>
 
+      {textos && (
+        <div style={{ ...st.card, marginTop: 8 }}>
+          <b style={{ fontSize: 13 }}>Textos deste tomador</b>
+          <div style={{ ...linha("1fr"), marginTop: 8 }}>
+            <Campo label="Descrição (em branco = padrão da empresa)"><textarea style={{ ...st.input, minHeight: 60, resize: "vertical" }} value={textos.descricao} onChange={(e) => setTextos({ ...textos, descricao: e.target.value })} /></Campo>
+          </div>
+          <div style={linha("1fr")}>
+            <Campo label="Informações complementares (em branco = padrão da empresa)"><textarea style={{ ...st.input, minHeight: 40, resize: "vertical" }} value={textos.info_compl} onChange={(e) => setTextos({ ...textos, info_compl: e.target.value })} /></Campo>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button style={st.btn} onClick={() => setTextos(null)}>Cancelar</button>
+            <button style={st.btnP} disabled={ocupado} onClick={async () => { const L = await enviar({ acao: "tomador_textos", ...textos }); if (L) { atualizarTomadores(L); setTextos(null); } }}>Salvar textos</button>
+          </div>
+        </div>
+      )}
       {msg && <p style={{ color: msg === "Salvo." ? "var(--ok)" : "var(--div)" }}>{msg}</p>}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
         <span>{!novo && <button style={st.btnD} disabled={ocupado} onClick={remover}>Remover da lista</button>}</span>
