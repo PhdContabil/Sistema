@@ -178,11 +178,12 @@ export async function cancelarNacional(p: { chave: string; cnpjAutor: string; am
   const motivo = p.xMotivo.trim();
   if (motivo.length < 15) throw new NacionalError("A justificativa do cancelamento precisa de pelo menos 15 caracteres.");
   if (p.cert.validade.getTime() < Date.now()) throw new NacionalError("Certificado A1 vencido.");
-  const id = `PRE${p.chave}101101001`;
+  // Id = PRE + chave (50) + tipo do evento (101101) = 59 caracteres (XSD 1.01: PRE[0-9]{56}).
+  const id = `PRE${p.chave}101101`;
   const desc = "Cancelamento de NFS-e";
   const xml = `<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.01"><infPedReg Id="${id}">`
     + `<tpAmb>${p.amb}</tpAmb><verAplic>NucleoFiscal1</verAplic><dhEvento>${dhEmiAgora()}</dhEvento>`
-    + `<CNPJAutor>${p.cnpjAutor}</CNPJAutor><chNFSe>${p.chave}</chNFSe><nPedRegEvento>1</nPedRegEvento>`
+    + `<CNPJAutor>${p.cnpjAutor}</CNPJAutor><chNFSe>${p.chave}</chNFSe>`
     + `<e101101><xDesc>${desc}</xDesc><cMotivo>${p.cMotivo}</cMotivo><xMotivo>${escXml(motivo.slice(0, 255))}</xMotivo></e101101>`
     + `</infPedReg></pedRegEvento>`;
   const assinado = assinar(xml, id, p.cert, "infPedReg");
