@@ -565,8 +565,10 @@ function CadastroModal({ inicial, lista, grupos, fechar, salvo }: { inicial: Par
   const rotuloEmp = (cod: string) => { const e = porCod.get(Number(cod)); return e ? `${e.codigoempresa} - ${e.nome} (${fmtDoc(e.cnpj)})` : cod; };
   const opcoesEmp = (tx: string) => {
     const d = tx.replace(/\D/g, ""), s = semAcento(tx.trim());
+    // Código exato primeiro, depois código que começa com o digitado, depois nome/CNPJ (Enter pega o 1º).
+    const peso = (e: EmpresaLista) => (d && String(e.codigoempresa) === d ? 0 : d && String(e.codigoempresa).startsWith(d) ? 1 : 2);
     return lista.filter((e) => !s || String(e.codigoempresa).startsWith(d || "#") || semAcento(e.nome).includes(s) || (d.length >= 3 && e.cnpj.includes(d)))
-      .slice(0, 15).map((e) => String(e.codigoempresa));
+      .sort((a, b) => peso(a) - peso(b)).slice(0, 15).map((e) => String(e.codigoempresa));
   };
 
   async function enviar(corpo: Record<string, unknown>) {
