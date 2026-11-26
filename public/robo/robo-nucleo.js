@@ -15,14 +15,15 @@ const { spawn, spawnSync } = require('child_process');
 const { preparar, codigoServico, hoje } = require('./emissor');
 const { guiaDAS } = require('./das');
 const { abrirEmailOutlook } = require('./outlook');
-const { abrirMediador } = require('./mediador');
+// Carregado só quando usado: se o arquivo faltar (instalação antiga), o resto do robô continua no ar.
+const abrirMediador = (...a) => require('./mediador').abrirMediador(...a);
 
 const PORTA = +(process.env.ROBO_PORTA || 3199);
 // Só o site do Núcleo manda comandos. localhost só com ROBO_DEV=1 (testes de desenvolvimento).
 const ORIGENS = ['https://system-contabilidade.vercel.app', 'https://system-contabilidade-git-dev-tecnologia-ph-d-s-projects.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
-const VERSAO = 14;
+const VERSAO = 15;
 const SITE_ROBO = 'https://system-contabilidade.vercel.app/robo';
 const ARQUIVOS = ['robo-nucleo.js', 'emissor.js', 'das.js', 'outlook.js', 'mediador.js', 'package.json', 'versao.txt'];
 
