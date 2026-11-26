@@ -6,6 +6,7 @@ import { ibgePorCep, cancelarNacional, NacionalError } from "@/lib/nfse/nacional
 import { carregarEmpresa } from "@/lib/nfse/empresas";
 import type { ConfigNacional, NotaNac } from "@/lib/nfse/nacional-formato";
 import { q } from "@/lib/mei/questor-mei";
+import { chaveEstab, decodificarEstab, fmtCodEstab } from "./estab";
 import { chamar } from "@/lib/mei/api";
 import { db, dig, hojeBR, tomadorDigitado, emitirPorProcuracao, SERIE_DPS, EMPRESA_CERT_PHD, type RespostaProcuracao } from "@/lib/nfse/procuracao";
 
@@ -30,7 +31,7 @@ export function cTribNacDaAtividadeMunic(cod: string): string {
 export interface EmpresaLista { codigoempresa: number; nome: string; cnpj: string; regime: string; municipio: string; uf: string }
 let cacheLista: { t: number; v: EmpresaLista[] } | null = null;
 
-/** Empresas ativas do Questor (matriz), por código — para a lista da tela. Cache de 10 min. */
+/** Empresas ativas do Questor por código — matriz e filiais (filial com código de emissão próprio, ver estab.ts). Cache de 10 min. */
 export async function listarEmpresasFiscal(): Promise<EmpresaLista[]> {
   if (cacheLista && Date.now() - cacheLista.t < 600_000) return cacheLista.v;
   const r = await q("/empresas/cadastro", { apenas_ativas: "true" });
@@ -38,9 +39,11 @@ export async function listarEmpresasFiscal(): Promise<EmpresaLista[]> {
   const vistos = new Set<number>();
   const v: EmpresaLista[] = [];
   for (const e of (r.json.dados ?? []) as Json[]) {
-    if (vistos.has(e.codigoempresa) || !(e.matriz || e.codigoestab === 1)) continue;
-    vistos.add(e.codigoempresa);
-    v.push({ codigoempresa: e.codigoempresa, nome: e.nomeestab || e.nomeempresa || "", cnpj: dig(e.inscrfederal), regime: String(e.regime ?? ""), municipio: e.nomemunic || "", uf: e.siglaestado || "" });
+    const estab = e.matriz ? 1 : Number(e.codigoestab) || 1;
+    const chave = chaveEstab(e.codigoempresa, estab);
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    v.push({ codigoempresa: chave, nome: e.nomeestab || e.nomeempresa || "", cnpj: dig(e.inscrfederal), regime: String(e.regime ?? ""), municipio: e.nomemunic || "", uf: e.siglaestado || "" });
   }
   v.sort((a, b) => a.codigoempresa - b.codigoempresa);
   cacheLista = { t: Date.now(), v };
@@ -48,15 +51,17 @@ export async function listarEmpresasFiscal(): Promise<EmpresaLista[]> {
 }
 
 /** Cadastro + situação no Simples (alíquota efetiva = % aproximado dos tributos na DPS). */
-export async function obterEmpresaFiscal(cod: number, competencia?: string): Promise<EmpresaFiscal> {
+export async function obterEmpresaFiscal(chave: number, competencia?: string): Promise<EmpresaFiscal> {
+  // "chave" é o código de emissão: o da empresa (matriz) ou o da filial (ver estab.ts).
+  const { codigoempresa: cod, codigoestab } = decodificarEstab(chave);
   const [c, s] = await Promise.all([
     q("/empresas/cadastro", { codigoempresa: cod, detalhado: "true" }),
     q(`/fiscal/simples/aliquotas/${cod}`),
   ]);
   if (c.status !== 200) throw new NacionalError(`Questor ${c.status} ao ler a empresa.`);
   const L: Json[] = c.json.dados ?? [];
-  const e: Json = L.find((x) => x.matriz || x.codigoestab === 1) ?? L[0];
-  if (!e) throw new NacionalError(`Empresa ${cod} não encontrada no Questor.`);
+  const e: Json = codigoestab > 1 ? L.find((x) => Number(x.codigoestab) === codigoestab) : (L.find((x) => x.matriz || x.codigoestab === 1) ?? L[0]);
+  if (!e) throw new NacionalError(`Empresa ${fmtCodEstab(chave)} não encontrada no Questor.`);
   const regime = String(e.regime ?? "");
   let simples: EmpresaFiscal["simples"] = { ok: false, aliquota: null, competencia: null, motivo: "Empresa fora do Simples Nacional (ou sem apuração no Questor)." };
   if (/\bMEI\b|MICRO\s*EMPREENDEDOR/i.test(regime)) simples.motivo = "Empresa MEI: emita pelo Sistema MEI.";
@@ -69,7 +74,7 @@ export async function obterEmpresaFiscal(cod: number, competencia?: string): Pro
       : { ok: false, aliquota: null, competencia: per?.competencia ?? null, motivo: "Sem alíquota efetiva do Simples no Questor para a competência." };
   }
   return {
-    codigoempresa: e.codigoempresa, nome: e.nomeestab || e.nomeempresa || "", cnpj: dig(e.inscrfederal), im: dig(e.inscrmunic),
+    codigoempresa: chave, nome: e.nomeestab || e.nomeempresa || "", cnpj: dig(e.inscrfederal), im: dig(e.inscrmunic),
     municipio: e.nomemunic || "", uf: e.siglaestado || "", cep: dig(e.cependerestab), regime, ativa: !!e.ativa,
     ativMunic: [e.codigoativmunic, e.descrativmunestab].filter(Boolean).join(" - "),
     cTribNacSugerido: cTribNacDaAtividadeMunic(e.codigoativmunic ?? ""), simples,
@@ -145,7 +150,7 @@ export async function lancarNoQuestor(id: number, email: string): Promise<{ ok: 
   if (n.questor_ok) return { ok: true, mensagem: "Esta nota já foi lançada no Questor." };
   const r = await chamar("POST", "/fiscal/nfse-saida", {
     corpo: {
-      codigoempresa: n.codigoempresa, data: n.dcompet, valor: Number(n.valor), numeronf: Number(n.nnfse), chave_acesso: n.chave_acesso,
+      ...decodificarEstab(n.codigoempresa), data: n.dcompet, valor: Number(n.valor), numeronf: Number(n.nnfse), chave_acesso: n.chave_acesso,
       tomador_doc: n.tomador_doc, tomador_nome: n.tomador_nome, ctribnac: n.ctribnac, descricao: n.descricao,
     },
     idempotencia: `fiscal-nfse-${n.chave_acesso}`, usuario: email, liberar: true,

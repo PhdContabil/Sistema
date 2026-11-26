@@ -7,6 +7,7 @@
 // salão). Em matriz, cada empresa do grupo abre com "+" e mostra os profissionais.
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import catalogo from "@/lib/nfse/catalogo-nfse.json";
+import { fmtCodEstab } from "@/lib/fiscal/estab";
 import { st, Campo, Tabela, Modal, brl, dt, fmtDoc } from "../mei/ui";
 
 interface Empresa {
@@ -124,7 +125,7 @@ export default function NotasFiscais() {
   }, []);
 
   const t = semAcento(busca.trim()), dBusca = busca.replace(/\D/g, "");
-  const cadsFiltrados = (cads ?? []).filter((c) => !t || String(c.codigoempresa) === dBusca || semAcento(c.nome).includes(t)
+  const cadsFiltrados = (cads ?? []).filter((c) => !t || String(c.codigoempresa) === dBusca || fmtCodEstab(c.codigoempresa) === busca.trim() || semAcento(c.nome).includes(t)
     || semAcento(c.grupo_nome ?? "").includes(t) || semAcento(gruposCad.find((g) => g.id === c.grupo_id)?.nome ?? "").includes(t) || (dBusca.length >= 3 && c.cnpj.includes(dBusca)));
   const grupos = useMemo(() => agrupar(cadsFiltrados, (c) => c.grupo_codigo ?? c.codigoempresa, (cod) => nomePorCod.get(cod) ?? `Empresa ${cod}`),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,9 +213,9 @@ export default function NotasFiscais() {
   const propsNotas = { nomes: nomePorCod, lancar, lancando, msgLanc, cancelar: setCancelando };
 
   const linhaCad = (c: Cad, recuo = false): ReactNode[] => [
-    <span key="c" style={recuo ? { paddingLeft: 22 } : undefined}>{c.codigoempresa}</span>,
+    <span key="c" style={recuo ? { paddingLeft: 22 } : undefined}>{fmtCodEstab(c.codigoempresa)}</span>,
     c.nome, fmtDoc(c.cnpj),
-    [gruposCad.find((g) => g.id === c.grupo_id)?.nome, c.grupo_codigo ? `${c.grupo_codigo} - ${nomePorCod.get(c.grupo_codigo) ?? c.grupo_nome ?? ""}` : ""].filter(Boolean).join(" › ") || "—",
+    [gruposCad.find((g) => g.id === c.grupo_id)?.nome, c.grupo_codigo ? `${fmtCodEstab(c.grupo_codigo)} - ${nomePorCod.get(c.grupo_codigo) ?? c.grupo_nome ?? ""}` : ""].filter(Boolean).join(" › ") || "—",
     c.c_trib_nac ? fmtServ(c.c_trib_nac) : <span key="s" style={{ color: "var(--div)" }}>sem serviço</span>,
     c.tomadores.length ? `${c.tomadores.length}${c.tomadores.some((x) => x.padrao) ? " (com padrão)" : ""}` : "—",
     <span key="a" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
@@ -272,7 +273,7 @@ export default function NotasFiscais() {
                   const total = g.filhos.filter((n) => n.status !== "cancelada").reduce((a, n) => a + Number(n.valor || 0), 0);
                   return (
                     <div key={g.cod} style={{ border: "1px solid var(--border)", borderRadius: 10, marginBottom: 8 }}>
-                      <Cabecalho aberto={abertos.has(g.cod)} alternar={() => alternar(g.cod)} titulo={`${g.cod} - ${g.nome}`} resumo={`${g.filhos.length} nota(s) · ${brl(total)}`} />
+                      <Cabecalho aberto={abertos.has(g.cod)} alternar={() => alternar(g.cod)} titulo={`${fmtCodEstab(g.cod)} - ${g.nome}`} resumo={`${g.filhos.length} nota(s) · ${brl(total)}`} />
                       {abertos.has(g.cod) && <div style={{ padding: "0 8px 8px" }}><TabelaNotas notas={g.filhos} {...propsNotas} /></div>}
                     </div>
                   );
@@ -311,7 +312,7 @@ export default function NotasFiscais() {
                   const filhos = g.filhos.filter((c) => c.codigoempresa !== g.cod);
                   return (
                     <div key={g.cod} style={{ border: "1px solid var(--border)", borderRadius: 10, marginBottom: 8 }}>
-                      <Cabecalho aberto={abertos.has(g.cod)} alternar={() => alternar(g.cod)} titulo={`${g.cod} - ${g.nome}`}
+                      <Cabecalho aberto={abertos.has(g.cod)} alternar={() => alternar(g.cod)} titulo={`${fmtCodEstab(g.cod)} - ${g.nome}`}
                         resumo={filhos.length ? `${filhos.length} profissional(is)` : "sem profissionais vinculados"}
                         acoes={dono ? <>
                           <button style={{ ...st.btnP, padding: "4px 10px" }} onClick={() => abrirEmissao(dono.codigoempresa)}>Emitir nota</button>
@@ -368,7 +369,7 @@ export default function NotasFiscais() {
       )}
 
       {aberta && (
-        <Modal titulo={emp ? `Emitir NFS-e — ${emp.codigoempresa} - ${emp.nome}` : "Emitir NFS-e"} fechar={fecharEmissao} largura={820}>
+        <Modal titulo={emp ? `Emitir NFS-e — ${fmtCodEstab(emp.codigoempresa)} - ${emp.nome}` : "Emitir NFS-e"} fechar={fecharEmissao} largura={820}>
           {!emp ? <p style={st.mut}>{info || "Buscando a empresa…"}</p> : (
             <>
               <p style={{ ...st.mut, marginTop: 0 }}>
@@ -491,7 +492,7 @@ function TabelaNotas({ notas, nomes, lancar, lancando, msgLanc, cancelar }: {
 }) {
   return (
     <Tabela cab={["Empresa", "Competência", "Emissão", "Nº NFS-e", "Tomador", "Valor", "Emitida por", "PDF", "Questor", ""]} linhas={notas.map((n) => [
-      `${n.codigoempresa}${nomes.get(n.codigoempresa) ? ` - ${nomes.get(n.codigoempresa)}` : ""}`, dt(n.dcompet), dt(n.criado_em),
+      `${fmtCodEstab(n.codigoempresa)}${nomes.get(n.codigoempresa) ? ` - ${nomes.get(n.codigoempresa)}` : ""}`, dt(n.dcompet), dt(n.criado_em),
       n.status === "incerta" ? "sem resposta — confira no portal" : (
         <span key="n">{n.nnfse ?? "—"}{n.status === "cancelada" && <><br /><span style={{ color: "var(--div)", fontSize: 12 }} title={n.cancel_motivo ?? ""}>CANCELADA em {dt(n.cancelada_em)}</span></>}</span>
       ),
@@ -527,7 +528,7 @@ function CancelarModal({ nota, nome, fechar, feito }: { nota: NotaEmitida; nome:
   }
   return (
     <Modal titulo={`Cancelar NFS-e nº ${nota.nnfse ?? ""}`} fechar={fechar} largura={560}>
-      <p style={{ ...st.mut, marginTop: 0 }}>{nota.codigoempresa} - {nome} · competência {dt(nota.dcompet)} · {brl(Number(nota.valor))}{nota.tomador_nome ? ` · ${nota.tomador_nome}` : ""}</p>
+      <p style={{ ...st.mut, marginTop: 0 }}>{fmtCodEstab(nota.codigoempresa)} - {nome} · competência {dt(nota.dcompet)} · {brl(Number(nota.valor))}{nota.tomador_nome ? ` · ${nota.tomador_nome}` : ""}</p>
       {nota.questor_ok && <p style={{ ...st.aviso, color: "var(--div)" }}>Esta nota já foi lançada no Questor: depois de cancelar, ajuste o lançamento lá.</p>}
       <div style={linha("1fr")}>
         <Campo label="Motivo *">
@@ -562,12 +563,13 @@ function CadastroModal({ inicial, lista, grupos, fechar, salvo }: { inicial: Par
   const [ocupado, setOcupado] = useState(false);
   const [salvoUmaVez, setSalvoUmaVez] = useState(!novo);
   const porCod = useMemo(() => new Map(lista.map((e) => [e.codigoempresa, e])), [lista]);
-  const rotuloEmp = (cod: string) => { const e = porCod.get(Number(cod)); return e ? `${e.codigoempresa} - ${e.nome} (${fmtDoc(e.cnpj)})` : cod; };
+  const rotuloEmp = (cod: string) => { const e = porCod.get(Number(cod)); return e ? `${fmtCodEstab(e.codigoempresa)} - ${e.nome} (${fmtDoc(e.cnpj)})` : cod; };
   const opcoesEmp = (tx: string) => {
     const d = tx.replace(/\D/g, ""), s = semAcento(tx.trim());
     // Código exato primeiro, depois código que começa com o digitado, depois nome/CNPJ (Enter pega o 1º).
-    const peso = (e: EmpresaLista) => (d && String(e.codigoempresa) === d ? 0 : d && String(e.codigoempresa).startsWith(d) ? 1 : 2);
-    return lista.filter((e) => !s || String(e.codigoempresa).startsWith(d || "#") || semAcento(e.nome).includes(s) || (d.length >= 3 && e.cnpj.includes(d)))
+    const cod = (e: EmpresaLista) => fmtCodEstab(e.codigoempresa);
+    const peso = (e: EmpresaLista) => (d && cod(e).replace("-", "") === d ? 0 : d && cod(e).startsWith(d) ? 1 : 2);
+    return lista.filter((e) => !s || cod(e).startsWith(d || "#") || cod(e) === tx.trim() || semAcento(e.nome).includes(s) || (d.length >= 3 && e.cnpj.includes(d)))
       .sort((a, b) => peso(a) - peso(b)).slice(0, 15).map((e) => String(e.codigoempresa));
   };
 
@@ -600,14 +602,14 @@ function CadastroModal({ inicial, lista, grupos, fechar, salvo }: { inicial: Par
   }
 
   return (
-    <Modal titulo={novo ? "Cadastrar empresa para emissão" : `Cadastro — ${c.codigoempresa} - ${c.nome}`} fechar={fechar} largura={820}>
+    <Modal titulo={novo ? "Cadastrar empresa para emissão" : `Cadastro — ${fmtCodEstab(c.codigoempresa)} - ${c.nome}`} fechar={fechar} largura={820}>
       <Secao titulo="Empresa">
         <div style={linha("1fr")}>
           <Campo label="Empresa (cadastro de empresas) *">
             {novo ? (
               <Busca valor={c.codigoempresa ? String(c.codigoempresa) : ""} rotulo={rotuloEmp} opcoes={opcoesEmp} placeholder="Digite o código, nome ou CNPJ"
                 escolher={(cod) => { const e = porCod.get(Number(cod))!; setC((v) => ({ ...v, codigoempresa: e.codigoempresa, nome: e.nome, cnpj: e.cnpj, regime: e.regime })); }} />
-            ) : <input style={st.input} disabled value={`${c.codigoempresa} - ${c.nome} (${fmtDoc(c.cnpj ?? "")})`} />}
+            ) : <input style={st.input} disabled value={`${fmtCodEstab(c.codigoempresa)} - ${c.nome} (${fmtDoc(c.cnpj ?? "")})`} />}
           </Campo>
         </div>
         {c.regime && !/MICROEMPRESA|PEQUENO PORTE/i.test(c.regime) && <p style={{ ...st.mut, color: "var(--div)", marginTop: 0 }}>Regime {c.regime}: {ehMei(c.regime) ? "MEI emite pelo Sistema MEI." : "por ora a emissão é só para o Simples Nacional."}</p>}
@@ -634,7 +636,7 @@ function CadastroModal({ inicial, lista, grupos, fechar, salvo }: { inicial: Par
           <Campo label="Pertence a (empresa do grupo, ex.: o salão — pode ser a própria empresa)">
             <div style={{ display: "flex", gap: 6 }}>
               <div style={{ flex: 1 }}>
-                <Busca valor={c.grupo_codigo ? String(c.grupo_codigo) : ""} rotulo={(cod) => (porCod.has(Number(cod)) ? rotuloEmp(cod) : `${cod} - ${c.grupo_nome ?? ""}`)} opcoes={opcoesEmp}
+                <Busca valor={c.grupo_codigo ? String(c.grupo_codigo) : ""} rotulo={(cod) => (porCod.has(Number(cod)) ? rotuloEmp(cod) : `${fmtCodEstab(Number(cod))} - ${c.grupo_nome ?? ""}`)} opcoes={opcoesEmp}
                   placeholder="Nenhuma — digite para vincular"
                   escolher={(cod) => { const e = porCod.get(Number(cod))!; setC((v) => ({ ...v, grupo_codigo: e.codigoempresa, grupo_nome: e.nome })); }} />
               </div>
