@@ -139,12 +139,22 @@ export async function marcarExcluido(codigoempresa: number, chaveQuestor: number
   if (error) console.error("[lucros-distribuidos/log]", error.message);
 }
 
-export async function listarLog(limite = 2000): Promise<LinhaLogLucro[]> {
+/** O Supabase devolve no máximo 1000 linhas por consulta (mesmo com .limit maior):
+ *  por isso o log é lido em páginas, até `limite` linhas, das mais novas para as mais antigas. */
+export async function listarLog(limite = 20000): Promise<LinhaLogLucro[]> {
   const sb = db();
   if (!sb) return [];
-  const { data, error } = await sb
-    .from("lucros_distribuidos_log").select("*")
-    .order("criado_em", { ascending: false }).limit(limite);
-  if (error) throw new Error(`Falha ao ler o log: ${error.message}`);
-  return (data ?? []) as LinhaLogLucro[];
+  const TAM = 1000;
+  const linhas: LinhaLogLucro[] = [];
+  while (linhas.length < limite) {
+    const { data, error } = await sb
+      .from("lucros_distribuidos_log").select("*")
+      .order("criado_em", { ascending: false }).order("id", { ascending: false })
+      .range(linhas.length, linhas.length + TAM - 1);
+    if (error) throw new Error(`Falha ao ler o log: ${error.message}`);
+    const lote = (data ?? []) as LinhaLogLucro[];
+    linhas.push(...lote);
+    if (lote.length < TAM) break;
+  }
+  return linhas.slice(0, limite);
 }

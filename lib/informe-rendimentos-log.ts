@@ -133,14 +133,24 @@ export async function registrarLog(l: {
   if (error) console.error("[informe-rendimentos/log]", error.message);
 }
 
-export async function listarLog(limite = 1000): Promise<LinhaLog[]> {
+/** O Supabase devolve no máximo 1000 linhas por consulta (mesmo com .limit maior):
+ *  por isso o log é lido em páginas, até `limite` linhas, das mais novas para as mais antigas. */
+export async function listarLog(limite = 20000): Promise<LinhaLog[]> {
   const sb = db();
   if (!sb) return [];
-  const { data, error } = await sb
-    .from("informe_rendimentos_log").select("*")
-    .order("criado_em", { ascending: false }).limit(limite);
-  if (error) throw new Error(`Falha ao ler o log: ${error.message}`);
-  return ((data ?? []) as Array<LinhaLog & { resposta?: unknown }>).map(({ resposta, ...l }) => ({
+  const TAM = 1000;
+  const brutas: Array<LinhaLog & { resposta?: unknown }> = [];
+  while (brutas.length < limite) {
+    const { data, error } = await sb
+      .from("informe_rendimentos_log").select("*")
+      .order("criado_em", { ascending: false }).order("id", { ascending: false })
+      .range(brutas.length, brutas.length + TAM - 1);
+    if (error) throw new Error(`Falha ao ler o log: ${error.message}`);
+    const lote = (data ?? []) as Array<LinhaLog & { resposta?: unknown }>;
+    brutas.push(...lote);
+    if (lote.length < TAM) break;
+  }
+  return brutas.slice(0, limite).map(({ resposta, ...l }) => ({
     ...l,
     editavel: ehStatusAtivo(l.status) && l.origem !== "access" && linhasDaResposta(resposta) !== null,
   }));
