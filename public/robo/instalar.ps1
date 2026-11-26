@@ -1,4 +1,4 @@
-# Instalador do Robô do Sistema MEI (chamado pelo instalar-robo-nucleo.bat).
+# Instalador do Robô do Nucleo (chamado pelo instalar-robo-nucleo.bat).
 # Instala tudo na pasta do usuário (%LOCALAPPDATA%\RoboNucleo), sem administrador:
 #   Node.js portátil, os arquivos do robô, o playwright-core e o início automático com o Windows.
 # Rodar de novo atualiza o robô.
@@ -33,7 +33,7 @@ if (-not (Test-Path $node)) {
 Get-CimInstance Win32_Process -Filter "name='node.exe'" | Where-Object { $_.CommandLine -match 'robo-nucleo\.js' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Seconds 1
 Write-Host '  [3/5] Baixando o robo...'
-foreach ($f in 'robo-nucleo.js','emissor.js','das.js','outlook.js','package.json','versao.txt') {
+foreach ($f in 'robo-nucleo.js','emissor.js','das.js','outlook.js','mediador.js','package.json','versao.txt') {
   Invoke-WebRequest "$Site/$f" -OutFile (Join-Path $Dir $f) -UseBasicParsing
 }
 
@@ -49,7 +49,7 @@ $startup = [Environment]::GetFolderPath('Startup')
 # Instalação antiga (manual) do robô: desativa para não brigar pela mesma porta.
 $antigo = Join-Path $startup 'Robo NFS-e Nucleo.vbs'
 if (Test-Path $antigo) { Rename-Item $antigo 'Robo NFS-e Nucleo.vbs.antigo' -Force }
-$vbs = Join-Path $startup 'Robo Sistema MEI.vbs'
+$vbs = Join-Path $startup 'Robo Nucleo.vbs'
 $conteudo = @"
 Set s = CreateObject("WScript.Shell")
 s.CurrentDirectory = "$Dir"
