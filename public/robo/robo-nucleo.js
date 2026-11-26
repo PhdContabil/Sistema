@@ -15,15 +15,16 @@ const { spawn, spawnSync } = require('child_process');
 const { preparar, codigoServico, hoje } = require('./emissor');
 const { guiaDAS } = require('./das');
 const { abrirEmailOutlook } = require('./outlook');
+const { abrirMediador } = require('./mediador');
 
 const PORTA = +(process.env.ROBO_PORTA || 3199);
 // Só o site do Núcleo manda comandos. localhost só com ROBO_DEV=1 (testes de desenvolvimento).
 const ORIGENS = ['https://system-contabilidade.vercel.app', 'https://system-contabilidade-git-dev-tecnologia-ph-d-s-projects.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
-const VERSAO = 13;
+const VERSAO = 14;
 const SITE_ROBO = 'https://system-contabilidade.vercel.app/robo';
-const ARQUIVOS = ['robo-nucleo.js', 'emissor.js', 'das.js', 'outlook.js', 'package.json', 'versao.txt'];
+const ARQUIVOS = ['robo-nucleo.js', 'emissor.js', 'das.js', 'outlook.js', 'mediador.js', 'package.json', 'versao.txt'];
 
 /** Versão publicada no site (versao.txt). */
 async function versaoNoSite() {
@@ -164,6 +165,26 @@ const servidor = http.createServer(async (req, res) => {
         onPage: (ctx) => { job.ctx = ctx; ctx.on('close', () => { if (ATIVOS.includes(job.status)) { job.status = 'fechada'; } }); },
       };
       guiaDAS(job, c, ctl).catch((e) => { job.status = 'erro'; job.erro = e.message; });
+      return send(res, 201, publico(job));
+    }
+    if (req.method === 'POST' && u.pathname === '/mediador') {
+      // Consulta de convenções/acordos/aditivos no Mediador: preenche e PARA (reCAPTCHA: quem pesquisa é a pessoa).
+      const chunks = []; for await (const c of req) chunks.push(c);
+      const b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cnpj = String(b.cnpj || '').replace(/\D/g, '');
+      if (!(cnpj.length === 14 || String(b.nome || '').trim())) return send(res, 422, { erro: 'Informe o CNPJ ou o nome do sindicato.' });
+      if ([...jobs.values()].some((j) => ATIVOS.includes(j.status) && j.tipo === 'mediador')) return send(res, 422, { erro: 'já existe uma consulta do Mediador aberta — feche a janela ou cancele' });
+      const id = 'M' + Date.now().toString(36).toUpperCase();
+      const job = { id, tipo: 'mediador', nome: b.nome || '', cnpj, usuario: b.usuario || '', status: 'preparando', passos: [], criado: new Date().toISOString() };
+      jobs.set(id, job);
+      const ctl = {
+        log: (msg) => job.passos.push({ t: new Date().toISOString(), msg }),
+        setStatus: (s) => { job.status = s; },
+        cancelado: () => job.cancel === true,
+        setPrint: (b64) => { job.printB64 = b64; },
+        onPage: (ctx) => { job.ctx = ctx; ctx.on('close', () => { if (ATIVOS.includes(job.status)) { job.status = 'fechada'; } }); },
+      };
+      abrirMediador(job, b, ctl).catch((e) => { job.status = 'erro'; job.erro = e.message; });
       return send(res, 201, publico(job));
     }
     if (req.method === 'POST' && u.pathname === '/email') {
