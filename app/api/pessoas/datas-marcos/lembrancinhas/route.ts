@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const q = await quemEstaAqui();
   if (!q.email) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  if (!q.controle) return NextResponse.json({ error: "Só Julia Rodrigues e Junior marcam as lembrancinhas." }, { status: 403 });
+  if (!q.controle) return NextResponse.json({ error: "Só Julia Rodrigues, Junior e a T.I. marcam as lembrancinhas." }, { status: 403 });
 
   let b: { pessoa_id?: number; anos?: number; campo?: string; valor?: boolean };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }

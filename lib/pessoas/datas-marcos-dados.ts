@@ -11,7 +11,7 @@ export interface QuemEstaAqui {
   email: string;
   /** Vê as abas de RH: Experiência, Datas e campanhas e Lembretes. */
   rh: boolean;
-  /** Marca e vê o controle das lembrancinhas de tempo de casa. */
+  /** Lembrancinhas, avaliações e histórico de experiência (dado sensível): Julia Rodrigues, Junior e T.I. */
   controle: boolean;
 }
 
@@ -26,10 +26,10 @@ export async function quemEstaAqui(): Promise<QuemEstaAqui> {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase() ?? "";
   if (!email) return { email: "", rh: false, controle: false };
-  const controle = RESPONSAVEIS_CONTROLE.includes(email);
-  if (ehApoioGestaoPessoas(email)) return { email, rh: true, controle };
-
   const nivel = await obterNivelAcesso(email).catch(() => null);
+  // Julia Rodrigues e Junior cuidam do controle; a T.I. tem acesso a tudo.
+  const controle = RESPONSAVEIS_CONTROLE.includes(email) || Boolean(nivel?.ti);
+  if (ehApoioGestaoPessoas(email)) return { email, rh: true, controle };
   if (nivel?.acessoTotal) return { email, rh: true, controle };
 
   const sb = admin();

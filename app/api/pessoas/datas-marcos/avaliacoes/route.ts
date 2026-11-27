@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(req: Request) {
   const q = await quemEstaAqui();
   if (!q.email) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  if (!q.controle) return NextResponse.json({ error: "Só Julia Rodrigues e Junior registram a decisão." }, { status: 403 });
+  if (!q.controle) return NextResponse.json({ error: "Só Julia Rodrigues, Junior e a T.I. registram a decisão." }, { status: 403 });
   let b: { id?: number; decisao?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Dados inválidos." }, { status: 400 }); }
   if (!Number.isInteger(b.id) || !(String(b.decisao) in RECOMENDACOES)) return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });
