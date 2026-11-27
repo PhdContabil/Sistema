@@ -87,8 +87,12 @@ function lerNota(xml: string, cnpj: string) {
 /**
  * Lê as notas a partir do NSU informado, até acabar ou até o tempo da função
  * apertar. Quem chama repete com `proximoNsu` enquanto `incompleto` for true.
+ * `ate` (AAAA-MM-DD): o ADN entrega em ordem de chegada; quando uma página
+ * inteira já é de notas emitidas mais de 45 dias depois do fim do período, para.
  */
-export async function capturarNotas(cnpjEntrada: string, nsuInicial = 0, orcamentoMs = 45_000) {
+export async function capturarNotas(cnpjEntrada: string, nsuInicial = 0, orcamentoMs = 45_000, ate = "") {
+  const limite = /^d{4}-d{2}-d{2}$/.test(ate) ? new Date(Date.parse(ate) + 45 * 864e5).toISOString().slice(0, 10) : "";
+  let passou = false;
   const cnpj = dig(cnpjEntrada);
   if (cnpj.length !== 14) throw new NacionalError("CNPJ inválido.");
   const { cert } = await carregarEmpresa(EMPRESA_CERT_PHD);
@@ -108,7 +112,7 @@ export async function capturarNotas(cnpjEntrada: string, nsuInicial = 0, orcamen
     }
     const lote = (campo(r.json, "LoteDFe") ?? []) as Record<string, unknown>[];
     if (!lote.length) break;
-    let maior = nsu;
+    let maior = nsu, notasPag = 0, dentro = 0;
     for (const d of lote) {
       const n = Number(campo(d, "NSU") ?? 0);
       if (n > maior) maior = n;
@@ -123,13 +127,17 @@ export async function capturarNotas(cnpjEntrada: string, nsuInicial = 0, orcamen
         continue;
       }
       if (!/<(?:\w+:)?infNFSe/.test(xml)) continue;
-      notas.push({ nsu: n, chave: dig(chave), cancelada: false, xml_gz: gz, ...lerNota(xml, cnpj) });
+      const nota = { nsu: n, chave: dig(chave), cancelada: false, xml_gz: gz, ...lerNota(xml, cnpj) };
+      notasPag++;
+      if (!limite || !nota.emissao || nota.emissao <= limite) dentro++;
+      notas.push(nota);
     }
+    if (limite && notasPag > 0 && dentro === 0) { passou = true; break; }
     if (maior < nsu) break;
     nsu = maior + 1;
     if (lote.length < 50) break;
   }
-  return { notas, canceladas, proximoNsu: nsu, incompleto };
+  return { notas, canceladas, proximoNsu: nsu, incompleto: incompleto && !passou };
 }
 
 /** PDF de uma nota consultada: DANFSe oficial do ADN; se falhar, gerado do XML. */

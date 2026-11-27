@@ -27,6 +27,9 @@ function baixar(nome: string, blob: Blob) {
   a.href = URL.createObjectURL(blob); a.download = nome; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Padrão: mês anterior inteiro. */
+const mesAnterior = () => { const h = new Date(); return { de: iso(new Date(h.getFullYear(), h.getMonth() - 1, 1)), ate: iso(new Date(h.getFullYear(), h.getMonth(), 0)) }; };
 const nomeXml = (n: Nota) => `NFSe-${n.tipo}-${n.numero || n.chave.slice(-10)}-${n.chave}.xml`;
 
 export default function ConsultaNotas() {
@@ -41,7 +44,10 @@ export default function ConsultaNotas() {
   const [msg, setMsg] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [ocupado, setOcupado] = useState("");
-  const [f, setF] = useState({ tipo: "", competencia: "", campo: "competencia", de: "", ate: "", texto: "", situacao: "validas" });
+  const [per, setPer] = useState({ campo: "competencia", ...mesAnterior() });
+  /** Período da última consulta (o que está na tela). */
+  const [perConsultado, setPerConsultado] = useState<typeof per | null>(null);
+  const [f, setF] = useState({ tipo: "", texto: "", situacao: "validas" });
 
   const carregarEmpresas = () => fetch("/api/fiscal/nfse/consulta?acao=empresas").then((r) => r.json()).then((j) => setEmpresas(j.empresas ?? [])).catch(() => setEmpresas([]));
   useEffect(() => { void carregarEmpresas(); }, []);
@@ -63,14 +69,19 @@ export default function ConsultaNotas() {
     if (r.ok) { setEmpresas(j.empresas ?? []); if (emp?.codigoempresa === e.codigoempresa) { setEmp(null); setNotas([]); } }
   }
 
-  async function consultar(e: EmpresaCons) {
-    setEmp(e); setNotas([]); setSel(new Set()); setErro(""); setMsg("");
+  function escolher(e: EmpresaCons) { setEmp(e); setNotas([]); setPerConsultado(null); setSel(new Set()); setErro(""); setMsg(""); }
+
+  async function consultar() {
+    const e = emp;
+    if (!e) return;
+    if (!per.de || !per.ate || per.de > per.ate) { setErro("Informe o período (De e Até)."); return; }
+    setPerConsultado(per); setNotas([]); setSel(new Set()); setErro(""); setMsg("");
     const todas: Nota[] = []; const canc = new Set<string>();
     let nsu = 0;
     try {
       for (let volta = 0; volta < 40; volta++) {
         setCarregando(`Lendo o Portal Nacional… ${todas.length} nota(s)`);
-        const r = await fetch(`/api/fiscal/nfse/consulta?cnpj=${e.cnpj}&nsu=${nsu}`);
+        const r = await fetch(`/api/fiscal/nfse/consulta?cnpj=${e.cnpj}&nsu=${nsu}&ate=${per.ate}`);
         const j = await r.json();
         if (!r.ok) { setErro(j.error ?? `Erro ${r.status}`); break; }
         todas.push(...(j.notas as Nota[]));
@@ -87,15 +98,15 @@ export default function ConsultaNotas() {
     if (f.tipo && n.tipo !== f.tipo) return false;
     if (f.situacao === "validas" && n.cancelada) return false;
     if (f.situacao === "canceladas" && !n.cancelada) return false;
-    if (f.competencia && n.competencia.slice(0, 7) !== f.competencia) return false;
-    const ref = f.campo === "emissao" ? n.emissao : n.competencia;
-    if (f.de && ref < f.de) return false;
-    if (f.ate && ref > f.ate) return false;
+    if (perConsultado) {
+      const ref = perConsultado.campo === "emissao" ? n.emissao : n.competencia;
+      if (ref < perConsultado.de || ref > perConsultado.ate) return false;
+    }
     const t = semAcento(f.texto.trim()), d = f.texto.replace(/\D/g, "");
     if (t && !(semAcento(n.prestador_nome).includes(t) || semAcento(n.tomador_nome).includes(t) || semAcento(n.descricao).includes(t)
       || (d.length >= 3 && (n.prestador_doc.includes(d) || n.tomador_doc.includes(d) || n.numero === d)))) return false;
     return true;
-  }).sort((a, b) => (b.emissao + b.numero).localeCompare(a.emissao + a.numero)), [notas, f]);
+  }).sort((a, b) => (b.emissao + b.numero).localeCompare(a.emissao + a.numero)), [notas, f, perConsultado]);
 
   const soma = (L: Nota[]) => L.reduce((a, n) => a + Number(n.valor || 0), 0);
   const emi = filtradas.filter((n) => n.tipo === "emitida" && !n.cancelada), rec = filtradas.filter((n) => n.tipo === "recebida" && !n.cancelada);
@@ -166,7 +177,7 @@ export default function ConsultaNotas() {
         <Tabela cab={["Cód.", "Empresa", "CNPJ", ""]} linhas={empresas.map((e) => [
           e.codigoempresa, e.nome, fmtDoc(e.cnpj),
           <span key="a" style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
-            <button style={{ ...st.btnP, padding: "4px 10px" }} disabled={!!carregando} onClick={() => consultar(e)}>{emp?.codigoempresa === e.codigoempresa && carregando ? "Consultando…" : "Consultar notas"}</button>
+            <button style={{ ...(emp?.codigoempresa === e.codigoempresa ? st.btnP : st.btn), padding: "4px 10px" }} disabled={!!carregando} onClick={() => escolher(e)}>{emp?.codigoempresa === e.codigoempresa ? "Selecionada" : "Selecionar"}</button>
             <button style={{ ...st.btn, padding: "4px 10px" }} onClick={() => remover(e)}>Remover</button>
           </span>,
         ])} />
@@ -175,8 +186,20 @@ export default function ConsultaNotas() {
       {emp && (
         <div style={st.card}>
           <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>{emp.codigoempresa} - {emp.nome} · {fmtDoc(emp.cnpj)}</h3>
+          <div style={{ ...st.bar, paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+            <Campo label="Período por"><select style={st.input} value={per.campo} onChange={(e) => setPer({ ...per, campo: e.target.value })}>
+              <option value="competencia">Data de competência</option><option value="emissao">Data de emissão</option></select></Campo>
+            <Campo label="Competência (atalho)"><input type="month" style={st.input} value={per.de.slice(0, 7) === per.ate.slice(0, 7) ? per.de.slice(0, 7) : ""}
+              onChange={(e) => { const [a, m] = e.target.value.split("-").map(Number); if (a && m) setPer({ ...per, de: iso(new Date(a, m - 1, 1)), ate: iso(new Date(a, m, 0)) }); }} /></Campo>
+            <Campo label="De"><input type="date" style={st.input} value={per.de} onChange={(e) => setPer({ ...per, de: e.target.value })} /></Campo>
+            <Campo label="Até"><input type="date" style={st.input} value={per.ate} onChange={(e) => setPer({ ...per, ate: e.target.value })} /></Campo>
+            <button style={st.btnP} disabled={!!carregando} onClick={consultar}>{carregando ? "Consultando…" : "Consultar"}</button>
+          </div>
           {carregando && <p style={st.mut}>{carregando}</p>}
+          {!perConsultado && !carregando && <p style={st.mut}>Escolha o período e clique em Consultar.</p>}
           {erro && <p style={{ color: "var(--div)" }}>{erro}</p>}
+          {perConsultado && <>
+          <p style={{ ...st.mut, margin: "10px 0" }}>Período consultado: {perConsultado.campo === "emissao" ? "emissão" : "competência"} de {dt(perConsultado.de)} a {dt(perConsultado.ate)}</p>
           <div style={{ ...st.grid, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
             {card("Emitidas", emi.length, soma(emi), "var(--ok)")}
             {card("Recebidas", rec.length, soma(rec), "var(--accent)")}
@@ -185,11 +208,6 @@ export default function ConsultaNotas() {
           <div style={st.bar}>
             <Campo label="Tipo"><select style={st.input} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })}>
               <option value="">Emitidas e recebidas</option><option value="emitida">Emitidas</option><option value="recebida">Recebidas</option></select></Campo>
-            <Campo label="Competência"><input type="month" style={st.input} value={f.competencia} onChange={(e) => setF({ ...f, competencia: e.target.value })} /></Campo>
-            <Campo label="Período por"><select style={st.input} value={f.campo} onChange={(e) => setF({ ...f, campo: e.target.value })}>
-              <option value="competencia">Data de competência</option><option value="emissao">Data de emissão</option></select></Campo>
-            <Campo label="De"><input type="date" style={st.input} value={f.de} onChange={(e) => setF({ ...f, de: e.target.value })} /></Campo>
-            <Campo label="Até"><input type="date" style={st.input} value={f.ate} onChange={(e) => setF({ ...f, ate: e.target.value })} /></Campo>
             <Campo label="Situação"><select style={st.input} value={f.situacao} onChange={(e) => setF({ ...f, situacao: e.target.value })}>
               <option value="validas">Válidas</option><option value="canceladas">Canceladas</option><option value="">Todas</option></select></Campo>
             <Campo label="Busca" largura={220}><input style={st.input} placeholder="Nome, CNPJ, nº, descrição" value={f.texto} onChange={(e) => setF({ ...f, texto: e.target.value })} /></Campo>
@@ -216,6 +234,7 @@ export default function ConsultaNotas() {
               </span>,
             ]),
           ]} />
+          </>}
         </div>
       )}
 
