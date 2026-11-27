@@ -1,20 +1,18 @@
-// Robô do Núcleo Contábil — roda no PC de quem usa (precisa do Google Chrome).
-// O Núcleo (system-contabilidade.vercel.app) chama este serviço em http://localhost:3199 para:
-//   • /das       — abrir a guia DAS do MEI no PGMEI (Sistema MEI › Tarefas);
-//   • /email     — abrir o Outlook com a mensagem e os anexos (O.S. do Paralegal e do MEI);
-//   • /mediador  — preencher a consulta de convenções/acordos/aditivos no Mediador (Trabalhista).
-// O robô nunca finaliza nada sozinho: quem envia, pesquisa ou paga é a pessoa.
+// Robô NFS-e do Núcleo Contábil — roda no PC de quem emite (precisa do Google Chrome).
+// O Núcleo (system-contabilidade.vercel.app) chama este serviço em http://localhost:3199
+// para abrir o Emissor Nacional, fazer login e PREENCHER a nota — igual ao botão "Salvar" do
+// form emitirnota do Access. O robô PARA antes de emitir: quem clica em "Emitir" é a pessoa.
 //
 //   node robo-nucleo.js        (ou iniciar-robo-nucleo.bat)
 //
 // Segurança: só escuta em 127.0.0.1, só aceita chamadas da origem do Núcleo e não grava senha
-// em disco (a senha chega do Núcleo quando precisa e fica só na memória).
+// em disco (a senha chega do Núcleo a cada emissão e fica só na memória).
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
-const { hoje } = require('./emissor');
+const { preparar, codigoServico, hoje } = require('./emissor');
 const { guiaDAS } = require('./das');
 const { abrirEmailOutlook } = require('./outlook');
 // Carregado só quando usado: se o arquivo faltar (instalação antiga), o resto do robô continua no ar.
@@ -25,7 +23,7 @@ const PORTA = +(process.env.ROBO_PORTA || 3199);
 const ORIGENS = ['https://system-contabilidade.vercel.app', 'https://system-contabilidade-git-dev-tecnologia-ph-d-s-projects.vercel.app', ...(process.env.ROBO_DEV === '1' ? ['http://localhost:3000'] : [])];
 const jobs = new Map();
 const ATIVOS = ['preparando', 'login', 'aguardando_login', 'preenchendo', 'aguardando_confirmacao'];
-const VERSAO = 16;
+const VERSAO = 17;
 const SITE_ROBO = 'https://system-contabilidade.vercel.app/robo';
 const ARQUIVOS = ['robo-nucleo.js', 'emissor.js', 'das.js', 'outlook.js', 'mediador.js', 'package.json', 'versao.txt'];
 
@@ -101,7 +99,7 @@ const servidor = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, versao: VERSAO, hoje: hoje(), jobs: [...jobs.values()].slice(-20).map(publico) });
     }
     if (req.method === 'POST' && u.pathname === '/atualizar') {
-      if ([...jobs.values()].some((j) => ATIVOS.includes(j.status))) return send(res, 409, { erro: 'Tem um robô em andamento: termine ou cancele antes de atualizar.' });
+      if ([...jobs.values()].some((j) => ATIVOS.includes(j.status))) return send(res, 409, { erro: 'Tem uma emissão em andamento: termine ou cancele antes de atualizar.' });
       const r = await atualizarRobo();
       return send(res, r.ok ? 200 : 500, r);
     }
@@ -117,6 +115,38 @@ const servidor = http.createServer(async (req, res) => {
       j.cancel = true; try { if (j.ctx) await j.ctx.close(); } catch {}
       if (ATIVOS.includes(j.status)) j.status = 'cancelada';
       return send(res, 200, publico(j));
+    }
+    if (req.method === 'POST' && u.pathname === '/preparar') {
+      const chunks = []; for await (const c of req) chunks.push(c);
+      const b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const erros = [];
+      if (!(+b.cod > 0)) erros.push('MEI inválido');
+      if (!(+b.valor > 0)) erros.push('valor inválido');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data || '')) erros.push('data inválida'); else if (b.data > hoje()) erros.push('data futura não permitida');
+      const tom = String(b.tomadorCnpj || '').replace(/\D/g, '');
+      if (tom && !(tom.length === 14 || tom.length === 11)) erros.push('CNPJ/CPF do tomador (salão) inválido'); // vazio = sem tomador
+      if ([...jobs.values()].some((j) => ATIVOS.includes(j.status))) erros.push('já existe uma emissão em andamento — conclua ou cancele');
+      if (erros.length) return send(res, 422, { erro: erros.join(' · ') });
+      const id = 'E' + Date.now().toString(36).toUpperCase();
+      const job = {
+        id, cod: +b.cod, razao: b.razao || '', data: b.data, valor: +b.valor, tomadorCnpj: tom,
+        descricao: String(b.descricao || '').slice(0, 2000), municipio: b.municipio || '', uf: b.uf || '',
+        codigoativmunic: b.codigoativmunic || '', servicoBusca: b.servicoBusca || codigoServico(b.codigoativmunic || ''),
+        usuario: b.usuario || '', status: 'preparando', passos: [], criado: new Date().toISOString(),
+        creds: b.creds || null,
+      };
+      jobs.set(id, job);
+      const ctl = {
+        log: (msg) => job.passos.push({ t: new Date().toISOString(), msg }),
+        setStatus: (s) => { job.status = s; },
+        cancelado: () => job.cancel === true,
+        setPrint: (b64) => { job.printB64 = b64; },
+        onPage: (ctx) => { job.ctx = ctx; ctx.on('close', () => { if (job.status === 'aguardando_confirmacao') { job.status = 'fechada'; job.passos.push({ t: new Date().toISOString(), msg: 'Janela do Chrome fechada.' }); } }); },
+      };
+      preparar(job, job.creds, ctl)
+        .catch((e) => { job.status = 'erro'; job.erro = e.message; })
+        .finally(() => { job.creds = null; });   // descarta a senha da memória
+      return send(res, 201, publico(job));
     }
     if (req.method === 'POST' && u.pathname === '/das') {
       const chunks = []; for await (const c of req) chunks.push(c);
@@ -176,4 +206,4 @@ servidor.on('error', (e) => {
   if (e.code === 'EADDRINUSE' && tentativasPorta++ < 30) return setTimeout(() => servidor.listen(PORTA, '127.0.0.1'), 1000);
   console.error(e); process.exit(1);
 });
-servidor.listen(PORTA, '127.0.0.1', () => console.log(`Robô do Núcleo v${VERSAO} em http://localhost:${PORTA} (deixe esta janela aberta)`));
+servidor.listen(PORTA, '127.0.0.1', () => console.log(`Robô NFS-e do Núcleo v${VERSAO} em http://localhost:${PORTA} (deixe esta janela aberta)`));

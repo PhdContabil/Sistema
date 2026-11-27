@@ -4,6 +4,7 @@
 // relatório rel_notas e a tela de emissão (emitirnota).
 import { useEffect, useMemo, useState } from "react";
 import { api, ler, st, Tabela, Campo, Modal, SelectSalao, baixarCsv, imprimir, esc, brl, dt, primeiroDiaMes, ultimoDiaMes, hojeISO, mensagemErro, AVULSO, fmtDoc, type Mei } from "./ui";
+import NotasRobo, { EmitirNota as EmitirNotaRobo } from "./NotasRobo";
 
 export interface Nota { codigoempresa: number; nome: string; cnpj: string; chave: number; codigopessoa: number | null; numeronf: number; especienf: string; serienf: string | null; datalctofis: string; valorcontabil: number; usuario?: string }
 const limpo = (s: string) => String(s ?? "").replace(/[\r\n]+\d*\s*$/g, "").replace(/[\r\n]+/g, " ").trim();
@@ -16,7 +17,7 @@ const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 /** Data de baixa do profissional (31/12/2100 = sem baixa). */
 const baixaDe = (m: Mei): string | null => (m.fim && m.fim.slice(0, 10) < "2100-01-01" ? m.fim.slice(0, 10) : null);
 
-export default function Notas({ mei }: { mei: Mei[] }) {
+function NotasApi({ mei }: { mei: Mei[] }) {
   const [de, setDe] = useState(primeiroDiaMes());
   const [ate, setAte] = useState(ultimoDiaMes());
   const [sal, setSal] = useState(String(AVULSO));
@@ -105,7 +106,7 @@ export default function Notas({ mei }: { mei: Mei[] }) {
           {notas && <p style={{ textAlign: "right", fontWeight: 600 }}>Total{filtroTom ? (filtroTom === "sem" ? " (sem tomador)" : " (com tomador)") : ""}: {brl(total)}</p>}
         </div>
       </div>
-      {emitir && <EmitirNota m={emitir} data={ate} fechar={() => setEmitir(null)} />}
+      {emitir && <EmitirNotaApi m={emitir} data={ate} fechar={() => setEmitir(null)} />}
       {corrigir && <CorrigirNota n={corrigir} m={porCod.get(corrigir.codigoempresa)} fechar={() => setCorrigir(null)}
         alterada={(nova) => setNotas((L) => (L ?? []).flatMap((x) => x.codigoempresa === corrigir.codigoempresa && x.chave === corrigir.chave ? (nova ? [nova] : []) : [x]))} />}
     </div>
@@ -131,7 +132,7 @@ function tomadorDoc(m: { salaoCod?: number | null; salaoCnpj?: string }): string
   return d;
 }
 
-export function EmitirNota({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
+function EmitirNotaApi({ m, data, fechar }: { m: Mei; data: string; fechar: () => void }) {
   const [d, setD] = useState({ data: data > hojeISO() ? hojeISO() : data, valor: "", numero: "", serie: "", obs: DISCRIMINACAO });
   // Emissão pela API do Portal Nacional (certificado da PHD + procuração do MEI), no lugar do robô.
   const [cTribNac, setCTribNac] = useState("");
@@ -358,3 +359,9 @@ export function CorrigirNota({ n, m, fechar, alterada }: { n: Nota; m?: Mei; fec
     </Modal>
   );
 }
+
+// PRD: NEXT_PUBLIC_MEI_NFSE_MODO=robo volta a emissão pelo Robô (como antes da API).
+// Dev (sem a variável): emissão pela API do Portal Nacional.
+const MODO_ROBO = process.env.NEXT_PUBLIC_MEI_NFSE_MODO === "robo";
+export default function Notas(p: { mei: Mei[] }) { return MODO_ROBO ? <NotasRobo {...p} /> : <NotasApi {...p} />; }
+export function EmitirNota(p: { m: Mei; data: string; fechar: () => void }) { return MODO_ROBO ? <EmitirNotaRobo {...p} /> : <EmitirNotaApi {...p} />; }
