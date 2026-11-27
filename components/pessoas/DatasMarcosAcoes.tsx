@@ -211,6 +211,27 @@ export function BotaoRemoverFormatura({ id, nome }: { id: number; nome: string }
   );
 }
 
+/** As duas caixinhas da lembrancinha de tempo de casa: feita e entregue. */
+export function ChecksLembrancinha({ pessoaId, anos, feita, entregue, feitaInfo, entregueInfo }: {
+  pessoaId: number; anos: number; feita: boolean; entregue: boolean; feitaInfo: string; entregueInfo: string;
+}) {
+  const router = useRouter();
+  const [ocupado, setOcupado] = useState(false);
+  async function mudar(campo: "feita" | "entregue", valor: boolean) {
+    setOcupado(true);
+    const r = await chamar("/api/pessoas/datas-marcos/lembrancinhas", "POST", { pessoa_id: pessoaId, anos, campo, valor });
+    setOcupado(false);
+    if (!r.ok) { alert(String(r.dados.error ?? "Não consegui salvar.")); return; }
+    router.refresh();
+  }
+  return (
+    <div className="dm-checks">
+      <label title={feitaInfo}><input type="checkbox" checked={feita} disabled={ocupado} onChange={(e) => mudar("feita", e.target.checked)} /> Feita</label>
+      <label title={entregueInfo}><input type="checkbox" checked={entregue} disabled={ocupado} onChange={(e) => mudar("entregue", e.target.checked)} /> Entregue</label>
+    </div>
+  );
+}
+
 /** Liga/desliga um lembrete e manda uma prévia para o e-mail de quem pediu. */
 export function LembreteControle({ chave, ativo }: { chave: string; ativo: boolean }) {
   const router = useRouter();

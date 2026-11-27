@@ -75,8 +75,9 @@ export function montarTempoDeCasa(hoje: string, lista: TempoDeCasaMes[]): EmailM
     `<p style="margin:0 0 8px"><strong>${esc(x.nome)}</strong> completa hoje <strong>${rotuloAnos(x.anos)} de PHD</strong>${x.marco ? SELO : ""}.</p>`).join("");
   const html = layoutEmail(
     marcos.length ? "⭐ Tempo de casa" : "Tempo de casa",
-    `${linhas}<p style="color:#68717e">${esc(dataBR(hoje))}.</p>`,
-    { texto: "Ver na agenda", url: LINK_AGENDA }
+    `${linhas}<p>🎁 Lembrancinha: marque como <strong>feita</strong> e <strong>entregue</strong> em Datas e Marcos.</p>
+     <p style="color:#68717e">${esc(dataBR(hoje))}.</p>`,
+    { texto: "Abrir Datas e Marcos", url: LINK_AREA }
   );
   return { assunto, html };
 }
@@ -129,6 +130,29 @@ async function registrarResultado(chave: string, referencia: string, texto: stri
   if (sb) await sb.from("lembretes_enviados").update({ resultado: texto }).eq("chave", chave).eq("referencia", referencia);
 }
 
+/**
+ * Encarregado do setor de cada pessoa da lista (cadastro de Pessoas, mesma regra da Hierarquia).
+ * Não inclui quem já recebe o aviso pela lista fixa, nem a própria pessoa avisada sobre si.
+ */
+async function encarregadosDasPessoas(lista: PessoaDatas[], jaRecebem: string[]): Promise<Map<string, PessoaDatas[]>> {
+  const r = new Map<string, PessoaDatas[]>();
+  const sb = admin();
+  if (!sb || !lista.length) return r;
+  const { data } = await sb.from("pessoas_perfil").select("id,setor,email,encarregado,ativo");
+  const perfis = (data ?? []) as { id: number; setor: string; email: string | null; encarregado: boolean; ativo: boolean }[];
+  const fixos = new Set(jaRecebem.map((e) => e.toLowerCase()));
+  for (const p of lista) {
+    const setor = perfis.find((x) => x.id === p.pessoa_id)?.setor;
+    if (!setor) continue;
+    for (const enc of perfis.filter((x) => x.setor === setor && x.encarregado && x.ativo && x.email)) {
+      const email = enc.email!.toLowerCase();
+      if (enc.id === p.pessoa_id || fixos.has(email)) continue;
+      r.set(email, [...(r.get(email) ?? []), p]);
+    }
+  }
+  return r;
+}
+
 /** Job diário: decide e envia os lembretes de hoje. */
 export async function executarLembretes(hoje: string = hojeSP()): Promise<{
   sincronizacao: ResultadoSincronizacao | { erro: string };
@@ -166,8 +190,16 @@ export async function executarLembretes(hoje: string = hojeSP()): Promise<{
         if (!lista.length) continue;
         if (!(await reservar(c.chave, a.ref))) continue; // já enviado
         const r = await enviarParaTodos(c.destinatarios, montarFimExperiencia(hoje, lista));
-        await registrarResultado(c.chave, a.ref, `${r.ok}/${c.destinatarios.length} e-mails`);
-        enviados.push({ chave: c.chave, referencia: a.ref, enviados: r.ok, falhas: r.falhas });
+        // Cada encarregado recebe só as pessoas do seu setor (quem já está na lista fixa não repete).
+        const extras = await encarregadosDasPessoas(lista, c.destinatarios);
+        let okExtra = 0, falhaExtra = 0;
+        for (const [email, pessoasDele] of extras) {
+          const re = await enviarParaTodos([email], montarFimExperiencia(hoje, pessoasDele));
+          okExtra += re.ok; falhaExtra += re.falhas;
+        }
+        const total = c.destinatarios.length + extras.size;
+        await registrarResultado(c.chave, a.ref, `${r.ok + okExtra}/${total} e-mails`);
+        enviados.push({ chave: c.chave, referencia: a.ref, enviados: r.ok + okExtra, falhas: r.falhas + falhaExtra });
       }
       continue;
     }

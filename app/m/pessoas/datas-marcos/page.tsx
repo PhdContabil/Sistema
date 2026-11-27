@@ -3,10 +3,10 @@ import Workspace from "@/components/Workspace";
 import AppIcon from "@/components/AppIcon";
 import { getModule } from "@/lib/modules";
 import {
-  BotaoAtivarData, BotaoRemoverFormatura, BotaoSincronizarQuestor, FormNovaData, FormNovaFormatura, LembreteControle, SeletorMes,
+  BotaoAtivarData, BotaoRemoverFormatura, BotaoSincronizarQuestor, ChecksLembrancinha, FormNovaData, FormNovaFormatura, LembreteControle, SeletorMes,
 } from "@/components/pessoas/DatasMarcosAcoes";
 import {
-  carregarDatasComemorativas, carregarFormaturas, carregarPessoasAtivas, carregarLembretes, carregarPessoasDatas, quemEstaAqui,
+  carregarDatasComemorativas, carregarFormaturas, carregarPessoasAtivas, carregarLembrancinhas, carregarLembretes, carregarPessoasDatas, quemEstaAqui,
 } from "@/lib/pessoas/datas-marcos-dados";
 import {
   aniversariantesDoMes, dataDaRegra, emExperiencia, hojeSP, MESES, partes, rotuloAnos,
@@ -49,12 +49,13 @@ export default async function DatasEMarcos({
   const ano = Number(searchParams.ano) >= 1900 && Number(searchParams.ano) <= 2200 ? Number(searchParams.ano) : hojeAno;
   const mes = Number(searchParams.mes) >= 1 && Number(searchParams.mes) <= 12 ? Number(searchParams.mes) : hojeMes;
 
-  const [pessoas, datas, formaturas, pessoasAtivas, lembretes] = await Promise.all([
+  const [pessoas, datas, formaturas, pessoasAtivas, lembretes, lembrancinhas] = await Promise.all([
     carregarPessoasDatas(),
     carregarDatasComemorativas(true),
     carregarFormaturas(),
     quem.rh && aba === "datas" ? carregarPessoasAtivas() : Promise.resolve([]),
     quem.rh && aba === "lemb" ? carregarLembretes() : Promise.resolve([]),
+    quem.lembrancinha ? carregarLembrancinhas() : Promise.resolve(new Map()),
   ]);
 
   // Cartões do topo: o mês seguinte ao de hoje.
@@ -64,6 +65,16 @@ export default async function DatasEMarcos({
   const casaProx = tempoDeCasaDoMes(proxAno, proxMes, pessoas);
   const marcosProx = casaProx.filter((x) => x.marco);
   const emExp = emExperiencia(hoje, pessoas);
+
+  // Lembrancinhas ainda não entregues: mês atual e anterior (só para quem cuida delas).
+  const antMes = hojeMes === 1 ? 12 : hojeMes - 1;
+  const antAno = hojeMes === 1 ? hojeAno - 1 : hojeAno;
+  const pendentes = quem.lembrancinha
+    ? [...tempoDeCasaDoMes(antAno, antMes, pessoas), ...tempoDeCasaDoMes(hojeAno, hojeMes, pessoas)]
+        .filter((x) => !lembrancinhas.get(`${x.pessoa_id}-${x.anos}`)?.entregue_em)
+    : [];
+  const info = (por: string | null | undefined, em: string | null | undefined) =>
+    por && em ? `Por ${por.split("@")[0]} em ${dataBR(em.slice(0, 10))}` : "";
 
   // Próxima data comemorativa (um dia só) depois de hoje.
   let proxData: { titulo: string; data: string } | null = null;
@@ -106,6 +117,13 @@ export default async function DatasEMarcos({
               : "nenhum marco"}
           </div>
         </div>
+        {quem.lembrancinha && (
+          <div className="dm-tile">
+            <div className="dm-k mono">Lembrancinhas pendentes</div>
+            <div className="dm-v">{pendentes.length}</div>
+            <div className="dm-s">{pendentes.length ? pendentes.map((x) => x.nome).join(", ") : "tudo entregue"}</div>
+          </div>
+        )}
         {quem.rh && (
           <div className="dm-tile">
             <div className="dm-k mono">Em experiência hoje</div>
@@ -145,11 +163,23 @@ export default async function DatasEMarcos({
             <div className="dm-card">
               <h3>🏢 Tempo de casa <span>{casaMes.length} no mês</span></h3>
               {casaMes.length === 0 ? <p className="dm-vazio">Ninguém faz aniversário de empresa neste mês.</p> : (
-                <table className="dm-tab"><thead><tr><th>Dia</th><th>Colaborador</th><th>Tempo</th></tr></thead>
+                <table className="dm-tab"><thead><tr><th>Dia</th><th>Colaborador</th><th>Tempo</th>{quem.lembrancinha && <th>Lembrancinha</th>}</tr></thead>
                   <tbody>{casaMes.map((x) => (
                     <tr key={`${x.dia}-${x.nome}`} className={x.marco ? "marco" : ""}>
                       <td>{p2(x.dia)}/{p2(mes)}</td><td>{x.nome}</td>
                       <td>{rotuloAnos(x.anos)}{x.marco && <span className="dm-selo">⭐ marco</span>}</td>
+                      {quem.lembrancinha && (() => {
+                        const l = lembrancinhas.get(`${x.pessoa_id}-${x.anos}`);
+                        return (
+                          <td>
+                            <ChecksLembrancinha
+                              pessoaId={x.pessoa_id} anos={x.anos}
+                              feita={Boolean(l?.feita_em)} entregue={Boolean(l?.entregue_em)}
+                              feitaInfo={info(l?.feita_por, l?.feita_em)} entregueInfo={info(l?.entregue_por, l?.entregue_em)}
+                            />
+                          </td>
+                        );
+                      })()}
                     </tr>
                   ))}</tbody></table>
               )}
@@ -257,7 +287,7 @@ export default async function DatasEMarcos({
               <div key={l.chave} className="dm-lembrete">
                 <div className="dm-lembrete-txt">
                   <strong>{l.titulo}</strong>
-                  <span>{l.descricao}{l.chave === "experiencia" ? ` Avisos ${l.antecedencia_dias} dias antes e no dia.` : ""} Envio às 8h30.</span>
+                  <span>{l.descricao}{l.chave === "experiencia" ? ` Avisos ${l.antecedencia_dias} dias antes e no dia, também ao encarregado do setor da pessoa.` : ""} Envio às 8h30.</span>
                   <span className="dm-dest">Para: {l.destinatarios.join(", ") || "—"}</span>
                 </div>
                 <LembreteControle chave={l.chave} ativo={l.ativo} />

@@ -151,7 +151,7 @@ export function campanhaDoMes(mes: number, datas: DataComemorativa[]): { titulo:
 }
 
 export interface AniversarianteMes { dia: number; nome: string }
-export interface TempoDeCasaMes { dia: number; nome: string; anos: number; marco: boolean }
+export interface TempoDeCasaMes { pessoa_id: number; dia: number; nome: string; anos: number; marco: boolean }
 
 /** Aniversários de nascimento do mês, por dia e depois por nome. */
 export function aniversariantesDoMes(ano: number, mes: number, pessoas: PessoaDatas[]): AniversarianteMes[] {
@@ -171,7 +171,7 @@ export function tempoDeCasaDoMes(ano: number, mes: number, pessoas: PessoaDatas[
     if (!p.ativo || !p.data_admissao) continue;
     const ad = partes(p.data_admissao);
     const anos = ano - ad.a;
-    if (ad.m === mes && anos >= 1) r.push({ dia: diaNoAno(ano, mes, ad.d), nome: p.nome, anos, marco: ehMarco(anos) });
+    if (ad.m === mes && anos >= 1) r.push({ pessoa_id: p.pessoa_id, dia: diaNoAno(ano, mes, ad.d), nome: p.nome, anos, marco: ehMarco(anos) });
   }
   return r.sort((x, y) => x.dia - y.dia || x.nome.localeCompare(y.nome, "pt-BR"));
 }

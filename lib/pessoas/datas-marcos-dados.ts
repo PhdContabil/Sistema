@@ -11,7 +11,12 @@ export interface QuemEstaAqui {
   email: string;
   /** Vê as abas de RH: Experiência, Datas e campanhas e Lembretes. */
   rh: boolean;
+  /** Marca e vê o controle das lembrancinhas de tempo de casa. */
+  lembrancinha: boolean;
 }
+
+/** Quem cuida das lembrancinhas (fazer e entregar). */
+export const RESPONSAVEIS_LEMBRANCINHA = ["julia.rodrigues@phdcontabil.com.br", "junior@phdcontabil.com.br"];
 
 /**
  * Quem é do RH nesta área: Diretoria e T.I. (acesso total), encarregados
@@ -20,16 +25,17 @@ export interface QuemEstaAqui {
 export async function quemEstaAqui(): Promise<QuemEstaAqui> {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase() ?? "";
-  if (!email) return { email: "", rh: false };
-  if (ehApoioGestaoPessoas(email)) return { email, rh: true };
+  if (!email) return { email: "", rh: false, lembrancinha: false };
+  const lembrancinha = RESPONSAVEIS_LEMBRANCINHA.includes(email);
+  if (ehApoioGestaoPessoas(email)) return { email, rh: true, lembrancinha };
 
   const nivel = await obterNivelAcesso(email).catch(() => null);
-  if (nivel?.acessoTotal) return { email, rh: true };
+  if (nivel?.acessoTotal) return { email, rh: true, lembrancinha };
 
   const sb = admin();
-  if (!sb) return { email, rh: false };
+  if (!sb) return { email, rh: false, lembrancinha };
   const { data } = await sb.from("pessoas_perfil").select("encarregado").ilike("email", email).maybeSingle();
-  return { email, rh: Boolean(data?.encarregado) };
+  return { email, rh: Boolean(data?.encarregado), lembrancinha };
 }
 
 interface LinhaPessoa {
@@ -116,4 +122,20 @@ export async function carregarLembretes(): Promise<LembreteConfig[]> {
     .select("chave,titulo,descricao,ativo,antecedencia_dias,destinatarios").order("chave");
   const ordem = ["resumo_mes", "tempo_casa", "experiencia"];
   return ((data ?? []) as LembreteConfig[]).sort((a, b) => ordem.indexOf(a.chave) - ordem.indexOf(b.chave));
+}
+
+export interface Lembrancinha {
+  pessoa_id: number; anos: number;
+  feita_em: string | null; feita_por: string | null;
+  entregue_em: string | null; entregue_por: string | null;
+}
+
+/** Controle das lembrancinhas, por "pessoa-anos". */
+export async function carregarLembrancinhas(): Promise<Map<string, Lembrancinha>> {
+  const m = new Map<string, Lembrancinha>();
+  const sb = admin();
+  if (!sb) return m;
+  const { data } = await sb.from("pessoas_lembrancinhas").select("pessoa_id,anos,feita_em,feita_por,entregue_em,entregue_por");
+  for (const l of (data ?? []) as Lembrancinha[]) m.set(`${l.pessoa_id}-${l.anos}`, l);
+  return m;
 }

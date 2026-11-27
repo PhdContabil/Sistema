@@ -58,9 +58,9 @@ test("tempo de casa: só 1 ano ou mais, só ativos, com marco", () => {
     pessoa(5, "Veterana", null, "2011-12-01"),
   ];
   assert.deepEqual(tempoDeCasaDoMes(2026, 12, ps), [
-    { dia: 1, nome: "Veterana", anos: 15, marco: true },
-    { dia: 15, nome: "Graciele", anos: 1, marco: true },
-    { dia: 19, nome: "Carla", anos: 16, marco: false },
+    { pessoa_id: 5, dia: 1, nome: "Veterana", anos: 15, marco: true },
+    { pessoa_id: 1, dia: 15, nome: "Graciele", anos: 1, marco: true },
+    { pessoa_id: 3, dia: 19, nome: "Carla", anos: 16, marco: false },
   ]);
 });
 
