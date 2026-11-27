@@ -98,6 +98,7 @@ test("eventos do mês: agrupa por dia e marca destaque", () => {
   assert.ok(maio.find((e) => e.titulo === "🎂 Eloiza, Pedro"));
   assert.ok(maio.find((e) => e.titulo === "Dia do Trabalhador"));
   assert.ok(maio.find((e) => e.titulo === "🎓 Formatura: Pedro"));
+  assert.equal(maio.find((e) => e.titulo === "🎓 Formatura: Pedro")?.inicio, "2027-05-31"); // último dia do mês
   const dez = eventosDoMes(2026, 12, ctx);
   const casa = dez.find((e) => e.titulo.startsWith("🏢"));
   assert.equal(casa?.destaque, true);
