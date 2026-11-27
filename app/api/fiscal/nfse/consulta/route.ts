@@ -1,6 +1,6 @@
 // Fiscal › Notas Fiscais › Consultar notas
 //   GET  ?acao=empresas                      -> empresas cadastradas para captura
-//   GET  ?cnpj=...&nsu=0                     -> notas do Portal Nacional (repita com proximoNsu enquanto incompleto)
+//   GET  ?cnpj=...&nsu=0&ate=AAAA-MM-DD                    -> notas do Portal Nacional (repita com proximoNsu enquanto incompleto)
 //   POST { acao: "cadastrar", codigoempresa, nome, cnpj } · { acao: "remover", codigoempresa }
 import { NextResponse } from "next/server";
 import { exigirFiscal } from "../_auth";
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const u = new URL(req.url).searchParams;
   try {
     if (u.get("acao") === "empresas") return NextResponse.json({ empresas: await listarEmpresasConsulta() });
-    return NextResponse.json(await capturarNotas(u.get("cnpj") ?? "", Number(u.get("nsu") ?? 0)));
+    return NextResponse.json(await capturarNotas(u.get("cnpj") ?? "", Number(u.get("nsu") ?? 0), 45_000, u.get("ate") ?? ""));
   } catch (e) { return erro(e); }
 }
 
