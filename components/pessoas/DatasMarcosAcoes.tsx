@@ -140,6 +140,7 @@ export function FormNovaFormatura({ pessoas, anoAtual }: { pessoas: { id: number
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [pessoa, setPessoa] = useState("");
+  const [nomeManual, setNomeManual] = useState("");
   const [curso, setCurso] = useState("");
   const [nivel, setNivel] = useState("Graduação");
   const [mes, setMes] = useState("6");
@@ -152,11 +153,11 @@ export function FormNovaFormatura({ pessoas, anoAtual }: { pessoas: { id: number
   async function salvar() {
     setErro(""); setOcupado(true);
     const r = await chamar("/api/pessoas/datas-marcos/formaturas", "POST", {
-      pessoa_id: Number(pessoa), curso, nivel, mes: Number(mes), ano: Number(ano),
+      pessoa_id: pessoa === "outro" ? null : Number(pessoa), nome_manual: pessoa === "outro" ? nomeManual : "", curso, nivel, mes: Number(mes), ano: Number(ano),
     });
     setOcupado(false);
     if (!r.ok) { setErro(String(r.dados.error ?? "Não consegui salvar.")); return; }
-    setAberto(false); setPessoa(""); setCurso(""); router.refresh();
+    setAberto(false); setPessoa(""); setNomeManual(""); setCurso(""); router.refresh();
   }
 
   return (
@@ -166,8 +167,12 @@ export function FormNovaFormatura({ pessoas, anoAtual }: { pessoas: { id: number
           <select className="sel" value={pessoa} onChange={(e) => setPessoa(e.target.value)}>
             <option value="">Escolha…</option>
             {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            <option value="outro">Outra pessoa (digitar o nome)…</option>
           </select>
         </label>
+        {pessoa === "outro" && (
+          <label>Nome<input className="sel" value={nomeManual} maxLength={120} onChange={(e) => setNomeManual(e.target.value)} placeholder="Nome da pessoa" /></label>
+        )}
         <label>Curso<input className="sel" value={curso} maxLength={120} onChange={(e) => setCurso(e.target.value)} placeholder="Ex.: Ciências Contábeis" /></label>
         <label>Nível
           <select className="sel" value={nivel} onChange={(e) => setNivel(e.target.value)}>

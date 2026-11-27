@@ -34,7 +34,8 @@ export interface DataComemorativa {
 
 export interface Formatura {
   id?: number;
-  pessoa_id: number;
+  /** Vazio quando o nome foi digitado à mão (pessoa fora do cadastro). */
+  pessoa_id: number | null;
   nome: string;
   curso: string;
   nivel: string;
@@ -241,7 +242,7 @@ export function eventosDoMes(ano: number, mes: number, ctx: ContextoDatas): Even
     const pv = partes(f.previsao);
     if (pv.a === ano && pv.m === mes) {
       ev.push({
-        id: `gen:form:${f.pessoa_id}:${f.previsao}`, tipo: "outro",
+        id: `gen:form:${f.id ?? f.pessoa_id}:${f.previsao}`, tipo: "outro",
         titulo: `🎓 Formatura: ${f.nome}`, inicio: iso(ano, mes, 1), fim: iso(ano, mes, 1),
         detalhe: `${f.nivel} em ${f.curso} (previsão ${p2(pv.m)}/${pv.a})`,
       });

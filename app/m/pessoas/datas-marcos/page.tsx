@@ -337,7 +337,7 @@ export default async function DatasEMarcos({
                     return (
                       <tr key={f.id ?? `${f.pessoa_id}-${f.previsao}`}>
                         <td>{f.nome}</td><td>{f.curso}</td><td>{f.nivel}</td>
-                        <td><strong>{cap(MESES[pv.m - 1].slice(0, 3))}/{pv.a}</strong>{passou && <span className="dm-pilula cinza">já passou</span>}</td>
+                        <td><strong>{cap(MESES[pv.m - 1].slice(0, 3))}/{pv.a}</strong>{passou && <span className="dm-pilula" style={{ background: "#16a34a" }}>Finalizado</span>}</td>
                         <td className="dm-fim">{f.id != null && <BotaoRemoverFormatura id={f.id} nome={f.nome} />}</td>
                       </tr>
                     );
