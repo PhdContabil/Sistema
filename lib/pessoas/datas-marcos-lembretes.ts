@@ -4,7 +4,9 @@
 // Três lembretes, todos ligados/desligados em lembretes_config (nascem desligados):
 //   • resumo_mes   — dia 01: aniversariantes e tempo de casa do mês;
 //   • tempo_casa   — no dia em que alguém completa tempo de casa (1 ano e múltiplos de 5 em destaque);
-//   • experiencia  — N dias antes de completar 90 dias de casa (padrão: 7).
+//   • experiencia  — N dias antes (padrão: 7) e no dia em que a pessoa completa 90 dias de casa.
+//
+// Todos saem às 8h30 (Brasília): o horário vem do cron em vercel.json.
 //
 // Só e-mail por ora (Teams fica para depois). Cada lembrete é registrado em
 // lembretes_enviados (chave + referência): rodar o job de novo no mesmo dia não
@@ -73,7 +75,7 @@ export function montarTempoDeCasa(hoje: string, lista: TempoDeCasaMes[]): EmailM
     `<p style="margin:0 0 8px"><strong>${esc(x.nome)}</strong> completa hoje <strong>${rotuloAnos(x.anos)} de PHD</strong>${x.marco ? SELO : ""}.</p>`).join("");
   const html = layoutEmail(
     marcos.length ? "⭐ Tempo de casa" : "Tempo de casa",
-    `${linhas}<p style="color:#68717e">Marcos de 1 ano e de 5 em 5 anos recebem destaque. ${esc(dataBR(hoje))}.</p>`,
+    `${linhas}<p style="color:#68717e">${esc(dataBR(hoje))}.</p>`,
     { texto: "Ver na agenda", url: LINK_AGENDA }
   );
   return { assunto, html };
@@ -154,10 +156,20 @@ export async function executarLembretes(hoje: string = hojeSP()): Promise<{
       const hojeLista = tempoDeCasaDoMes(ano, mes, pessoas).filter((x) => x.dia === dia);
       if (hojeLista.length) email = montarTempoDeCasa(hoje, hojeLista);
     } else if (c.chave === "experiencia") {
-      const alvo = somaDias(hoje, c.antecedencia_dias);
-      referencia = alvo;
-      const lista = fimExperienciaEm(alvo, pessoas);
-      if (lista.length) email = montarFimExperiencia(hoje, lista);
+      // Dois avisos: N dias antes e no próprio dia do fim da experiência.
+      const alvos = [
+        { ref: somaDias(hoje, c.antecedencia_dias), data: somaDias(hoje, c.antecedencia_dias) },
+        { ref: `${hoje}-dia`, data: hoje },
+      ];
+      for (const a of alvos) {
+        const lista = fimExperienciaEm(a.data, pessoas);
+        if (!lista.length) continue;
+        if (!(await reservar(c.chave, a.ref))) continue; // já enviado
+        const r = await enviarParaTodos(c.destinatarios, montarFimExperiencia(hoje, lista));
+        await registrarResultado(c.chave, a.ref, `${r.ok}/${c.destinatarios.length} e-mails`);
+        enviados.push({ chave: c.chave, referencia: a.ref, enviados: r.ok, falhas: r.falhas });
+      }
+      continue;
     }
 
     if (!email || !referencia) continue;

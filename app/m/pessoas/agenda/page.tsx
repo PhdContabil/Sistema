@@ -126,7 +126,7 @@ export default async function AgendaMensal({
 
       <p className="footnote">
         Férias aprovadas, aniversários, tempo de casa e datas comemorativas entram aqui automaticamente
-        (cadastro em Pessoas › Datas e Marcos). Marcos de 1 ano e de 5 em 5 anos de casa ganham contorno dourado.
+        (cadastro em Pessoas › Datas e Marcos).
         Feriados, emendas e demais eventos podem ser cadastrados pelos encarregados numa próxima etapa.
       </p>
     </Workspace>

@@ -156,8 +156,7 @@ export default async function DatasEMarcos({
             </div>
           </div>
           <p className="footnote">
-            Aniversariantes saem da data de nascimento do cadastro; tempo de casa, da data de admissão. Marcos: 1 ano e
-            todo múltiplo de 5. A idade não é exibida. Tudo isso também aparece na <Link href="/m/pessoas/agenda">Agenda mensal</Link>.
+            Aniversariantes saem da data de nascimento do cadastro; tempo de casa, da data de admissão. A idade não é exibida. Tudo isso também aparece na <Link href="/m/pessoas/agenda">Agenda mensal</Link>.
           </p>
         </>
       )}
@@ -258,7 +257,7 @@ export default async function DatasEMarcos({
               <div key={l.chave} className="dm-lembrete">
                 <div className="dm-lembrete-txt">
                   <strong>{l.titulo}</strong>
-                  <span>{l.descricao}{l.chave === "experiencia" ? ` Aviso ${l.antecedencia_dias} dias antes.` : ""}</span>
+                  <span>{l.descricao}{l.chave === "experiencia" ? ` Avisos ${l.antecedencia_dias} dias antes e no dia.` : ""} Envio às 8h30.</span>
                   <span className="dm-dest">Para: {l.destinatarios.join(", ") || "—"}</span>
                 </div>
                 <LembreteControle chave={l.chave} ativo={l.ativo} />

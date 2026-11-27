@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/pessoas/cron/lembretes-datas",
-      "schedule": "5 11 * * *"
+      "schedule": "30 11 * * *"
     },
     {
       "path": "/api/fiscal/dare-sp/cron",
