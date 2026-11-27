@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { gunzipSync } from "node:zlib";
 import { exigirFiscal } from "../../_auth";
 import { importarNfseQDrive, hasQuestorZenToken } from "@/lib/questor-zen";
+import { nacionalParaQuestor } from "@/lib/fiscal/nfse-zen-formato";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-interface Item { chave: string; numero?: string; tipo: "emitida" | "recebida"; xml_gz: string }
+interface Item { chave: string; numero?: string; tipo: "emitida" | "recebida"; xml_gz: string; cancelada?: boolean }
 
 /** POST { itens: [...] } (até 20 por chamada) — importa as NFS-e no Q-Drive do Questor Zen. */
 export async function POST(req: Request) {
@@ -19,7 +20,9 @@ export async function POST(req: Request) {
   for (const it of itens) {
     try {
       const xml = gunzipSync(Buffer.from(it.xml_gz, "base64")).toString("utf8");
-      await importarNfseQDrive(`NFSe-${it.chave}.xml`, xml, it.tipo === "emitida" ? 1 : 0);
+      // O Q-Drive só aceita o XML no padrão do Questor (InvoiceQuestorXmlDto), não o nacional.
+      const dto = nacionalParaQuestor(xml, it.chave, !!it.cancelada);
+      await importarNfseQDrive(`NFS-e Padrão-${it.numero ?? ""} NFS-e-${it.chave}.xml`, dto, it.tipo === "emitida" ? 1 : 0);
       resultados.push({ chave: it.chave, ok: true });
     } catch (e) {
       resultados.push({ chave: it.chave, ok: false, mensagem: e instanceof Error ? e.message : "Falha." });
