@@ -165,6 +165,11 @@ export async function emitirPorProcuracao(e: EmissaoProcuracao): Promise<Respost
   return { ok: false, erro: "Não achei um número de DPS livre depois de 8 tentativas. Avise a T.I." };
 }
 
+/** Guarda o motivo de o Portal não ter entregue o DANFSe oficial (diagnóstico). */
+export async function registrarFalhaDanfse(chave: string, motivo: string) {
+  try { await db().from("nfse_danfse_log").insert({ chave, motivo: String(motivo).slice(0, 2000) }); } catch { /* só diagnóstico */ }
+}
+
 /** PDF da nota: DANFSe oficial do ADN (com o certificado da PHD) ou, se o serviço falhar, gerado do XML. */
 export async function pdfPorChave(chave: string): Promise<Buffer> {
   const { data } = await db().from("mei_nfse").select("nfse_xml,ambiente").eq("chave_acesso", chave).maybeSingle();
@@ -173,6 +178,7 @@ export async function pdfPorChave(chave: string): Promise<Buffer> {
   const { cert } = await carregarEmpresa(EMPRESA_CERT_PHD);
   const of = await baixarDanfseOficial(chave, amb, cert);
   if (of.pdf) return of.pdf;
+  await registrarFalhaDanfse(chave, of.motivo);
   if (!data.nfse_xml) throw new NacionalError(`PDF oficial indisponível (${of.motivo}).`);
   return gerarDanfse(data.nfse_xml, chave, amb);
 }
