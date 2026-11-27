@@ -4,7 +4,7 @@
 // Nada é guardado: o XML (gzip+base64, como vem do ADN) vai direto para a tela.
 import https from "node:https";
 import { gunzipSync } from "node:zlib";
-import { db, EMPRESA_CERT_PHD } from "@/lib/nfse/procuracao";
+import { db, EMPRESA_CERT_PHD, registrarFalhaDanfse } from "@/lib/nfse/procuracao";
 import { carregarEmpresa } from "@/lib/nfse/empresas";
 import { baixarDanfseOficial, NacionalError } from "@/lib/nfse/nacional";
 import { gerarDanfse } from "@/lib/nfse/danfse";
@@ -145,6 +145,7 @@ export async function pdfDaConsulta(chave: string, xmlGz: string): Promise<{ pdf
   const { cert } = await carregarEmpresa(EMPRESA_CERT_PHD);
   const of = await baixarDanfseOficial(dig(chave), 1, cert);
   if (of.pdf) return { pdf: of.pdf, oficial: true, motivo: "" };
+  await registrarFalhaDanfse(dig(chave), of.motivo);
   const xml = gunzipSync(Buffer.from(xmlGz, "base64")).toString("utf8");
   return { pdf: await gerarDanfse(xml, dig(chave), 1), oficial: false, motivo: of.motivo };
 }
