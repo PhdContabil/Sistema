@@ -461,3 +461,22 @@ export async function cadastrarCliente(dados: Record<string, unknown>): Promise<
   });
   return checarResposta(resposta, "Cadastrar Cliente");
 }
+
+/**
+ * Q-Drive › NFS-e › Importar NFS-e: POST /nfse (multipart: arquivo XML + Type).
+ * Type: 1 saída (emitida pela empresa) · 0 entrada (recebida).
+ * O Zen acha o cliente pelo CNPJ dentro do XML. Resposta: { Success, ErrorMessage }.
+ */
+export async function importarNfseQDrive(nomeArquivo: string, xml: string, tipo: 0 | 1): Promise<void> {
+  const url = `${montarUrlBaseApi()}/nfse`;
+  const formData = new FormData();
+  formData.append("file", new Blob([xml], { type: "text/xml" }), nomeArquivo);
+  formData.append("Type", String(tipo));
+  const resposta = await requisitar("POST", url, "Importar NFS-e (Q-Drive)", TIMEOUT_PADRAO_MS, { body: formData });
+  const texto = await resposta.text();
+  let j: { Success?: boolean; ErrorMessage?: string | null } | null = null;
+  try { j = JSON.parse(texto); } catch { /* não é JSON */ }
+  if (!resposta.ok || (j && j.Success === false)) {
+    throw new QuestorZenError(`Importar NFS-e (Q-Drive): ${j?.ErrorMessage || `HTTP ${resposta.status} ${texto.slice(0, 200)}`}`, resposta.status || 502);
+  }
+}
