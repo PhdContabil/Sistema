@@ -3,7 +3,7 @@ import Workspace from "@/components/Workspace";
 import AppIcon from "@/components/AppIcon";
 import { getModule } from "@/lib/modules";
 import {
-  BotaoAtivarData, BotaoRemoverFormatura, BotaoSincronizarQuestor, ChecksLembrancinha, FormNovaData, FormNovaFormatura, LembreteControle, SeletorMes,
+  BotaoAtivarData, BotaoRemoverFormatura, BotaoSincronizarQuestor, ChecksLembrancinha, DecisaoExperiencia, FormNovaData, FormNovaFormatura, LembreteControle, SeletorMes,
 } from "@/components/pessoas/DatasMarcosAcoes";
 import {
   carregarDatasComemorativas, carregarFormaturas, carregarPessoasAtivas, carregarLembrancinhas, carregarLembretes, carregarPessoasDatas, quemEstaAqui,
@@ -13,6 +13,7 @@ import {
   somaDias, tempoDeCasaDoMes, type DataComemorativa,
 } from "@/lib/pessoas/datas-marcos";
 import { dataBR } from "@/lib/pessoas/datas-marcos-lembretes";
+import { carregarAvaliacoes, CRITERIOS, RECOMENDACOES, type Avaliacao } from "@/lib/pessoas/avaliacao-experiencia";
 import { CORES_TIPO } from "@/lib/pessoas/agenda-tipos";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,26 @@ function quando(d: DataComemorativa): string {
   }
 }
 
+/** Situação da avaliação de um colaborador em experiência. */
+function situacaoAvaliacao(a: Avaliacao, hoje: string): { texto: string; cor: string } {
+  if (a.enviada_em) return { texto: `Respondida em ${dataBR(a.enviada_em.slice(0, 10))}`, cor: "#16a34a" };
+  if (a.fim_experiencia < hoje) return { texto: "Atrasada", cor: "#dc2626" };
+  return { texto: "Aguardando o encarregado", cor: "#f59e0b" };
+}
+
+function DetalhesAvaliacao({ a }: { a: Avaliacao }) {
+  if (!a.enviada_em) return null;
+  return (
+    <details className="dm-detalhes">
+      <summary>Ver respostas</summary>
+      <p>{CRITERIOS.map((c) => `${c.rotulo}: ${a[c.campo] ?? "—"}/5`).join(" · ")}</p>
+      <p><strong>Pontos fortes:</strong> {a.pontos_fortes}</p>
+      <p><strong>A melhorar:</strong> {a.pontos_melhorar}</p>
+      <p><strong>Recomendação:</strong> {RECOMENDACOES[a.recomendacao ?? ""] ?? "—"}{a.justificativa ? ` — ${a.justificativa}` : ""}</p>
+    </details>
+  );
+}
+
 export default async function DatasEMarcos({
   searchParams,
 }: {
@@ -49,13 +70,14 @@ export default async function DatasEMarcos({
   const ano = Number(searchParams.ano) >= 1900 && Number(searchParams.ano) <= 2200 ? Number(searchParams.ano) : hojeAno;
   const mes = Number(searchParams.mes) >= 1 && Number(searchParams.mes) <= 12 ? Number(searchParams.mes) : hojeMes;
 
-  const [pessoas, datas, formaturas, pessoasAtivas, lembretes, lembrancinhas] = await Promise.all([
+  const [pessoas, datas, formaturas, pessoasAtivas, lembretes, lembrancinhas, avaliacoes] = await Promise.all([
     carregarPessoasDatas(),
     carregarDatasComemorativas(true),
     carregarFormaturas(),
     quem.rh && aba === "datas" ? carregarPessoasAtivas() : Promise.resolve([]),
     quem.rh && aba === "lemb" ? carregarLembretes() : Promise.resolve([]),
-    quem.lembrancinha ? carregarLembrancinhas() : Promise.resolve(new Map()),
+    quem.controle ? carregarLembrancinhas() : Promise.resolve(new Map()),
+    quem.controle && aba === "exp" ? carregarAvaliacoes() : Promise.resolve([] as Avaliacao[]),
   ]);
 
   // Cartões do topo: o mês seguinte ao de hoje.
@@ -69,7 +91,7 @@ export default async function DatasEMarcos({
   // Lembrancinhas ainda não entregues: mês atual e anterior (só para quem cuida delas).
   const antMes = hojeMes === 1 ? 12 : hojeMes - 1;
   const antAno = hojeMes === 1 ? hojeAno - 1 : hojeAno;
-  const pendentes = quem.lembrancinha
+  const pendentes = quem.controle
     ? [...tempoDeCasaDoMes(antAno, antMes, pessoas), ...tempoDeCasaDoMes(hojeAno, hojeMes, pessoas)]
         .filter((x) => !lembrancinhas.get(`${x.pessoa_id}-${x.anos}`)?.entregue_em)
     : [];
@@ -117,7 +139,7 @@ export default async function DatasEMarcos({
               : "nenhum marco"}
           </div>
         </div>
-        {quem.lembrancinha && (
+        {quem.controle && (
           <div className="dm-tile">
             <div className="dm-k mono">Lembrancinhas pendentes</div>
             <div className="dm-v">{pendentes.length}</div>
@@ -163,12 +185,12 @@ export default async function DatasEMarcos({
             <div className="dm-card">
               <h3>🏢 Tempo de casa <span>{casaMes.length} no mês</span></h3>
               {casaMes.length === 0 ? <p className="dm-vazio">Ninguém faz aniversário de empresa neste mês.</p> : (
-                <table className="dm-tab"><thead><tr><th>Dia</th><th>Colaborador</th><th>Tempo</th>{quem.lembrancinha && <th>Lembrancinha</th>}</tr></thead>
+                <table className="dm-tab"><thead><tr><th>Dia</th><th>Colaborador</th><th>Tempo</th>{quem.controle && <th>Lembrancinha</th>}</tr></thead>
                   <tbody>{casaMes.map((x) => (
                     <tr key={`${x.dia}-${x.nome}`} className={x.marco ? "marco" : ""}>
                       <td>{p2(x.dia)}/{p2(mes)}</td><td>{x.nome}</td>
                       <td>{rotuloAnos(x.anos)}{x.marco && <span className="dm-selo">⭐ marco</span>}</td>
-                      {quem.lembrancinha && (() => {
+                      {quem.controle && (() => {
                         const l = lembrancinhas.get(`${x.pessoa_id}-${x.anos}`);
                         return (
                           <td>
@@ -217,6 +239,56 @@ export default async function DatasEMarcos({
               </table>
             )}
           </div>
+          {quem.controle && (
+            <>
+              <div className="dm-card" style={{ marginTop: 16 }}>
+                <h3>Avaliações de experiência <span>enviadas ao encarregado por e-mail · só Gestão de Pessoas vê</span></h3>
+                {avaliacoes.filter((a) => !a.decisao).length === 0 ? <p className="dm-vazio">Nenhuma avaliação aguardando decisão.</p> : (
+                  <table className="dm-tab">
+                    <thead><tr><th>Colaborador</th><th>Fim</th><th>Encarregado</th><th>Situação</th><th>Decisão</th></tr></thead>
+                    <tbody>
+                      {avaliacoes.filter((a) => !a.decisao).map((a) => {
+                        const sit = situacaoAvaliacao(a, hoje);
+                        return (
+                          <tr key={a.id}>
+                            <td>{a.pessoa_nome}</td>
+                            <td>{dataBR(a.fim_experiencia)}</td>
+                            <td>{a.encarregado_nome ?? a.encarregado_email}</td>
+                            <td><span className="dm-pilula" style={{ background: sit.cor }}>{sit.texto}</span><DetalhesAvaliacao a={a} /></td>
+                            <td>{a.enviada_em ? <DecisaoExperiencia id={a.id} decisao={a.decisao} rotulos={RECOMENDACOES} /> : <span className="dm-vazio">Depois da resposta</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="dm-card" style={{ marginTop: 16 }}>
+                <h3>Histórico por colaborador <span>registro permanente · dado sensível</span></h3>
+                {avaliacoes.length === 0 ? <p className="dm-vazio">Ainda não há avaliações registradas.</p> : (
+                  Array.from(new Set(avaliacoes.map((a) => a.pessoa_id))).map((pid) => {
+                    const doColab = avaliacoes.filter((a) => a.pessoa_id === pid);
+                    return (
+                      <div key={pid} className="dm-hist">
+                        <strong>{doColab[0].pessoa_nome}</strong>
+                        {doColab.map((a) => {
+                          const sit = situacaoAvaliacao(a, hoje);
+                          return (
+                            <div key={a.id} className="dm-hist-item">
+                              <span>Experiência até {dataBR(a.fim_experiencia)} · {a.encarregado_nome ?? a.encarregado_email}</span>
+                              <span className="dm-pilula" style={{ background: sit.cor }}>{sit.texto}</span>
+                              {a.decisao && <span className="dm-selo">Decisão: {RECOMENDACOES[a.decisao]}{a.decisao_por ? ` (${a.decisao_por.split("@")[0]}, ${dataBR((a.decisao_em ?? "").slice(0, 10))})` : ""}</span>}
+                              <DetalhesAvaliacao a={a} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
           <div style={{ marginTop: 16 }}>
             <BotaoSincronizarQuestor />
             {semAdmissao.length > 0 && (
@@ -287,7 +359,7 @@ export default async function DatasEMarcos({
               <div key={l.chave} className="dm-lembrete">
                 <div className="dm-lembrete-txt">
                   <strong>{l.titulo}</strong>
-                  <span>{l.descricao}{l.chave === "experiencia" ? ` Avisos ${l.antecedencia_dias} dias antes e no dia, também ao encarregado do setor da pessoa.` : ""} Envio às 8h30.</span>
+                  <span>{l.descricao}{l.chave === "experiencia" ? ` Resumo ao RH ${l.antecedencia_dias} dias antes e no dia; o encarregado do setor recebe o formulário de avaliação e é cobrado até responder.` : ""} Envio às 8h30.</span>
                   <span className="dm-dest">Para: {l.destinatarios.join(", ") || "—"}</span>
                 </div>
                 <LembreteControle chave={l.chave} ativo={l.ativo} />

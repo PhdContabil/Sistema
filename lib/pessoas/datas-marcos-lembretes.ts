@@ -4,7 +4,8 @@
 // Três lembretes, todos ligados/desligados em lembretes_config (nascem desligados):
 //   • resumo_mes   — dia 01: aniversariantes e tempo de casa do mês;
 //   • tempo_casa   — no dia em que alguém completa tempo de casa (1 ano e múltiplos de 5 em destaque);
-//   • experiencia  — N dias antes (padrão: 7) e no dia em que a pessoa completa 90 dias de casa.
+//   • experiencia  — resumo ao RH N dias antes (padrão: 7) e no dia dos 90 dias; formulário de avaliação
+//                    ao encarregado do setor, com cobrança até ele responder (avaliacao-experiencia.ts).
 //
 // Todos saem às 8h30 (Brasília): o horário vem do cron em vercel.json.
 //
@@ -14,7 +15,8 @@
 import { admin } from "./ferias";
 import { enviarEmail, layoutEmail } from "./notificar";
 import { getFuncionariosAtivos } from "../questor";
-import { carregarLembretes, carregarPessoasDatas, type LembreteConfig } from "./datas-marcos-dados";
+import { carregarLembretes, carregarPessoasDatas, RESPONSAVEIS_CONTROLE, type LembreteConfig } from "./datas-marcos-dados";
+import { avaliacoesPendentes, emailCobranca, emailPedido, garantirAvaliacoes } from "./avaliacao-experiencia";
 import {
   aniversariantesDoMes, fimExperienciaEm, hojeSP, MESES, partes, rotuloAnos, somaDias, tempoDeCasaDoMes,
   type PessoaDatas, type TempoDeCasaMes,
@@ -130,29 +132,6 @@ async function registrarResultado(chave: string, referencia: string, texto: stri
   if (sb) await sb.from("lembretes_enviados").update({ resultado: texto }).eq("chave", chave).eq("referencia", referencia);
 }
 
-/**
- * Encarregado do setor de cada pessoa da lista (cadastro de Pessoas, mesma regra da Hierarquia).
- * Não inclui quem já recebe o aviso pela lista fixa, nem a própria pessoa avisada sobre si.
- */
-async function encarregadosDasPessoas(lista: PessoaDatas[], jaRecebem: string[]): Promise<Map<string, PessoaDatas[]>> {
-  const r = new Map<string, PessoaDatas[]>();
-  const sb = admin();
-  if (!sb || !lista.length) return r;
-  const { data } = await sb.from("pessoas_perfil").select("id,setor,email,encarregado,ativo");
-  const perfis = (data ?? []) as { id: number; setor: string; email: string | null; encarregado: boolean; ativo: boolean }[];
-  const fixos = new Set(jaRecebem.map((e) => e.toLowerCase()));
-  for (const p of lista) {
-    const setor = perfis.find((x) => x.id === p.pessoa_id)?.setor;
-    if (!setor) continue;
-    for (const enc of perfis.filter((x) => x.setor === setor && x.encarregado && x.ativo && x.email)) {
-      const email = enc.email!.toLowerCase();
-      if (enc.id === p.pessoa_id || fixos.has(email)) continue;
-      r.set(email, [...(r.get(email) ?? []), p]);
-    }
-  }
-  return r;
-}
-
 /** Job diário: decide e envia os lembretes de hoje. */
 export async function executarLembretes(hoje: string = hojeSP()): Promise<{
   sincronizacao: ResultadoSincronizacao | { erro: string };
@@ -180,7 +159,7 @@ export async function executarLembretes(hoje: string = hojeSP()): Promise<{
       const hojeLista = tempoDeCasaDoMes(ano, mes, pessoas).filter((x) => x.dia === dia);
       if (hojeLista.length) email = montarTempoDeCasa(hoje, hojeLista);
     } else if (c.chave === "experiencia") {
-      // Dois avisos: N dias antes e no próprio dia do fim da experiência.
+      // 1) Resumo ao RH: N dias antes e no próprio dia do fim da experiência.
       const alvos = [
         { ref: somaDias(hoje, c.antecedencia_dias), data: somaDias(hoje, c.antecedencia_dias) },
         { ref: `${hoje}-dia`, data: hoje },
@@ -190,16 +169,39 @@ export async function executarLembretes(hoje: string = hojeSP()): Promise<{
         if (!lista.length) continue;
         if (!(await reservar(c.chave, a.ref))) continue; // já enviado
         const r = await enviarParaTodos(c.destinatarios, montarFimExperiencia(hoje, lista));
-        // Cada encarregado recebe só as pessoas do seu setor (quem já está na lista fixa não repete).
-        const extras = await encarregadosDasPessoas(lista, c.destinatarios);
-        let okExtra = 0, falhaExtra = 0;
-        for (const [email, pessoasDele] of extras) {
-          const re = await enviarParaTodos([email], montarFimExperiencia(hoje, pessoasDele));
-          okExtra += re.ok; falhaExtra += re.falhas;
-        }
-        const total = c.destinatarios.length + extras.size;
-        await registrarResultado(c.chave, a.ref, `${r.ok + okExtra}/${total} e-mails`);
-        enviados.push({ chave: c.chave, referencia: a.ref, enviados: r.ok + okExtra, falhas: r.falhas + falhaExtra });
+        await registrarResultado(c.chave, a.ref, `${r.ok}/${c.destinatarios.length} e-mails`);
+        enviados.push({ chave: c.chave, referencia: a.ref, enviados: r.ok, falhas: r.falhas });
+      }
+
+      // 2) Pedido da avaliação ao encarregado de quem está no prazo (hoje até N dias depois).
+      const limite = somaDias(hoje, c.antecedencia_dias);
+      const noPrazo = pessoas.filter((p) => p.ativo && p.fim_experiencia && p.fim_experiencia >= hoje && p.fim_experiencia <= limite);
+      const { avaliacoes } = await garantirAvaliacoes(noPrazo);
+      const pedidosHoje = new Set<number>();
+      for (const av of avaliacoes) {
+        if (av.enviada_em) continue;
+        const ref = `av${av.id}-pedido`;
+        if (!(await reservar(c.chave, ref))) continue;
+        const r = await enviarParaTodos([av.encarregado_email], emailPedido(av, hoje));
+        await registrarResultado(c.chave, ref, `${r.ok}/1 e-mails`);
+        pedidosHoje.add(av.id);
+        enviados.push({ chave: c.chave, referencia: ref, enviados: r.ok, falhas: r.falhas });
+      }
+
+      // 3) Cobrança enquanto não responder: 3 dias antes, no dia e todo dia depois (até 30 dias).
+      //    No dia e depois, Julia Rodrigues e Junior recebem cópia.
+      for (const av of await avaliacoesPendentes()) {
+        if (pedidosHoje.has(av.id)) continue;
+        const dias = Math.round((Date.parse(`${av.fim_experiencia}T12:00:00Z`) - Date.parse(`${hoje}T12:00:00Z`)) / 86400000);
+        const tipo = dias === 3 ? "d3" : dias === 0 ? "d0" : dias < 0 && dias >= -30 ? `atraso-${hoje}` : null;
+        if (!tipo) continue;
+        const ref = `av${av.id}-${tipo}`;
+        if (!(await reservar(c.chave, ref))) continue;
+        const email = emailCobranca(av, hoje);
+        const r = await enviarParaTodos([av.encarregado_email], email);
+        if (tipo !== "d3") await enviarParaTodos(RESPONSAVEIS_CONTROLE, email, "[Cópia] ");
+        await registrarResultado(c.chave, ref, `${r.ok}/1 e-mails`);
+        enviados.push({ chave: c.chave, referencia: ref, enviados: r.ok, falhas: r.falhas });
       }
       continue;
     }

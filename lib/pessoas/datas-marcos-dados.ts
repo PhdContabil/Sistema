@@ -12,11 +12,11 @@ export interface QuemEstaAqui {
   /** Vê as abas de RH: Experiência, Datas e campanhas e Lembretes. */
   rh: boolean;
   /** Marca e vê o controle das lembrancinhas de tempo de casa. */
-  lembrancinha: boolean;
+  controle: boolean;
 }
 
 /** Quem cuida das lembrancinhas (fazer e entregar). */
-export const RESPONSAVEIS_LEMBRANCINHA = ["julia.rodrigues@phdcontabil.com.br", "junior@phdcontabil.com.br"];
+export const RESPONSAVEIS_CONTROLE = ["julia.rodrigues@phdcontabil.com.br", "junior@phdcontabil.com.br"];
 
 /**
  * Quem é do RH nesta área: Diretoria e T.I. (acesso total), encarregados
@@ -25,17 +25,17 @@ export const RESPONSAVEIS_LEMBRANCINHA = ["julia.rodrigues@phdcontabil.com.br", 
 export async function quemEstaAqui(): Promise<QuemEstaAqui> {
   const user = await getCurrentUser().catch(() => null);
   const email = user?.email?.toLowerCase() ?? "";
-  if (!email) return { email: "", rh: false, lembrancinha: false };
-  const lembrancinha = RESPONSAVEIS_LEMBRANCINHA.includes(email);
-  if (ehApoioGestaoPessoas(email)) return { email, rh: true, lembrancinha };
+  if (!email) return { email: "", rh: false, controle: false };
+  const controle = RESPONSAVEIS_CONTROLE.includes(email);
+  if (ehApoioGestaoPessoas(email)) return { email, rh: true, controle };
 
   const nivel = await obterNivelAcesso(email).catch(() => null);
-  if (nivel?.acessoTotal) return { email, rh: true, lembrancinha };
+  if (nivel?.acessoTotal) return { email, rh: true, controle };
 
   const sb = admin();
-  if (!sb) return { email, rh: false, lembrancinha };
+  if (!sb) return { email, rh: false, controle };
   const { data } = await sb.from("pessoas_perfil").select("encarregado").ilike("email", email).maybeSingle();
-  return { email, rh: Boolean(data?.encarregado), lembrancinha };
+  return { email, rh: Boolean(data?.encarregado), controle };
 }
 
 interface LinhaPessoa {

@@ -232,6 +232,33 @@ export function ChecksLembrancinha({ pessoaId, anos, feita, entregue, feitaInfo,
   );
 }
 
+/** Decisão final (efetivar / prorrogar / não efetivar) sobre uma avaliação já respondida. */
+export function DecisaoExperiencia({ id, decisao, rotulos }: { id: number; decisao: string | null; rotulos: Record<string, string> }) {
+  const router = useRouter();
+  const [valor, setValor] = useState(decisao ?? "");
+  const [ocupado, setOcupado] = useState(false);
+  return (
+    <div className="dm-checks">
+      <select className="sel" value={valor} onChange={(e) => setValor(e.target.value)} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12.5 }}>
+        <option value="">Decidir…</option>
+        {Object.entries(rotulos).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+      </select>
+      <button
+        type="button" className="btn dm-mini" disabled={ocupado || !valor || valor === decisao}
+        onClick={async () => {
+          setOcupado(true);
+          const r = await chamar("/api/pessoas/datas-marcos/avaliacoes", "PATCH", { id, decisao: valor });
+          setOcupado(false);
+          if (!r.ok) { alert(String(r.dados.error ?? "Não consegui salvar.")); return; }
+          router.refresh();
+        }}
+      >
+        Salvar
+      </button>
+    </div>
+  );
+}
+
 /** Liga/desliga um lembrete e manda uma prévia para o e-mail de quem pediu. */
 export function LembreteControle({ chave, ativo }: { chave: string; ativo: boolean }) {
   const router = useRouter();
