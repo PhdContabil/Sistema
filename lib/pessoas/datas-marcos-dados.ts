@@ -76,17 +76,17 @@ export async function carregarDatasComemorativas(incluirInativas = false): Promi
 }
 
 interface LinhaFormatura {
-  id: number; pessoa_id: number; curso: string; nivel: string; previsao: string;
+  id: number; pessoa_id: number | null; nome_manual: string | null; curso: string; nivel: string; previsao: string;
   pessoas_perfil: { nome: string } | { nome: string }[] | null;
 }
 
 export async function carregarFormaturas(): Promise<Formatura[]> {
   const sb = admin();
   if (!sb) return [];
-  const { data } = await sb.from("pessoas_formaturas").select("id,pessoa_id,curso,nivel,previsao,pessoas_perfil(nome)").order("previsao");
+  const { data } = await sb.from("pessoas_formaturas").select("id,pessoa_id,nome_manual,curso,nivel,previsao,pessoas_perfil(nome)").order("previsao");
   return ((data ?? []) as unknown as LinhaFormatura[]).map((l) => {
     const perfil = Array.isArray(l.pessoas_perfil) ? l.pessoas_perfil[0] : l.pessoas_perfil;
-    return { id: l.id, pessoa_id: l.pessoa_id, nome: perfil?.nome ?? "—", curso: l.curso, nivel: l.nivel, previsao: l.previsao };
+    return { id: l.id, pessoa_id: l.pessoa_id, nome: perfil?.nome ?? l.nome_manual ?? "—", curso: l.curso, nivel: l.nivel, previsao: l.previsao };
   });
 }
 
