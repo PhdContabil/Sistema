@@ -33,6 +33,7 @@ export interface DataComemorativa {
 }
 
 export interface Formatura {
+  id?: number;
   pessoa_id: number;
   nome: string;
   curso: string;

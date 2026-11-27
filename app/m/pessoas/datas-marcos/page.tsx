@@ -3,10 +3,10 @@ import Workspace from "@/components/Workspace";
 import AppIcon from "@/components/AppIcon";
 import { getModule } from "@/lib/modules";
 import {
-  BotaoAtivarData, BotaoSincronizarQuestor, FormNovaData, LembreteControle, SeletorMes,
+  BotaoAtivarData, BotaoRemoverFormatura, BotaoSincronizarQuestor, FormNovaData, FormNovaFormatura, LembreteControle, SeletorMes,
 } from "@/components/pessoas/DatasMarcosAcoes";
 import {
-  carregarDatasComemorativas, carregarFormaturas, carregarLembretes, carregarPessoasDatas, quemEstaAqui,
+  carregarDatasComemorativas, carregarFormaturas, carregarPessoasAtivas, carregarLembretes, carregarPessoasDatas, quemEstaAqui,
 } from "@/lib/pessoas/datas-marcos-dados";
 import {
   aniversariantesDoMes, dataDaRegra, emExperiencia, hojeSP, MESES, partes, rotuloAnos,
@@ -49,10 +49,11 @@ export default async function DatasEMarcos({
   const ano = Number(searchParams.ano) >= 1900 && Number(searchParams.ano) <= 2200 ? Number(searchParams.ano) : hojeAno;
   const mes = Number(searchParams.mes) >= 1 && Number(searchParams.mes) <= 12 ? Number(searchParams.mes) : hojeMes;
 
-  const [pessoas, datas, formaturas, lembretes] = await Promise.all([
+  const [pessoas, datas, formaturas, pessoasAtivas, lembretes] = await Promise.all([
     carregarPessoasDatas(),
     carregarDatasComemorativas(true),
     carregarFormaturas(),
+    quem.rh && aba === "datas" ? carregarPessoasAtivas() : Promise.resolve([]),
     quem.rh && aba === "lemb" ? carregarLembretes() : Promise.resolve([]),
   ]);
 
@@ -223,17 +224,19 @@ export default async function DatasEMarcos({
           </div>
           <div className="dm-card" style={{ marginTop: 16 }}>
             <h3>Términos de graduação e mestrado <span>{formaturas.length}</span></h3>
+            <div className="toolbar" style={{ padding: "0 16px 12px" }}><FormNovaFormatura pessoas={pessoasAtivas} anoAtual={hojeAno} /></div>
             {formaturas.length === 0 ? <p className="dm-vazio">Nenhuma formatura cadastrada.</p> : (
               <table className="dm-tab">
-                <thead><tr><th>Colaborador</th><th>Curso</th><th>Nível</th><th>Previsão (mês/ano)</th></tr></thead>
+                <thead><tr><th>Colaborador</th><th>Curso</th><th>Nível</th><th>Previsão (mês/ano)</th><th /></tr></thead>
                 <tbody>
                   {formaturas.map((f) => {
                     const pv = partes(f.previsao);
                     const passou = f.previsao.slice(0, 7) < hoje.slice(0, 7);
                     return (
-                      <tr key={`${f.pessoa_id}-${f.previsao}`}>
+                      <tr key={f.id ?? `${f.pessoa_id}-${f.previsao}`}>
                         <td>{f.nome}</td><td>{f.curso}</td><td>{f.nivel}</td>
                         <td><strong>{cap(MESES[pv.m - 1].slice(0, 3))}/{pv.a}</strong>{passou && <span className="dm-pilula cinza">já passou</span>}</td>
+                        <td className="dm-fim">{f.id != null && <BotaoRemoverFormatura id={f.id} nome={f.nome} />}</td>
                       </tr>
                     );
                   })}

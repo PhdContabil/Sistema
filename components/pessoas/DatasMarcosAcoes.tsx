@@ -133,6 +133,84 @@ export function FormNovaData() {
   );
 }
 
+const NIVEIS = ["Graduação", "Pós-graduação", "Mestrado", "Doutorado", "Técnico", "Curso livre"];
+
+/** Cadastro da previsão de término de um curso (mês/ano). */
+export function FormNovaFormatura({ pessoas, anoAtual }: { pessoas: { id: number; nome: string }[]; anoAtual: number }) {
+  const router = useRouter();
+  const [aberto, setAberto] = useState(false);
+  const [pessoa, setPessoa] = useState("");
+  const [curso, setCurso] = useState("");
+  const [nivel, setNivel] = useState("Graduação");
+  const [mes, setMes] = useState("6");
+  const [ano, setAno] = useState(String(anoAtual + 1));
+  const [erro, setErro] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+
+  if (!aberto) return <button type="button" className="btn primary" onClick={() => setAberto(true)}>+ Nova formatura</button>;
+
+  async function salvar() {
+    setErro(""); setOcupado(true);
+    const r = await chamar("/api/pessoas/datas-marcos/formaturas", "POST", {
+      pessoa_id: Number(pessoa), curso, nivel, mes: Number(mes), ano: Number(ano),
+    });
+    setOcupado(false);
+    if (!r.ok) { setErro(String(r.dados.error ?? "Não consegui salvar.")); return; }
+    setAberto(false); setPessoa(""); setCurso(""); router.refresh();
+  }
+
+  return (
+    <div className="dm-form">
+      <div className="dm-form-grade">
+        <label>Colaborador
+          <select className="sel" value={pessoa} onChange={(e) => setPessoa(e.target.value)}>
+            <option value="">Escolha…</option>
+            {pessoas.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+        </label>
+        <label>Curso<input className="sel" value={curso} maxLength={120} onChange={(e) => setCurso(e.target.value)} placeholder="Ex.: Ciências Contábeis" /></label>
+        <label>Nível
+          <select className="sel" value={nivel} onChange={(e) => setNivel(e.target.value)}>
+            {NIVEIS.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        <label>Previsão de término (mês)
+          <select className="sel" value={mes} onChange={(e) => setMes(e.target.value)}>
+            {MESES.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+          </select>
+        </label>
+        <label>Ano<input className="sel" type="number" min={2000} max={2100} value={ano} onChange={(e) => setAno(e.target.value)} /></label>
+      </div>
+      {erro && <p className="dm-erro">{erro}</p>}
+      <div className="dm-form-acoes">
+        <button type="button" className="btn primary" disabled={ocupado} onClick={salvar}>{ocupado ? "Salvando…" : "Salvar"}</button>
+        <button type="button" className="btn" onClick={() => setAberto(false)}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+/** Remove uma formatura cadastrada. */
+export function BotaoRemoverFormatura({ id, nome }: { id: number; nome: string }) {
+  const router = useRouter();
+  const [ocupado, setOcupado] = useState(false);
+  return (
+    <button
+      type="button" className="btn dm-mini" disabled={ocupado}
+      onClick={async () => {
+        if (!confirm(`Remover a formatura de ${nome}?`)) return;
+        setOcupado(true);
+        const r = await chamar("/api/pessoas/datas-marcos/formaturas", "DELETE", { id });
+        setOcupado(false);
+        if (!r.ok) { alert(String(r.dados.error ?? "Não consegui remover.")); return; }
+        router.refresh();
+      }}
+    >
+      Remover
+    </button>
+  );
+}
+
 /** Liga/desliga um lembrete e manda uma prévia para o e-mail de quem pediu. */
 export function LembreteControle({ chave, ativo }: { chave: string; ativo: boolean }) {
   const router = useRouter();

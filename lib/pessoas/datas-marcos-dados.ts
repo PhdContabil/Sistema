@@ -70,18 +70,26 @@ export async function carregarDatasComemorativas(incluirInativas = false): Promi
 }
 
 interface LinhaFormatura {
-  pessoa_id: number; curso: string; nivel: string; previsao: string;
+  id: number; pessoa_id: number; curso: string; nivel: string; previsao: string;
   pessoas_perfil: { nome: string } | { nome: string }[] | null;
 }
 
 export async function carregarFormaturas(): Promise<Formatura[]> {
   const sb = admin();
   if (!sb) return [];
-  const { data } = await sb.from("pessoas_formaturas").select("pessoa_id,curso,nivel,previsao,pessoas_perfil(nome)").order("previsao");
+  const { data } = await sb.from("pessoas_formaturas").select("id,pessoa_id,curso,nivel,previsao,pessoas_perfil(nome)").order("previsao");
   return ((data ?? []) as unknown as LinhaFormatura[]).map((l) => {
     const perfil = Array.isArray(l.pessoas_perfil) ? l.pessoas_perfil[0] : l.pessoas_perfil;
-    return { pessoa_id: l.pessoa_id, nome: perfil?.nome ?? "—", curso: l.curso, nivel: l.nivel, previsao: l.previsao };
+    return { id: l.id, pessoa_id: l.pessoa_id, nome: perfil?.nome ?? "—", curso: l.curso, nivel: l.nivel, previsao: l.previsao };
   });
+}
+
+/** Colaboradores ativos, para escolher na hora de cadastrar uma formatura. */
+export async function carregarPessoasAtivas(): Promise<{ id: number; nome: string }[]> {
+  const sb = admin();
+  if (!sb) return [];
+  const { data } = await sb.from("pessoas_perfil").select("id,nome").eq("ativo", true).order("nome");
+  return (data ?? []) as { id: number; nome: string }[];
 }
 
 /** Tudo o que a agenda precisa para gerar os eventos de um mês. */
