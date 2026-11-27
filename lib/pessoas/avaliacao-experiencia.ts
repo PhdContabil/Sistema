@@ -43,6 +43,7 @@ export interface Avaliacao {
   pontos_melhorar: string | null;
   recomendacao: string | null;
   justificativa: string | null;
+  observacoes: string | null;
   decisao: string | null;
   decisao_por: string | null;
   decisao_em: string | null;
@@ -51,7 +52,7 @@ export interface Avaliacao {
   pessoa_ativa: boolean;
 }
 
-const COLUNAS = "id,pessoa_id,fim_experiencia,encarregado_email,encarregado_nome,token,criado_em,enviada_em,nota_desempenho,nota_assiduidade,nota_equipe,nota_aprendizado,pontos_fortes,pontos_melhorar,recomendacao,justificativa,decisao,decisao_por,decisao_em,pessoas_perfil(nome,ativo)";
+const COLUNAS = "id,pessoa_id,fim_experiencia,encarregado_email,encarregado_nome,token,criado_em,enviada_em,nota_desempenho,nota_assiduidade,nota_equipe,nota_aprendizado,pontos_fortes,pontos_melhorar,recomendacao,justificativa,observacoes,decisao,decisao_por,decisao_em,pessoas_perfil(nome,ativo)";
 
 type Linha = Omit<Avaliacao, "pessoa_nome" | "pessoa_ativa"> & {
   pessoas_perfil: { nome: string; ativo: boolean } | { nome: string; ativo: boolean }[] | null;

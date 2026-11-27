@@ -28,6 +28,7 @@ export default function AvaliacaoExperiencia({ params }: { params: { token: stri
   const [melhorar, setMelhorar] = useState("");
   const [rec, setRec] = useState("");
   const [just, setJust] = useState("");
+  const [obs, setObs] = useState("");
 
   useEffect(() => {
     fetch(`/api/avaliacao-experiencia/${params.token}`, { cache: "no-store" }).then(async (r) => {
@@ -47,7 +48,7 @@ export default function AvaliacaoExperiencia({ params }: { params: { token: stri
     try {
       const r = await fetch(`/api/avaliacao-experiencia/${params.token}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...notas, pontos_fortes: fortes, pontos_melhorar: melhorar, recomendacao: rec, justificativa: just }),
+        body: JSON.stringify({ ...notas, pontos_fortes: fortes, pontos_melhorar: melhorar, recomendacao: rec, justificativa: just, observacoes: obs }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(j.error || "Não consegui enviar."); return; }
@@ -110,6 +111,10 @@ export default function AvaliacaoExperiencia({ params }: { params: { token: stri
             <textarea className="sel" rows={3} value={just} maxLength={3000} onChange={(e) => setJust(e.target.value)} />
           </label>
         )}
+
+        <label style={{ marginBottom: 12 }}>Observações (opcional)
+          <textarea className="sel" rows={4} value={obs} maxLength={3000} onChange={(e) => setObs(e.target.value)} placeholder="Escreva aqui o que desejar: contexto, situações marcantes, sugestões…" />
+        </label>
 
         {erro && <p className="dm-erro">{erro}</p>}
         <div className="dm-form-acoes">

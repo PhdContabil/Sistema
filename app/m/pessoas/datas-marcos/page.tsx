@@ -50,6 +50,7 @@ function DetalhesAvaliacao({ a }: { a: Avaliacao }) {
       <p><strong>Pontos fortes:</strong> {a.pontos_fortes}</p>
       <p><strong>A melhorar:</strong> {a.pontos_melhorar}</p>
       <p><strong>Recomendação:</strong> {RECOMENDACOES[a.recomendacao ?? ""] ?? "—"}{a.justificativa ? ` — ${a.justificativa}` : ""}</p>
+      {a.observacoes && <p><strong>Observações:</strong> {a.observacoes}</p>}
     </details>
   );
 }

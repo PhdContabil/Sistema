@@ -40,6 +40,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
   const pontos_melhorar = texto(b.pontos_melhorar);
   const recomendacao = String(b.recomendacao ?? "");
   const justificativa = texto(b.justificativa);
+  const observacoes = texto(b.observacoes);
   if (pontos_fortes.length < 10) return NextResponse.json({ error: "Descreva os pontos fortes (mínimo de 10 caracteres)." }, { status: 400 });
   if (pontos_melhorar.length < 10) return NextResponse.json({ error: "Descreva os pontos a melhorar (mínimo de 10 caracteres)." }, { status: 400 });
   if (!(recomendacao in RECOMENDACOES)) return NextResponse.json({ error: "Escolha a recomendação." }, { status: 400 });
@@ -51,7 +52,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
   if (!sb) return NextResponse.json({ error: "Banco indisponível." }, { status: 500 });
   // Só grava se ainda não foi enviada (evita envio duplo em cliques simultâneos).
   const { data, error } = await sb.from("avaliacoes_experiencia")
-    .update({ ...notas, pontos_fortes, pontos_melhorar, recomendacao, justificativa: justificativa || null, enviada_em: new Date().toISOString() })
+    .update({ ...notas, pontos_fortes, pontos_melhorar, recomendacao, justificativa: justificativa || null, observacoes: observacoes || null, enviada_em: new Date().toISOString() })
     .eq("id", av.id).is("enviada_em", null).select("id");
   if (error) return NextResponse.json({ error: "Não consegui salvar. Tente de novo." }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: "Esta avaliação já foi enviada." }, { status: 409 });
