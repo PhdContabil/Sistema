@@ -36,6 +36,7 @@ interface NotaEmitida {
   status: string; tomador_doc: string | null; tomador_nome: string | null; emitido_por: string | null; criado_em: string; ambiente: number;
   questor_ok: boolean | null; questor_erro: string | null; descricao?: string | null;
   cancelada_em?: string | null; cancelada_por?: string | null; cancel_motivo?: string | null;
+  tareffa_documento_id?: string | null; tareffa_enviado_em?: string | null; tareffa_erro?: string | null;
 }
 
 const hoje = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
@@ -77,6 +78,11 @@ export default function NotasFiscais() {
   const [emitindo, setEmitindo] = useState(false);
   const [emitida, setEmitida] = useState<{ id: number; chave: string; numero: string | null; ja?: boolean } | null>(null);
   const [lancando, setLancando] = useState<number | null>(null);
+  const [enviandoT, setEnviandoT] = useState<number | null>(null);
+  const [msgT, setMsgT] = useState<Record<number, string>>({});
+  const [loteT, setLoteT] = useState("");
+  const [comTareffa, setComTareffa] = useState(false);
+  const [emitidaT, setEmitidaT] = useState("");
   const [msgLanc, setMsgLanc] = useState<Record<number, string>>({});
   const [editando, setEditando] = useState<Partial<Cad> | null>(null);
   const [cancelando, setCancelando] = useState<NotaEmitida | null>(null);
@@ -164,7 +170,12 @@ export default function NotasFiscais() {
       const j = await r.json();
       if (!j.ok) { setErro(j.erro ?? j.error ?? `Erro ${r.status}`); return; }
       setEmitida({ id: j.id, chave: j.chave, numero: j.numero, ja: j.ja_emitida });
-      void carregar();
+      setEmitidaT("");
+      await carregar();
+      if (comTareffa && j.id && j.chave) {
+        if (ambiente === 2) setEmitidaT("Nota de teste: não foi enviada ao Tareffa.");
+        else { setEmitidaT("Enviando ao Tareffa…"); const e = await enviarAoTareffa(j.id); setEmitidaT(e ? `Não foi para o Tareffa: ${e}. Reenvie em Notas emitidas.` : "Enviada ao Tareffa."); }
+      }
     } catch (e) { setErro(e instanceof Error ? e.message : "Falha ao emitir."); }
     finally { setEmitindo(false); }
   }
@@ -189,6 +200,41 @@ export default function NotasFiscais() {
     finally { setLancando(null); }
   }
 
+  /** Publica uma nota no Tareffa e atualiza a linha. Devolve a mensagem de erro, ou null se deu certo. */
+  async function enviarAoTareffa(id: number): Promise<string | null> {
+    setEnviandoT(id);
+    try {
+      const r = await fetch("/api/fiscal/nfse/tareffa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      const j = await r.json();
+      const msg: string = j.mensagem ?? j.error ?? `Erro ${r.status}`;
+      setMsgT((m) => ({ ...m, [id]: msg }));
+      setNotas((L) => L.map((x) => (x.id === id ? (j.ok ? { ...x, tareffa_documento_id: "ok", tareffa_enviado_em: new Date().toISOString(), tareffa_erro: null } : { ...x, tareffa_erro: msg }) : x)));
+      return j.ok ? null : msg;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha.";
+      setMsgT((m) => ({ ...m, [id]: msg }));
+      return msg;
+    } finally { setEnviandoT(null); }
+  }
+
+  async function tareffa(n: NotaEmitida) {
+    if (n.tareffa_documento_id && !confirm(`A NFS-e nº ${n.nnfse} já foi enviada ao Tareffa em ${dt(n.tareffa_enviado_em)}. Enviar de novo?`)) return;
+    await enviarAoTareffa(n.id);
+  }
+
+  /** Lote: as notas emitidas da lista filtrada que ainda não foram ao Tareffa, uma de cada vez. */
+  async function tareffaLote(pendentes: NotaEmitida[]) {
+    if (!pendentes.length || !confirm(`Enviar ao Tareffa ${pendentes.length} nota(s) emitida(s) que ainda não foram enviadas (da lista filtrada)?`)) return;
+    let ok = 0; const falhas: string[] = [];
+    for (let i = 0; i < pendentes.length; i++) {
+      const n = pendentes[i];
+      setLoteT(`Enviando ${i + 1} de ${pendentes.length}…`);
+      const e = await enviarAoTareffa(n.id);
+      if (e) falhas.push(`nº ${n.nnfse}: ${e}`); else ok++;
+    }
+    setLoteT(`Tareffa: ${ok} enviada(s)${falhas.length ? `, ${falhas.length} com erro — ${falhas.slice(0, 3).join(" · ")}${falhas.length > 3 ? " …" : ""}` : ""}.`);
+  }
+
   const podeEmitir = !!emp && emp.ativa && emp.simples.ok;
   const notasFiltradas = notas.filter((n) => {
     const tt = semAcento(fn.busca.trim()), d = fn.busca.replace(/\D/g, "");
@@ -210,7 +256,7 @@ export default function NotasFiscais() {
   const limparFn = { busca: "", competencia: "", campo: "competencia", de: "", ate: "", questor: "", status: "" };
   const temFiltroNotas = JSON.stringify(fn) !== JSON.stringify(limparFn);
   const alternar = (cod: number) => setAbertos((s) => { const n = new Set(s); if (n.has(cod)) n.delete(cod); else n.add(cod); return n; });
-  const propsNotas = { nomes: nomePorCod, lancar, lancando, msgLanc, cancelar: setCancelando };
+  const propsNotas = { nomes: nomePorCod, lancar, lancando, msgLanc, cancelar: setCancelando, tareffa, enviandoT, msgT };
 
   const linhaCad = (c: Cad, recuo = false): ReactNode[] => [
     <span key="c" style={recuo ? { paddingLeft: 22 } : undefined}>{fmtCodEstab(c.codigoempresa)}</span>,
@@ -260,7 +306,12 @@ export default function NotasFiscais() {
             {temFiltroNotas && <button style={st.btn} onClick={() => setFn(limparFn)}>Limpar</button>}
             <ModoToggle modo={modoNotas} trocar={setModoNotas} />
           </div>
-          <p style={{ ...st.mut, margin: "10px 0 6px" }}>{notasFiltradas.length} nota(s) · total {brl(totalNotas)} (sem as canceladas)</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "10px 0 6px" }}>
+            <p style={{ ...st.mut, margin: 0 }}>{notasFiltradas.length} nota(s) · total {brl(totalNotas)} (sem as canceladas)</p>
+            {(() => { const pend = notasFiltradas.filter((n) => n.status === "emitida" && n.chave_acesso && !n.tareffa_documento_id && n.ambiente !== 2);
+              return <button style={{ ...st.btn, padding: "3px 10px" }} disabled={!pend.length || enviandoT !== null} onClick={() => tareffaLote(pend)}>Enviar ao Tareffa ({pend.length})</button>; })()}
+            {loteT && <span style={{ ...st.mut, fontSize: 13 }}>{loteT}</span>}
+          </div>
           {notasFiltradas.length === 0 ? <p style={st.mut}>Nenhuma nota encontrada.</p>
             : modoNotas === "tabela" ? <TabelaNotas notas={notasFiltradas} {...propsNotas} />
             : (
@@ -437,7 +488,10 @@ export default function NotasFiscais() {
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 6, paddingTop: 12, borderTop: "1px solid var(--line, rgba(127,127,127,.25))" }}>
                 <span style={{ ...st.mut, fontSize: 12 }}>Simples Nacional · ISS no DAS · sem retenções</span>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label style={{ ...st.mut, fontSize: 13, display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+                    <input type="checkbox" checked={comTareffa} disabled={emitindo} onChange={(e) => setComTareffa(e.target.checked)} /> Enviar ao Tareffa
+                  </label>
                   {emitida && <button style={st.btn} onClick={novaNota}>Nova nota</button>}
                   <button style={st.btnP} disabled={emitindo || !!emitida} onClick={emitir}>{emitindo ? "Emitindo no Portal Nacional…" : emitida ? "NFS-e emitida" : "Emitir NFS-e (Portal Nacional)"}</button>
                 </div>
@@ -448,6 +502,7 @@ export default function NotasFiscais() {
                   <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--ok)" }}>{emitida.ja ? "Esta nota já tinha sido emitida" : "NFS-e emitida"}{ambiente === 2 ? " (TESTE — não vale)" : ""}: nº {emitida.numero ?? "—"}</p>
                   <p style={{ ...st.mut, margin: "2px 0" }}>Chave de acesso: {emitida.chave}</p>
                   <p style={{ margin: "6px 0 0" }}><a href={`/api/fiscal/nfse/pdf?chave=${emitida.chave}`} target="_blank" rel="noreferrer">Abrir PDF da nota</a> · lance no Questor em Notas emitidas.</p>
+                  {emitidaT && <p style={{ margin: "6px 0 0", color: /^Enviada/.test(emitidaT) ? "var(--ok)" : /^Não/.test(emitidaT) ? "var(--div)" : undefined }}>{emitidaT}</p>}
                 </div>
               )}
             </div>
@@ -487,11 +542,12 @@ function Cabecalho({ aberto, alternar, titulo, resumo, acoes }: { aberto: boolea
   );
 }
 
-function TabelaNotas({ notas, nomes, lancar, lancando, msgLanc, cancelar }: {
+function TabelaNotas({ notas, nomes, lancar, lancando, msgLanc, cancelar, tareffa, enviandoT, msgT }: {
   notas: NotaEmitida[]; nomes: Map<number, string>; lancar: (n: NotaEmitida) => void; lancando: number | null; msgLanc: Record<number, string>; cancelar: (n: NotaEmitida) => void;
+  tareffa: (n: NotaEmitida) => void; enviandoT: number | null; msgT: Record<number, string>;
 }) {
   return (
-    <Tabela cab={["Empresa", "Competência", "Emissão", "Nº NFS-e", "Tomador", "Valor", "Emitida por", "PDF", "Questor", ""]} linhas={notas.map((n) => [
+    <Tabela cab={["Empresa", "Competência", "Emissão", "Nº NFS-e", "Tomador", "Valor", "Emitida por", "PDF", "Questor", "Tareffa", ""]} linhas={notas.map((n) => [
       `${fmtCodEstab(n.codigoempresa)}${nomes.get(n.codigoempresa) ? ` - ${nomes.get(n.codigoempresa)}` : ""}`, dt(n.dcompet), dt(n.criado_em),
       n.status === "incerta" ? "sem resposta — confira no portal" : (
         <span key="n">{n.nnfse ?? "—"}{n.status === "cancelada" && <><br /><span style={{ color: "var(--div)", fontSize: 12 }} title={n.cancel_motivo ?? ""}>CANCELADA em {dt(n.cancelada_em)}</span></>}</span>
@@ -503,6 +559,14 @@ function TabelaNotas({ notas, nomes, lancar, lancando, msgLanc, cancelar }: {
         <span key="q">
           <button style={{ ...st.btn, padding: "3px 8px" }} disabled={lancando === n.id} onClick={() => lancar(n)}>{lancando === n.id ? "Lançando…" : "Lançar no Questor"}</button>
           {(msgLanc[n.id] || n.questor_erro) && <><br /><span style={{ ...st.mut, color: "var(--div)" }}>{msgLanc[n.id] || n.questor_erro}</span></>}
+        </span>
+      ),
+      n.status !== "emitida" || !n.chave_acesso ? "" : (
+        <span key="t">
+          {n.tareffa_documento_id && !msgT[n.id] ? <span style={{ color: "var(--ok)" }} title={`Enviada em ${dt(n.tareffa_enviado_em)}`}>enviada </span> : null}
+          <button style={{ ...st.btn, padding: "3px 8px" }} disabled={enviandoT === n.id} onClick={() => tareffa(n)}>
+            {enviandoT === n.id ? "Enviando…" : n.tareffa_documento_id ? "Reenviar" : "Enviar ao Tareffa"}</button>
+          {(msgT[n.id] || n.tareffa_erro) && <><br /><span style={{ ...st.mut, color: msgT[n.id] && !n.tareffa_erro ? "var(--ok)" : "var(--div)" }}>{msgT[n.id] || n.tareffa_erro}</span></>}
         </span>
       ),
       n.status === "emitida" ? <button key="c" style={{ ...st.btnD, padding: "3px 8px" }} onClick={() => cancelar(n)}>Cancelar nota</button> : "",
