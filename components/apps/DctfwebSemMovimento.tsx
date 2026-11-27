@@ -73,6 +73,7 @@ export default function SemMovimento() {
       if (j.ok === false) setErro(`${l.razao_social ?? l.cnpj}: ${j.mensagem ?? j.motivo}`);
       else if (a === "conferir") setMsg(`${l.razao_social}: ${j.estado === "aceito" ? `R-2099 aceito${j.recibo ? ` (recibo ${j.recibo})` : ""}` : j.estado === "processando" ? "a Receita ainda está processando, confira de novo em alguns minutos" : `rejeitado: ${j.mensagem}`}`);
       else if (a === "enviar") setMsg(`${l.razao_social}: R-2099 enviado (protocolo ${j.protocolo}). Use “Conferir” para ver o resultado.`);
+      else if (a === "consultar") setMsg(`${l.razao_social}: ${j.situacao === "transmitida" ? "DCTFWeb já entregue — marcada como Entregue" : `DCTFWeb ${String(j.situacao).replace("_", " ")} na Receita`}.`);
       else if (a === "transmitir") setMsg(`${l.razao_social}: DCTFWeb sem movimento transmitida.`);
     } catch (e) { setErro(e instanceof Error ? e.message : String(e)); }
     finally { setOcupado(null); carregar(competencia); }
@@ -185,6 +186,8 @@ export default function SemMovimento() {
                                   onClick={() => window.confirm(`Transmitir a DCTFWeb sem movimento de ${l.razao_social} (${compBR(l.competencia)})? Cobrado pelo SERPRO e irreversível.`) && acao(l, "transmitir")}>
                             {b("transmitir") ? "Transmitindo…" : "Transmitir DCTFWeb"}</button>
                         : <span className={s.dataSub}>teste OK</span>)}
+                      {l.situacao !== "concluida" && <button className={s.botao} disabled={!!ocupado} title="Consulta na Receita se a DCTFWeb da competência já foi entregue (cobrado pelo SERPRO)"
+                                onClick={() => acao(l, "consultar")}>{b("consultar") ? "Consultando…" : "Consultar DCTFWeb"}</button>}
                     </div></td>
                   </tr>
                 );

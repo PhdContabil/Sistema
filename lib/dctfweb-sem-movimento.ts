@@ -5,7 +5,7 @@
 // 4) empresa fica "sem movimento desde M" até o movimento voltar.
 
 import { db, registrarChamada } from "./serpro/servidor";
-import { obterParametros, sincronizarObrigadas, transmitir, validarCompetencia } from "./dctfweb";
+import { consultar, obterParametros, sincronizarObrigadas, transmitir, validarCompetencia } from "./dctfweb";
 import { consultarR2099, enviarR2099 } from "./reinf";
 import { apurar, competenciaAnterior, raiz, type AmbienteReinf, type LinhaMov } from "./reinf-regras";
 
@@ -154,4 +154,25 @@ export async function transmitirDctf(id: number, por: string) {
 export async function dispensar(id: number, por: string) {
   await gravar(id, { situacao: "dispensada", ativa: false, por });
   return { ok: true };
+}
+
+/**
+ * Consulta na DCTFWeb (Integra, pago) se a declaração da competência já foi
+ * entregue. Se sim, o registro sem movimento vira "concluida" (Entregue).
+ */
+export async function consultarDctf(id: number) {
+  const l = await uma(id);
+  const { data: existente } = await db().from("dctfweb").select("id").eq("cnpj", l.cnpj).eq("competencia", l.competencia).maybeSingle();
+  let dctfId = existente?.id as number | undefined;
+  if (!dctfId) {
+    const { data, error } = await db().from("dctfweb").insert({
+      cnpj: l.cnpj, competencia: l.competencia, razao_social: l.razao_social, codigoempresa: l.codigoempresa, debito: 0, obrigada: true,
+    }).select("id").single();
+    if (error) throw new Error(error.message);
+    dctfId = data.id as number;
+  }
+  const r = await consultar(dctfId);
+  if (r.ok && r.situacao === "transmitida") await gravar(id, { situacao: "concluida", dctfweb_id: dctfId, erro: null });
+  else await gravar(id, { dctfweb_id: dctfId });
+  return r;
 }
