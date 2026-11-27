@@ -132,6 +132,8 @@ export default function ConsultaNotas() {
     try {
       const r = await fetch("/api/fiscal/nfse/consulta/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chave: n.chave, xml_gz: n.xml_gz }) });
       if (!r.ok) { const j = await r.json().catch(() => ({})); setErro(j.error ?? `Erro ${r.status}`); return; }
+      if (r.headers.get("X-Danfse-Origem") === "local")
+        setErro(`O Portal Nacional não entregou o PDF oficial; abri o gerado pelo Núcleo. Motivo: ${decodeURIComponent(r.headers.get("X-Danfse-Motivo") ?? "")}`);
       window.open(URL.createObjectURL(await r.blob()), "_blank");
     } finally { setOcupado(""); }
   }

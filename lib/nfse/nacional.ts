@@ -147,17 +147,43 @@ export async function ibgePorCep(cep: string): Promise<string | null> {
  * com o certificado da empresa. Devolve o PDF ou o motivo de não ter vindo
  * (o serviço já ficou fora do ar em 2026; quem chama cai no PDF local).
  */
-export function baixarDanfseOficial(chave: string, amb: 1 | 2, c: Cert): Promise<{ pdf: Buffer | null; motivo: string }> {
+export async function baixarDanfseOficial(chave: string, amb: 1 | 2, c: Cert): Promise<{ pdf: Buffer | null; motivo: string }> {
   const base = amb === 1 ? "https://adn.nfse.gov.br" : "https://adn.producaorestrita.nfse.gov.br";
+  const motivos: string[] = [];
+  for (const url of [`${base}/danfse/${chave}`, `${base}/contribuintes/danfse/${chave}`]) {
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+      const r = await pedirDanfse(url, c);
+      if (r.pdf) return { pdf: r.pdf, motivo: "" };
+      motivos.push(`${url.replace(base, "")}: ${r.motivo}`);
+      if (!/tempo esgotado|ECONNRESET|socket|HTTP 5dd/.test(r.motivo)) break;
+    }
+  }
+  console.error("[danfse oficial]", chave, motivos.join(" | "));
+  return { pdf: null, motivo: motivos.join(" | ") };
+}
+
+/** Uma tentativa: aceita o PDF puro ou um JSON com o PDF em base64; segue um redirecionamento. */
+function pedirDanfse(url: string, c: Cert, saltos = 0): Promise<{ pdf: Buffer | null; motivo: string }> {
   return new Promise((resolve) => {
     const agent = new https.Agent({ key: c.keyPem, cert: c.chainPem, minVersion: "TLSv1.2", keepAlive: false });
-    const req = https.request(`${base}/danfse/${chave}`, { method: "GET", agent, timeout: 25_000, headers: { Accept: "application/pdf" } }, (res) => {
+    const req = https.request(url, { method: "GET", agent, timeout: 40_000, headers: { Accept: "application/pdf, application/json, */*" } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && saltos < 2) {
+        res.resume();
+        resolve(pedirDanfse(new URL(res.headers.location, url).toString(), c, saltos + 1));
+        return;
+      }
       const partes: Buffer[] = [];
       res.on("data", (d) => partes.push(d));
       res.on("end", () => {
         const b = Buffer.concat(partes);
-        if (res.statusCode === 200 && b.subarray(0, 4).toString() === "%PDF") resolve({ pdf: b, motivo: "" });
-        else resolve({ pdf: null, motivo: `HTTP ${res.statusCode}: ${b.subarray(0, 200).toString("utf8").replace(/\s+/g, " ")}` });
+        if (res.statusCode === 200 && b.subarray(0, 4).toString() === "%PDF") return resolve({ pdf: b, motivo: "" });
+        if (res.statusCode === 200) {
+          // alguns serviços devolvem o PDF em base64 (texto puro ou dentro de um JSON)
+          const txt = b.toString("utf8").trim();
+          const b64 = /^"?JVBER/.test(txt) ? txt.replace(/"/g, "") : /"(JVBER[A-Za-z0-9+/=]+)"/.exec(txt)?.[1];
+          if (b64) { const pdf = Buffer.from(b64, "base64"); if (pdf.subarray(0, 4).toString() === "%PDF") return resolve({ pdf, motivo: "" }); }
+        }
+        resolve({ pdf: null, motivo: `HTTP ${res.statusCode}: ${b.subarray(0, 200).toString("utf8").replace(/s+/g, " ")}` });
       });
     });
     req.on("timeout", () => req.destroy(new Error("tempo esgotado")));

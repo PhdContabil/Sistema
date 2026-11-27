@@ -141,10 +141,10 @@ export async function capturarNotas(cnpjEntrada: string, nsuInicial = 0, orcamen
 }
 
 /** PDF de uma nota consultada: DANFSe oficial do ADN; se falhar, gerado do XML. */
-export async function pdfDaConsulta(chave: string, xmlGz: string): Promise<Buffer> {
+export async function pdfDaConsulta(chave: string, xmlGz: string): Promise<{ pdf: Buffer; oficial: boolean; motivo: string }> {
   const { cert } = await carregarEmpresa(EMPRESA_CERT_PHD);
   const of = await baixarDanfseOficial(dig(chave), 1, cert);
-  if (of.pdf) return of.pdf;
+  if (of.pdf) return { pdf: of.pdf, oficial: true, motivo: "" };
   const xml = gunzipSync(Buffer.from(xmlGz, "base64")).toString("utf8");
-  return gerarDanfse(xml, dig(chave), 1);
+  return { pdf: await gerarDanfse(xml, dig(chave), 1), oficial: false, motivo: of.motivo };
 }
