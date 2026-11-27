@@ -42,6 +42,9 @@ export async function POST(req: Request) {
     }
     if (b.acao === "avulsa") return NextResponse.json({ ok: true, ...(await criarAvulsa(empresa, b.avulsa ?? {}, email)) });
     if (b.acao === "questor") {
+      if (!Number(b.rps_inicio) || !Number(b.rps_fim)) {
+        return NextResponse.json({ error: "Preencha \"RPS de\" e \"até\": o Questor só busca por faixa de RPS (as datas filtram dentro dessa faixa)." }, { status: 400 });
+      }
       const r = await getRpsNfse({ data_inicio: b.data_inicio, data_fim: b.data_fim, rps_inicio: b.rps_inicio, rps_fim: b.rps_fim, codigoempresa: empresa });
       return NextResponse.json(await importar(r.dados ?? [], "questor", null, email, b.data_manual, empresa));
     }

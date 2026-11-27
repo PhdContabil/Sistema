@@ -46,7 +46,10 @@ async function get<T>(path: string): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = body?.detail ?? detail;
+      const d = body?.detail ?? detail;
+      detail = Array.isArray(d)
+        ? d.map((x: { loc?: unknown[]; msg?: string }) => `${(x.loc ?? []).slice(-1)[0] ?? ""}: ${x.msg ?? ""}`).join("; ")
+        : typeof d === "string" ? d : JSON.stringify(d);
     } catch {
       /* ignore */
     }
