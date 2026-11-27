@@ -4,13 +4,14 @@
 //   POST { acao: "enviar", id }               -> R-2099 sem movimento na EFD-Reinf
 //   POST { acao: "conferir", id }             -> resultado do protocolo do R-2099
 //   POST { acao: "transmitir", id }           -> DCTFWeb pelo Integra (pago, irreversível)
+//   POST { acao: "consultar", id }            -> situação da DCTFWeb na Receita (pago)
 //   POST { acao: "dispensar", id }            -> tira da fila
 //   POST { acao: "ambiente", valor: 1|2 }     -> produção / produção restrita
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { exigirDctfweb } from "../../dare-sp/_auth";
 import {
-  apontar, conferir, definirAmbiente, dispensar, enviar, listarSemMovimento, transmitirDctf,
+  apontar, conferir, consultarDctf, definirAmbiente, dispensar, enviar, listarSemMovimento, transmitirDctf,
 } from "@/lib/dctfweb-sem-movimento";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
     if (!id) return falha(null, "Informe o registro.", 400);
     switch (b.acao) {
       case "enviar": return NextResponse.json(await enviar(id, email));
+      case "consultar": return NextResponse.json(await consultarDctf(id));
       case "conferir": return NextResponse.json(await conferir(id));
       case "transmitir": return NextResponse.json(await transmitirDctf(id, email));
       case "dispensar": return NextResponse.json(await dispensar(id, email));
