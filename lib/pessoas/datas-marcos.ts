@@ -237,13 +237,14 @@ export function eventosDoMes(ano: number, mes: number, ctx: ContextoDatas): Even
     }
   }
 
-  // Formaturas previstas (aparecem no mês previsto).
+  // Formaturas previstas: só o mês/ano é conhecido, então aparecem no último dia do mês previsto.
   for (const f of ctx.formaturas) {
     const pv = partes(f.previsao);
     if (pv.a === ano && pv.m === mes) {
+      const ultimo = iso(ano, mes, diasNoMes(ano, mes));
       ev.push({
         id: `gen:form:${f.id ?? f.pessoa_id}:${f.previsao}`, tipo: "outro",
-        titulo: `🎓 Formatura: ${f.nome}`, inicio: iso(ano, mes, 1), fim: iso(ano, mes, 1),
+        titulo: `🎓 Formatura: ${f.nome}`, inicio: ultimo, fim: ultimo,
         detalhe: `${f.nivel} em ${f.curso} (previsão ${p2(pv.m)}/${pv.a})`,
       });
     }
