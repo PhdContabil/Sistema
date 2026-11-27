@@ -259,6 +259,7 @@ const APP_ICONS: Record<string, React.ReactNode> = {
 /** Mesma heurística por palavra-chave do handoff — escolhe o ícone pelo nome da aplicação. */
 function chaveIcone(nomeApp: string): keyof typeof APP_ICONS {
   const n = nomeApp.toLowerCase();
+  if (n.includes("datas e marcos")) return "calendario";
   if (n.includes("simples")) return "documento";
   if (n.includes("dctf")) return "documento";
   if (n.includes("apuração de impostos")) return "calculadora";

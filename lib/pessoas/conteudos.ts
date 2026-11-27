@@ -119,6 +119,13 @@ export const AREAS: AreaPessoas[] = [
     ],
   },
   {
+    // Tela própria em /m/pessoas/datas-marcos (a rota fixa vale mais que [area]).
+    id: "datas-marcos", titulo: "Datas e Marcos",
+    resumo: "Aniversários, tempo de casa, experiência, datas comemorativas e campanhas do ano.",
+    cor: "oklch(0.62 0.13 150)",
+    secoes: [],
+  },
+  {
     id: "remuneracao", titulo: "Remuneração", resumo: "Cargos e salários, PLR e demais benefícios.",
     cor: "oklch(0.62 0.13 60)",
     secoes: [
@@ -197,6 +204,9 @@ export const AREAS: AreaPessoas[] = [
 // Legenda usada nas marcações do quadro.
 export const AGENDA_LEGENDA: { sigla: string; rotulo: string; cor: string }[] = [
   { sigla: "A", rotulo: "Aniversário", cor: "#8b5cf6" },
+  { sigla: "T", rotulo: "Tempo de casa", cor: "#6d28d9" },
+  { sigla: "D", rotulo: "Data comemorativa", cor: "#64748b" },
+  { sigla: "B", rotulo: "Bem-Estar", cor: "#d6336c" },
   { sigla: "C", rotulo: "Confraternização", cor: "#ec4899" },
   { sigla: "E", rotulo: "Emenda de feriado", cor: "#0ea5e9" },
   { sigla: "F", rotulo: "Férias", cor: "#16a34a" },

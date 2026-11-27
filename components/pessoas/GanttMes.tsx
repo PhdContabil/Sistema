@@ -1,34 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CORES_TIPO } from "@/lib/pessoas/agenda-tipos";
 
 export interface EventoAgenda {
-  id: number;
+  /** Número (eventos_agenda) ou texto "gen:..." (eventos calculados em Datas e Marcos). */
+  id: number | string;
   tipo: string;
   titulo: string;
   inicio: string;
   fim: string;
   detalhe: string | null;
   pessoa_nome?: string | null;
+  /** Marco de tempo de casa: ganha contorno dourado. */
+  destaque?: boolean;
 }
 
-const CORES: Record<string, { cor: string; rotulo: string }> = {
-  ferias:          { cor: "#16a34a", rotulo: "Férias" },
-  ausencia:        { cor: "#f59e0b", rotulo: "Ausência" },
-  licenca:         { cor: "#eab308", rotulo: "Licença B.H." },
-  feriado:         { cor: "#dc2626", rotulo: "Feriado" },
-  emenda:          { cor: "#0ea5e9", rotulo: "Emenda" },
-  reuniao:         { cor: "#0f766e", rotulo: "Reunião" },
-  aniversario:     { cor: "#8b5cf6", rotulo: "Aniversário" },
-  confraternizacao:{ cor: "#ec4899", rotulo: "Confraternização" },
-  bem_estar:       { cor: "#d6336c", rotulo: "Bem-Estar" },
-  outro:           { cor: "#64748b", rotulo: "Outro" },
-};
+/** Campanha do mês (ex.: Novembro Azul): pinta o topo da linha do tempo. */
+export interface CampanhaMes { titulo: string; cor: string }
+
+const CORES = CORES_TIPO;
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-export default function GanttMes({ eventos, ano, mes }: { eventos: EventoAgenda[]; ano: number; mes: number }) {
+export default function GanttMes({ eventos, ano, mes, campanha }: { eventos: EventoAgenda[]; ano: number; mes: number; campanha?: CampanhaMes | null }) {
   const [tipoSel, setTipoSel] = useState<string>("todos");
+  // Começa recolhida: o calendário abaixo já mostra o mês; a linha do tempo é para quem quiser o detalhe.
+  const [aberta, setAberta] = useState(false);
 
   const diasNoMes = new Date(ano, mes, 0).getDate();
   const primeiroDia = `${ano}-${String(mes).padStart(2, "0")}-01`;
@@ -55,21 +53,32 @@ export default function GanttMes({ eventos, ano, mes }: { eventos: EventoAgenda[
   const hoje = new Date();
   const diaHoje = hoje.getFullYear() === ano && hoje.getMonth() + 1 === mes ? hoje.getDate() : null;
 
+  const totalMes = eventos.filter((e) => e.fim >= primeiroDia && e.inicio <= ultimoDia).length;
+
   return (
-    <section className="gantt">
+    <section className="gantt" style={campanha ? { borderTop: `5px solid ${campanha.cor}` } : undefined}>
       <div className="gantt-topo">
-        <h2 className="bloco-titulo">Linha do tempo — {MESES[mes - 1]} de {ano}</h2>
-        <div className="gantt-filtros">
-          <span className={`chip ${tipoSel === "todos" ? "on" : ""}`} onClick={() => setTipoSel("todos")}>Todos</span>
-          {tiposPresentes.map((t) => (
-            <span key={t} className={`chip ${tipoSel === t ? "on" : ""}`} onClick={() => setTipoSel(t)}>
-              {CORES[t]?.rotulo ?? t}
-            </span>
-          ))}
-        </div>
+        <button type="button" className={`gantt-alterna${aberta ? " aberta" : ""}`} aria-expanded={aberta} onClick={() => setAberta((v) => !v)}>
+          <span className="gantt-seta" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+          </span>
+          <h2 className="bloco-titulo">Linha do tempo — {MESES[mes - 1]} de {ano}</h2>
+          {campanha && <span className="camp-selo" style={{ background: campanha.cor }}>{campanha.titulo}</span>}
+          <span className="gantt-resumo">{aberta ? "clique para recolher" : `${totalMes} ${totalMes === 1 ? "evento" : "eventos"} · clique para ver`}</span>
+        </button>
+        {aberta && (
+          <div className="gantt-filtros">
+            <span className={`chip ${tipoSel === "todos" ? "on" : ""}`} onClick={() => setTipoSel("todos")}>Todos</span>
+            {tiposPresentes.map((t) => (
+              <span key={t} className={`chip ${tipoSel === t ? "on" : ""}`} onClick={() => setTipoSel(t)}>
+                {CORES[t]?.rotulo ?? t}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
-      {doMes.length === 0 ? (
+      {!aberta ? null : doMes.length === 0 ? (
         <p className="vazio" style={{ padding: "18px 0" }}>Nenhum evento neste mês.</p>
       ) : (
         <div className="gantt-wrap">
@@ -95,7 +104,7 @@ export default function GanttMes({ eventos, ano, mes }: { eventos: EventoAgenda[
                   <tr key={e.id}>
                     <td className="g-nome">
                       <span className="g-ponto" style={{ background: cor }} />
-                      <span className="g-titulo">{e.titulo}</span>
+                      <span className="g-titulo">{e.destaque ? "⭐ " : ""}{e.titulo}</span>
                       {e.detalhe && <span className="g-detalhe">{e.detalhe}</span>}
                     </td>
                     {Array.from({ length: diasNoMes }).map((_, i) => {
@@ -103,7 +112,7 @@ export default function GanttMes({ eventos, ano, mes }: { eventos: EventoAgenda[
                       if (d === ini) {
                         return (
                           <td key={d} colSpan={span} className="g-barra-cel">
-                            <span className="g-barra" style={{ background: cor }} title={`${e.titulo} — ${e.inicio} a ${e.fim}`}>
+                            <span className="g-barra" style={{ background: cor, outline: e.destaque ? "2px solid #f59e0b" : undefined }} title={`${e.titulo} — ${e.inicio} a ${e.fim}`}>
                               {span >= 3 ? `${span}d` : ""}
                             </span>
                           </td>
@@ -122,13 +131,13 @@ export default function GanttMes({ eventos, ano, mes }: { eventos: EventoAgenda[
         </div>
       )}
 
-      <div className="agenda-legenda" style={{ marginTop: 14 }}>
+      {aberta && <div className="agenda-legenda" style={{ marginTop: 14 }}>
         {Object.entries(CORES)
           .filter(([t]) => tiposPresentes.includes(t))
           .map(([t, v]) => (
             <span key={t} className="lg"><span className="g-ponto" style={{ background: v.cor }} />{v.rotulo}</span>
           ))}
-      </div>
+      </div>}
     </section>
   );
 }
