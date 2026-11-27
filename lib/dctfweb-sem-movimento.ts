@@ -71,7 +71,18 @@ export async function apontar(competencia: string, por: string) {
   // marcadas nesta mesma competência também não são candidatas de novo
   const { data: daComp } = await db().from(T).select("raiz").eq("competencia", competencia);
   const jaMarcadas = new Set([...(ativas ?? []), ...(daComp ?? [])].map((a) => a.raiz as string));
-  const { candidatos, voltaram } = apurar(await linhasDctf(anterior), await linhasDctf(competencia), jaMarcadas);
+  const atual = await linhasDctf(competencia);
+  const { candidatos, voltaram } = apurar(await linhasDctf(anterior), atual, jaMarcadas);
+
+  // Apontadas desta competência (nada enviado ainda) que agora têm movimento no
+  // Questor: o apontamento foi feito antes do fechamento e deixa de valer.
+  const comMov = new Set(atual.filter((l) => Number(l.debito) > 0).map((l) => raiz(l.cnpj)));
+  const { data: apontadas } = await db().from(T).select("id, raiz").eq("competencia", competencia).eq("situacao", "apontada").is("protocolo", null);
+  const descartar = (apontadas ?? []).filter((a) => comMov.has(a.raiz as string)).map((a) => a.id as number);
+  if (descartar.length) {
+    const { error: eD } = await db().from(T).delete().in("id", descartar);
+    if (eD) throw new Error(eD.message);
+  }
 
   if (candidatos.length) {
     const { error: e } = await db().from(T).upsert(candidatos.map((c) => ({
@@ -85,7 +96,7 @@ export async function apontar(competencia: string, por: string) {
   if (encerrar.length) {
     await db().from(T).update({ ativa: false, encerrada_em: competencia, updated_at: new Date().toISOString() }).in("id", encerrar);
   }
-  return { apontadas: candidatos.length, voltaram: encerrar.length };
+  return { apontadas: candidatos.length, voltaram: encerrar.length, descartadas: descartar.length };
 }
 
 /** Envia o R-2099 sem movimento (irreversível em produção). */
