@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import catalogo from "@/lib/nfse/catalogo-nfse.json";
 import { fmtCodEstab } from "@/lib/fiscal/estab";
 import { st, Campo, Tabela, Modal, brl, dt, fmtDoc } from "../mei/ui";
+import ConsultaNotas from "./ConsultaNotas";
 
 interface Empresa {
   codigoempresa: number; nome: string; cnpj: string; im: string; municipio: string; uf: string; cep: string;
@@ -66,7 +67,7 @@ export default function NotasFiscais() {
   const [modoNotas, setModoNotas] = useModo("nfse-fiscal-modo-notas");
   const [abertos, setAbertos] = useState<Set<number>>(new Set());
   const [aberta, setAberta] = useState(false);
-  const [aba, setAba] = useState<"empresas" | "notas">("empresas");
+  const [aba, setAba] = useState<"empresas" | "notas" | "consulta">("empresas");
   const [fn, setFn] = useState({ busca: "", competencia: "", campo: "competencia", de: "", ate: "", questor: "", status: "" });
   const [emp, setEmp] = useState<Empresa | null>(null);
   const [notas, setNotas] = useState<NotaEmitida[]>([]);
@@ -274,11 +275,12 @@ export default function NotasFiscais() {
     <div>
       {ambiente === 2 && <div style={{ ...st.aviso, color: "var(--div)" }}>Ambiente de TESTE (produção restrita): as notas não valem.</div>}
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {([["empresas", "Emitir nota"], ["notas", `Notas emitidas${notas.length ? ` (${notas.length})` : ""}`]] as const).map(([k, tx]) => (
+        {([["empresas", "Emitir nota"], ["notas", `Notas emitidas${notas.length ? ` (${notas.length})` : ""}`], ["consulta", "Consultar notas"]] as const).map(([k, tx]) => (
           <button key={k} style={aba === k ? st.btnP : st.btn} onClick={() => setAba(k)}>{tx}</button>
         ))}
       </div>
 
+      {aba === "consulta" && <ConsultaNotas />}
       {aba === "notas" && (
         <div style={st.card}>
           <div style={st.bar}>
