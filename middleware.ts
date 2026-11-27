@@ -47,6 +47,9 @@ const PUBLIC_PATHS = [
   // Termo de empréstimo de equipamento: assinatura por link (token secreto), sem login
   "/termo/",
   "/api/termo/",
+  // Avaliação de experiência: o encarregado responde por link no e-mail (token secreto), sem login
+  "/avaliacao-experiencia/",
+  "/api/avaliacao-experiencia/",
 ];
 
 /** Domínio corporativo autorizado a entrar no hub. */

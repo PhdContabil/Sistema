@@ -7,6 +7,9 @@ import AppIcon from "@/components/AppIcon";
 import ModuloIcon from "@/components/ModuloIcon";
 import { getModule } from "@/lib/modules";
 
+// A Agenda semanal lê o banco e a data de hoje: não pode ser gerada uma vez só no build.
+export const dynamic = "force-dynamic";
+
 export default function PessoasHome() {
   const cor = getModule("pessoas")!.color;
   return (

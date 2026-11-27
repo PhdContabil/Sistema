@@ -1,7 +1,11 @@
+import type React from "react";
 import Workspace from "@/components/Workspace";
 import GanttMes, { type EventoAgenda } from "@/components/pessoas/GanttMes";
 import { admin } from "@/lib/pessoas/ferias";
 import { AGENDA_SEMANA, AGENDA_LEGENDA } from "@/lib/pessoas/conteudos";
+import { CORES_TIPO } from "@/lib/pessoas/agenda-tipos";
+import { campanhaDoMes, eventosDoMes } from "@/lib/pessoas/datas-marcos";
+import { carregarContexto, quemEstaAqui } from "@/lib/pessoas/datas-marcos-dados";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +27,7 @@ export default async function AgendaMensal({
 
   // Eventos reais (férias aprovadas, feriados, ausências…)
   let eventos: EventoAgenda[] = [];
+  let campanha: { titulo: string; cor: string } | null = null;
   const sb = admin();
   if (sb) {
     const { data } = await sb
@@ -32,6 +37,19 @@ export default async function AgendaMensal({
       .gte("fim", ini)
       .order("inicio");
     eventos = (data ?? []) as EventoAgenda[];
+
+    // Aniversários, tempo de casa, datas comemorativas e formaturas são
+    // calculados do cadastro (Datas e Marcos) para qualquer mês, junto com os
+    // eventos gravados. O fim da experiência só aparece para o RH.
+    const quem = await quemEstaAqui();
+    const ctx = await carregarContexto({ incluirExperiencia: quem.rh });
+    campanha = campanhaDoMes(mes, ctx.datas);
+    eventos = [
+      ...eventos,
+      ...eventosDoMes(ano, mes, ctx)
+        .filter((e) => !e.campanha)
+        .map((e) => ({ id: e.id, tipo: e.tipo, titulo: e.titulo, inicio: e.inicio, fim: e.fim, detalhe: e.detalhe, destaque: e.destaque })),
+    ].sort((x, y) => x.inicio.localeCompare(y.inicio));
   }
 
   const mesAnterior = mes === 1 ? { a: ano - 1, m: 12 } : { a: ano, m: mes - 1 };
@@ -41,6 +59,8 @@ export default async function AgendaMensal({
   const porDia = new Map(AGENDA_SEMANA.map((d) => [d.data, d.marcas]));
   const cor = (s: string) => AGENDA_LEGENDA.find((l) => l.sigla === s)?.cor ?? "var(--muted)";
   const vazios = new Date(ano, mes - 1, 1).getDay();
+  const hojeIso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const ehMesAtual = hojeIso.slice(0, 7) === `${ano}-${String(mes).padStart(2, "0")}`;
 
   return (
     <Workspace moduleId="pessoas" appName="Agenda mensal">
@@ -48,7 +68,7 @@ export default async function AgendaMensal({
         <div className="app-ic mono" style={{ background: "oklch(0.62 0.13 150)" }}>AG</div>
         <div>
           <h1>Agenda mensal</h1>
-          <div className="desc">Férias, ausências, feriados, emendas e reuniões do escritório.</div>
+          <div className="desc">Férias, ausências, feriados, aniversários, tempo de casa e datas comemorativas do escritório.</div>
         </div>
       </div>
 
@@ -56,14 +76,18 @@ export default async function AgendaMensal({
         <a className="btn" href={`/m/pessoas/agenda?ano=${mesAnterior.a}&mes=${mesAnterior.m}`}>← {MESES[mesAnterior.m - 1]}</a>
         <strong style={{ fontSize: 15 }}>{MESES[mes - 1]} de {ano}</strong>
         <a className="btn" href={`/m/pessoas/agenda?ano=${mesSeguinte.a}&mes=${mesSeguinte.m}`}>{MESES[mesSeguinte.m - 1]} →</a>
+        {!ehMesAtual && <a className="btn" href="/m/pessoas/agenda">Hoje</a>}
         <span className="contador">{eventos.length} eventos</span>
       </div>
 
       {/* Linha do tempo (Gantt) */}
-      <GanttMes eventos={eventos} ano={ano} mes={mes} />
+      <GanttMes eventos={eventos} ano={ano} mes={mes} campanha={campanha} />
 
       {/* Calendário do mês */}
-      <div className="mes" style={{ marginTop: 20 }}>
+      <div
+        className={`mes${campanha ? " com-campanha" : ""}`}
+        style={{ marginTop: 20, ...(campanha ? ({ "--camp": campanha.cor } as React.CSSProperties) : {}) }}
+      >
         <div className="mes-grid mes-head">
           {DOW.map((d) => <div key={d} className="mes-dow mono">{d}</div>)}
         </div>
@@ -83,7 +107,14 @@ export default async function AgendaMensal({
                     <span key={`m${k}`} className="marca mono" style={{ background: cor(mk.sigla) }} title={mk.detalhe}>{mk.sigla}</span>
                   ))}
                   {doDia.slice(0, 3).map((e) => (
-                    <span key={e.id} className="mes-evt" title={e.titulo}>{e.titulo}</span>
+                    <span
+                      key={e.id}
+                      className={`mes-evt${e.destaque ? " destaque" : ""}`}
+                      style={{ background: CORES_TIPO[e.tipo]?.cor ?? "var(--accent-soft)", color: "#fff" }}
+                      title={e.detalhe ? `${e.titulo} — ${e.detalhe}` : e.titulo}
+                    >
+                      {e.destaque ? "⭐ " : ""}{e.titulo}
+                    </span>
                   ))}
                   {doDia.length > 3 && <span className="mes-mais">+{doDia.length - 3}</span>}
                 </div>
@@ -94,8 +125,9 @@ export default async function AgendaMensal({
       </div>
 
       <p className="footnote">
-        Férias aprovadas entram aqui automaticamente. Feriados, emendas e demais eventos podem ser
-        cadastrados pelos encarregados numa próxima etapa.
+        Férias aprovadas, aniversários, tempo de casa e datas comemorativas entram aqui automaticamente
+        (cadastro em Pessoas › Datas e Marcos).
+        Feriados, emendas e demais eventos podem ser cadastrados pelos encarregados numa próxima etapa.
       </p>
     </Workspace>
   );
