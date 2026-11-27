@@ -100,7 +100,7 @@ export default function SemMovimento() {
     setOcupado("apontar"); setErro(null);
     try {
       const j = await post({ acao: "apontar", competencia });
-      setMsg(`${j.apontadas} empresa(s) apontada(s) como sem movimento em ${compBR(competencia)}${j.voltaram ? ` · ${j.voltaram} voltaram a ter movimento e saíram da lista` : ""}.`);
+      setMsg(`${j.apontadas} empresa(s) apontada(s) como sem movimento em ${compBR(competencia)}${j.voltaram ? ` · ${j.voltaram} voltaram a ter movimento e saíram da lista` : ""}${j.descartadas ? ` · ${j.descartadas} tiveram movimento em ${compBR(competencia)} e foram retiradas` : ""}.`);
     } catch (e) { setErro(e instanceof Error ? e.message : String(e)); }
     finally { setOcupado(null); carregar(competencia); }
   }
